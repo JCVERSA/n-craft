@@ -8,6 +8,7 @@ import { requireSameOrigin } from '../security.ts';
 import { SystemInspector } from '../preflight.ts';
 import { VersionCatalog } from '../versionCatalog.ts';
 import type { PlayitRunner } from '../playit/playitRunner.ts';
+import type { TunnelProvider } from '../types/backend.ts';
 
 export interface ServerRouteDependencies {
   auth: PanelAuthService;
@@ -17,6 +18,7 @@ export interface ServerRouteDependencies {
   inspector: SystemInspector;
   catalog: VersionCatalog;
   playitRunner: PlayitRunner;
+  tunnelProvider: TunnelProvider;
 }
 
 export function createServerRouter(dependencies: ServerRouteDependencies): Router {
@@ -29,6 +31,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       const [system] = await Promise.all([dependencies.inspector.inspect()]);
       response.json({
         state: dependencies.state.getSnapshot(),
+        tunnelProvider: dependencies.tunnelProvider,
         playitSetup: dependencies.playitRunner.getSetupSnapshot(),
         system,
         serverDirectory: dependencies.pipeline.serverDirectoryPath,
@@ -50,6 +53,10 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
   });
 
   router.post('/playit/setup', requireSameOrigin, (_request, response) => {
+    if (dependencies.tunnelProvider !== 'playit') {
+      response.status(409).json({ error: 'Playit n’est pas le fournisseur de tunnel actif.' });
+      return;
+    }
     try {
       dependencies.playitRunner.requestSetup();
       response.status(202).json({ accepted: true, playitSetup: dependencies.playitRunner.getSetupSnapshot() });

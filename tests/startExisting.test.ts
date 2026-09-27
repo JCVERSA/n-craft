@@ -43,6 +43,7 @@ const preflight: SystemPreflight = {
   diskWarning: false,
   playitBinary: { ok: true, detail: 'daemon' },
   playitCliBinary: { ok: true, detail: 'cli' },
+  localtonetBinary: { ok: true, detail: 'client' },
   bedrockBinary: { ok: true, detail: 'ready' },
   deployReady: true,
   warnings: ['low-memory warning is informational'],

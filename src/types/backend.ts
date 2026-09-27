@@ -39,6 +39,21 @@ export type PipelineStep =
 
 export type PipelineStatus = 'idle' | 'running' | 'failed';
 export type ServerLifecycle = 'stopped' | 'stopping' | 'starting' | 'running' | 'failed';
+export type TunnelProvider = 'localtonet' | 'playit';
+export type LocaltonetLifecycle =
+  | 'starting'
+  | 'running'
+  | 'address_not_detected'
+  | 'configuration_missing'
+  | 'failed'
+  | 'exited';
+export interface LocaltonetState {
+  status: LocaltonetLifecycle;
+  address: string | null;
+  error: string | null;
+  startedAt: string | null;
+  addressDetectedAt: string | null;
+}
 export type PlayitLifecycle =
   | 'starting'
   | 'waiting_for_secret'
@@ -79,6 +94,7 @@ export interface PersistentPanelState {
     startedAt: string | null;
     addressDetectedAt: string | null;
   };
+  localtonet: LocaltonetState;
   activeConfig: DeployConfiguration | null;
   verification: {
     eula: 'unverified' | 'prompt_accepted' | 'no_prompt_observed';
@@ -120,6 +136,7 @@ export interface SystemPreflight {
   serverDiskRequiredBytes: number;
   sharedDiskVolume: boolean | null;
   diskWarning: boolean;
+  localtonetBinary: SystemCheck;
   playitBinary: SystemCheck;
   playitCliBinary: SystemCheck;
   bedrockBinary: SystemCheck;

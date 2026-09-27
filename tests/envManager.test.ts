@@ -88,6 +88,25 @@ test('env set/unset preserves unrelated values and masks secrets by default', as
   assert.equal(result.status, 0);
   assert.doesNotMatch(result.stdout, /0123456789abcdef0123456789abcdef/);
 
+  for (const [key, secret] of [
+    ['LOCALTONET_AUTH_TOKEN', 'localtonet-auth-token-private'],
+    ['LOCALTONET_API_KEY', 'localtonet-api-key-private'],
+  ]) {
+    result = spawnSync(process.execPath, [path.join(root, 'scripts', 'env-manager.mjs'), 'set-stdin', key], {
+      cwd: root,
+      input: secret,
+      encoding: 'utf8',
+      timeout: 5_000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, new RegExp(secret));
+  }
+  result = invoke(root, 'list');
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /localtonet-auth-token-private|localtonet-api-key-private/);
+  assert.match(result.stdout, /LOCALTONET_AUTH_TOKEN=loc…te/);
+  assert.match(result.stdout, /LOCALTONET_API_KEY=loc…te/);
+
   result = invoke(root, 'set', 'PLAYIT_SECRET_KEY', 'must-not-be-stored');
   assert.notEqual(result.status, 0);
   content = await readFile(path.join(root, '.env'), 'utf8');

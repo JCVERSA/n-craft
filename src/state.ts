@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   DeployConfiguration,
+  LocaltonetLifecycle,
   PersistentPanelState,
   PipelineStep,
   PipelineStatus,
@@ -33,6 +34,13 @@ function initialState(): PersistentPanelState {
       startedAt: null,
       addressDetectedAt: null,
     },
+    localtonet: {
+      status: 'starting',
+      address: null,
+      error: null,
+      startedAt: null,
+      addressDetectedAt: null,
+    },
     activeConfig: null,
     verification: {
       eula: 'unverified',
@@ -53,6 +61,7 @@ function normalizeState(value: unknown): PersistentPanelState {
   const pipeline = isRecord(value.pipeline) ? value.pipeline : {};
   const server = isRecord(value.server) ? value.server : {};
   const playit = isRecord(value.playit) ? value.playit : {};
+  const localtonet = isRecord(value.localtonet) ? value.localtonet : {};
   const verification = isRecord(value.verification) ? value.verification : {};
 
   const pipelineStatus: PipelineStatus =
@@ -68,6 +77,9 @@ function normalizeState(value: unknown): PersistentPanelState {
     : 'stopped';
   const playitStatuses: PlayitLifecycle[] = [
     'starting', 'waiting_for_secret', 'claim_pending', 'running', 'address_not_detected', 'configuration_missing', 'failed', 'exited',
+  ];
+  const localtonetStatuses: LocaltonetLifecycle[] = [
+    'starting', 'running', 'address_not_detected', 'configuration_missing', 'failed', 'exited',
   ];
 
   const activeConfig = isRecord(value.activeConfig)
@@ -96,6 +108,15 @@ function normalizeState(value: unknown): PersistentPanelState {
       error: typeof playit.error === 'string' ? playit.error : null,
       startedAt: typeof playit.startedAt === 'string' ? playit.startedAt : null,
       addressDetectedAt: typeof playit.addressDetectedAt === 'string' ? playit.addressDetectedAt : null,
+    },
+    localtonet: {
+      status: localtonetStatuses.includes(localtonet.status as LocaltonetLifecycle)
+        ? (localtonet.status as LocaltonetLifecycle)
+        : 'starting',
+      address: typeof localtonet.address === 'string' ? localtonet.address : null,
+      error: typeof localtonet.error === 'string' ? localtonet.error : null,
+      startedAt: typeof localtonet.startedAt === 'string' ? localtonet.startedAt : null,
+      addressDetectedAt: typeof localtonet.addressDetectedAt === 'string' ? localtonet.addressDetectedAt : null,
     },
     activeConfig,
     verification: {
@@ -172,6 +193,12 @@ export class StateStore extends EventEmitter {
   async updatePlayit(patch: Partial<PersistentPanelState['playit']>): Promise<void> {
     await this.update(() => {
       this.state.playit = { ...this.state.playit, ...patch };
+    });
+  }
+
+  async updateLocaltonet(patch: Partial<PersistentPanelState['localtonet']>): Promise<void> {
+    await this.update(() => {
+      this.state.localtonet = { ...this.state.localtonet, ...patch };
     });
   }
 

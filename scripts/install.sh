@@ -241,8 +241,13 @@ say ''
 say 'Installation terminée.'
 say "  Gestionnaire : $BIN_DIR/ncraft"
 say '  Démarrer le dashboard : ncraft start'
-say '  Claim/configuration Playit : ouvrir le dashboard, approuver le lien, puis configurer le tunnel UDP 19132 sur Playit.'
-say '  Bedrock ne démarre pas automatiquement : utilise Start dans le dashboard après le setup Playit.'
+ACTIVE_TUNNEL_PROVIDER=$(node "$INSTALL_DIR/scripts/env-manager.mjs" get TUNNEL_PROVIDER 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
+if [ "$ACTIVE_TUNNEL_PROVIDER" = playit ]; then
+  say '  Playit sélectionné : ouvre le dashboard, approuve le lien de claim et configure manuellement un tunnel UDP local 19132.'
+else
+  say '  Localtonet par défaut : installe/vérifie le client headless, configure LOCALTONET_AUTH_TOKEN et LOCALTONET_API_KEY via ncraft env, puis crée manuellement le tunnel UDP local 19132 dans Localtonet.'
+fi
+say '  Bedrock ne démarre pas automatiquement : utilise Start dans le dashboard.'
 say '  Le jeton de connexion reste privé ; pour l’afficher localement : ncraft env get PANEL_TOKEN --reveal'
 if [ "$ENV_EXISTED" -eq 1 ]; then
   say '  .env existant conservé ; aucun secret ni réglage n’a été remplacé.'

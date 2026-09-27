@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { access, readFile, stat, statfs } from 'node:fs/promises';
 import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
-import type { SystemCheck, SystemPreflight } from './types/backend.ts';
+import type { SystemCheck, SystemPreflight, TunnelProvider } from './types/backend.ts';
+import { resolveTunnelProvider } from './tunnelProvider.ts';
 import { DISK_HEADROOM_BYTES, getMaxArchiveBytes, MAX_UNPACKED_BYTES } from './bedrock/limits.ts';
 
 const MIB = 1024 * 1024;
@@ -123,6 +124,8 @@ export class SystemInspector {
     private readonly serverDirectory: string,
     private readonly playitCommand: string,
     private readonly playitCliCommand = process.env.PLAYIT_CLI_BIN?.trim() || 'playit',
+    private readonly localtonetCommand = process.env.LOCALTONET_BIN?.trim() || 'localtonet',
+    private readonly tunnelProvider: TunnelProvider = resolveTunnelProvider(),
   ) {}
 
   async inspect(force = false): Promise<SystemPreflight> {
@@ -154,6 +157,10 @@ export class SystemInspector {
     const playitCliBinary: SystemCheck = playitCliPath
       ? { ok: true, detail: `CLI Playit détecté : ${playitCliPath}` }
       : { ok: false, detail: `CLI Playit "${this.playitCliCommand}" absent du PATH ; le lien de claim ne peut pas être généré.` };
+    const localtonetPath = resolveExecutable(this.localtonetCommand);
+    const localtonetBinary: SystemCheck = localtonetPath
+      ? { ok: true, detail: `Client Localtonet détecté : ${localtonetPath}` }
+      : { ok: false, detail: `Client Localtonet "${this.localtonetCommand}" absent du PATH.` };
 
     let bedrockExists = false;
     try {
@@ -201,8 +208,14 @@ export class SystemInspector {
     } else if (memoryWarning) {
       warnings.push(`Mémoire limitée à ${(memoryLimitBytes / GIB).toFixed(1)} Go ; la page officielle BDS indique 4 Go. L’essai est autorisé, mais un OOM est possible.`);
     }
-    if (!playitPath) warnings.push('Le tunnel Playit ne démarrera pas tant que le daemon playitd ne sera pas présent dans le PATH.');
-    if (!playitCliPath) warnings.push('Le lien de claim Playit ne pourra pas être généré tant que le CLI officiel playit ne sera pas présent dans le PATH.');
+    if (this.tunnelProvider === 'localtonet') {
+      if (!localtonetPath) warnings.push('Le tunnel Localtonet ne démarrera pas tant que le client localtonet ne sera pas présent dans le PATH.');
+      if (!process.env.LOCALTONET_AUTH_TOKEN?.trim()) warnings.push('LOCALTONET_AUTH_TOKEN absent : le client Localtonet ne peut pas s’authentifier.');
+      if (!process.env.LOCALTONET_API_KEY?.trim()) warnings.push('LOCALTONET_API_KEY absente : le dashboard ne peut pas détecter l’adresse publique Localtonet.');
+    } else {
+      if (!playitPath) warnings.push('Le tunnel Playit ne démarrera pas tant que le daemon playitd ne sera pas présent dans le PATH.');
+      if (!playitCliPath) warnings.push('Le lien de claim Playit ne pourra pas être généré tant que le CLI officiel playit ne sera pas présent dans le PATH.');
+    }
     if (dataDiskFreeBytes === null) {
       warnings.push('Espace libre du volume DATA_DIR non détecté.');
     } else if (dataDiskFreeBytes < dataDiskRequiredBytes) {
@@ -237,6 +250,7 @@ export class SystemInspector {
       serverDiskRequiredBytes,
       sharedDiskVolume,
       diskWarning,
+      localtonetBinary,
       playitBinary,
       playitCliBinary,
       bedrockBinary,

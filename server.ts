@@ -9,6 +9,8 @@ import { BedrockConsole, attachConsoleWebSocket } from './src/bedrock/console.ts
 import { DeployPipeline } from './src/bedrock/deployPipeline.ts';
 import { SystemInspector } from './src/preflight.ts';
 import { PlayitRunner } from './src/playit/playitRunner.ts';
+import { LocaltonetRunner } from './src/localtonet/localtonetRunner.ts';
+import { resolveTunnelProvider } from './src/tunnelProvider.ts';
 import { createAuthRouter } from './src/routes/auth.routes.ts';
 import { createServerRouter } from './src/routes/server.routes.ts';
 import { StateStore } from './src/state.ts';
@@ -19,6 +21,7 @@ const projectDirectory = process.cwd();
 const dataDirectory = path.resolve(projectDirectory, process.env.DATA_DIR?.trim() || 'data');
 const serverDirectory = path.resolve(projectDirectory, process.env.BEDROCK_SERVER_DIR?.trim() || path.join('bedrock', 'server'));
 const playitCommand = process.env.PLAYIT_BIN?.trim() || 'playitd';
+const tunnelProvider = resolveTunnelProvider();
 const port = Number(process.env.PORT || 3000);
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -33,7 +36,14 @@ await catalog.load();
 
 const auth = new PanelAuthService(process.env.PANEL_TOKEN);
 const bedrockConsole = new BedrockConsole(dataDirectory);
-const inspector = new SystemInspector(dataDirectory, serverDirectory, playitCommand, process.env.PLAYIT_CLI_BIN || 'playit');
+const inspector = new SystemInspector(
+  dataDirectory,
+  serverDirectory,
+  playitCommand,
+  process.env.PLAYIT_CLI_BIN || 'playit',
+  process.env.LOCALTONET_BIN || 'localtonet',
+  tunnelProvider,
+);
 const pipeline = new DeployPipeline(
   state,
   bedrockConsole,
@@ -46,6 +56,7 @@ const playitRunner = new PlayitRunner(playitCommand, process.env.PLAYIT_SECRET_K
   cliCommand: process.env.PLAYIT_CLI_BIN || 'playit',
   dataDirectory,
 });
+const localtonetRunner = new LocaltonetRunner(state, { dataDirectory });
 
 const app = express();
 app.disable('x-powered-by');
@@ -69,7 +80,7 @@ app.get('/api/health', (_request, response) => {
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
 app.use('/api/auth', createAuthRouter(auth));
-app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, inspector, catalog, playitRunner }));
+app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, inspector, catalog, playitRunner, tunnelProvider }));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 
 let viteServer: ViteDevServer | null = null;
@@ -135,7 +146,11 @@ bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals 
 httpServer.listen(port, '0.0.0.0', () => {
   console.info(`[Nebula Craft] Panel listening on 0.0.0.0:${port}`);
   if (!auth.configured) console.warn('[Nebula Craft] PANEL_TOKEN absent : la connexion au panel est désactivée.');
-  playitRunner.startOnce();
+  if (tunnelProvider === 'localtonet') {
+    localtonetRunner.startOnce();
+  } else {
+    playitRunner.startOnce();
+  }
 });
 
 let shuttingDown = false;
@@ -151,6 +166,7 @@ const shutdown = async (signal: NodeJS.Signals) => {
     consoleGateway.close().catch((error) => console.error(`[server] WebSocket close: ${(error as Error).message}`)),
     pipeline.shutdown().catch((error) => console.error(`[server] Bedrock shutdown: ${(error as Error).message}`)),
     playitRunner.shutdown().catch((error) => console.error(`[server] Playit shutdown: ${(error as Error).message}`)),
+    localtonetRunner.shutdown().catch((error) => console.error(`[server] Localtonet shutdown: ${(error as Error).message}`)),
   ]);
   await viteServer?.close().catch((error) => console.error(`[server] Vite close: ${(error as Error).message}`));
   await serverClosed;

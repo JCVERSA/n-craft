@@ -43,6 +43,7 @@ function preflight(deployReady: boolean): SystemPreflight {
     diskWarning: false,
     playitBinary: { ok: false, detail: 'missing' },
     playitCliBinary: { ok: false, detail: 'missing' },
+    localtonetBinary: { ok: false, detail: 'missing' },
     bedrockBinary: { ok: false, detail: 'not deployed' },
     deployReady,
     warnings: [],

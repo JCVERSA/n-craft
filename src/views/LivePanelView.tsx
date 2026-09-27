@@ -7,11 +7,13 @@ import type {
   PipelineStep,
   PlayitSetupSnapshot,
   SystemPreflight,
+  TunnelProvider,
   VersionEntry,
 } from '../types/backend.ts';
 
 interface StatusResponse {
   state: PersistentPanelState;
+  tunnelProvider: TunnelProvider;
   playitSetup: PlayitSetupSnapshot;
   system: SystemPreflight;
   serverDirectory: string;
@@ -369,7 +371,7 @@ export function LivePanelView() {
   };
 
   const handleStop = async () => {
-    if (!window.confirm('Arrêter uniquement bedrock_server ? Playit restera en fonctionnement.')) return;
+    if (!window.confirm(`Arrêter uniquement bedrock_server ? Le tunnel ${tunnelProvider} restera en fonctionnement.`)) return;
     setBusyAction('stop');
     setNotice('');
     try {
@@ -457,7 +459,10 @@ export function LivePanelView() {
   }
 
   const server = status?.state.server;
+  const tunnelProvider = status?.tunnelProvider ?? 'localtonet';
   const playit = status?.state.playit;
+  const localtonet = status?.state.localtonet;
+  const activeTunnel = tunnelProvider === 'localtonet' ? localtonet : playit;
   const playitSetup = status?.playitSetup;
   const system = status?.system;
   const pipeline = status?.state.pipeline;
@@ -502,28 +507,36 @@ export function LivePanelView() {
           </article>
 
           <article className="mc-bevel bg-[#1b1c1c] p-4">
-            <p className="font-jb text-[10px] text-[#8c9380]">ADRESSE PUBLIQUE PLAYIT</p>
-            {playit?.address ? (
+            <p className="font-jb text-[10px] text-[#8c9380]">ADRESSE PUBLIQUE {tunnelProvider.toUpperCase()}</p>
+            {activeTunnel?.address && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="select-all break-all font-jb text-sm font-bold text-[#dfc740]">{playit.address}</span>
-                <button type="button" onClick={() => void navigator.clipboard?.writeText(playit.address ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier</button>
+                <span className="select-all break-all font-jb text-sm font-bold text-[#dfc740]">{activeTunnel.address}</span>
+                <button type="button" onClick={() => void navigator.clipboard?.writeText(activeTunnel.address ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier</button>
               </div>
-            ) : <p className="mt-2 font-jb text-xs text-[#dfc740]">{statusLabel(playit?.status ?? 'starting')}</p>}
-            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Tunnel indépendant · destination locale fixe : <strong className="text-white">19132/UDP</strong></p>
-            {playitSetup?.claimUrl && (
+            )}
+            <p className={`mt-2 font-jb text-xs ${activeTunnel?.status === 'running' ? 'text-[#97d85d]' : activeTunnel?.status === 'failed' || activeTunnel?.status === 'exited' ? 'text-[#ff8782]' : 'text-[#dfc740]'}`}>{statusLabel(activeTunnel?.status ?? 'starting')}</p>
+            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Tunnel Bedrock · destination locale : <strong className="text-white">127.0.0.1:19132/UDP</strong></p>
+            {tunnelProvider === 'localtonet' && localtonet?.status === 'address_not_detected' && (
+              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Crée et démarre dans Localtonet un tunnel UDP vers 127.0.0.1:19132. Son adresse publique apparaîtra ici.</p>
+            )}
+            {tunnelProvider === 'localtonet' && localtonet?.status === 'configuration_missing' && (
+              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Vérifie le client Localtonet et configure LOCALTONET_AUTH_TOKEN ainsi que LOCALTONET_API_KEY dans le .env du conteneur, puis redémarre le panneau.</p>
+            )}
+            {tunnelProvider === 'localtonet' && localtonet?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{localtonet.error}</p>}
+            {tunnelProvider === 'playit' && playitSetup?.claimUrl && (
               <a href={playitSetup.claimUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex mc-bevel-green bg-[#97d85d] px-3 py-2 font-jb text-[10px] font-bold text-[#1b3700]">
                 OUVRIR LE LIEN DE CLAIM PLAYIT
               </a>
             )}
-            {playitSetup?.phase === 'configured' && !playit?.address && (
+            {tunnelProvider === 'playit' && playitSetup?.phase === 'configured' && !playit?.address && (
               <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Agent approuvé. Dans ton compte Playit, crée un tunnel Minecraft Bedrock en UDP ; son adresse apparaîtra ici automatiquement.</p>
             )}
-            {(playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && (
+            {tunnelProvider === 'playit' && (playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && (
               <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Préparation du lien de claim… Le panneau le garde ici, sans le placer dans les logs.</p>
             )}
-            {playitSetup?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playitSetup.error}</p>}
-            {playit?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playit.error}</p>}
-            {(playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
+            {tunnelProvider === 'playit' && playitSetup?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playitSetup.error}</p>}
+            {tunnelProvider === 'playit' && playit?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playit.error}</p>}
+            {tunnelProvider === 'playit' && (playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
               <button type="button" onClick={() => void handlePlayitSetup()} disabled={busyAction === 'playit'} className="mt-3 mc-stone-btn bg-[#2a2a2a] px-3 py-2 font-jb text-[10px] text-white disabled:opacity-40">
                 {busyAction === 'playit' ? 'DÉMARRAGE…' : 'RÉESSAYER LE CLAIM'}
               </button>
@@ -547,7 +560,7 @@ export function LivePanelView() {
                 </button>
               </div>
             </div>
-            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Playit n’est pas arrêté par STOP ni par Deploy.</p>
+            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Le tunnel {tunnelProvider} n’est pas arrêté par STOP ni par Deploy.</p>
           </article>
         </section>
 
@@ -687,8 +700,14 @@ export function LivePanelView() {
                 <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres · ${formatBytes(system?.dataDiskRequiredBytes ?? null)} estimés`} ok={system ? !system.diskWarning : null} detail={system?.sharedDiskVolume ? 'Même volume que BEDROCK_SERVER_DIR : l’estimation inclut archive + extraction.' : undefined} />
                 {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · ${formatBytes(system.serverDiskRequiredBytes)} estimés`} ok={!system.diskWarning} />}
                 {system && system.sharedDiskVolume === null && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · estimation du volume incertaine`} ok={!system.diskWarning} />}
-                <CheckRow label="Daemon Playit (playitd) dans PATH" ok={system ? system.playitBinary.ok : null} detail={system?.playitBinary.detail} />
-                <CheckRow label="CLI Playit (claim) dans PATH" ok={system ? system.playitCliBinary.ok : null} detail={system?.playitCliBinary.detail} />
+                {tunnelProvider === 'localtonet' ? (
+                  <CheckRow label="Client Localtonet dans PATH" ok={system ? system.localtonetBinary.ok : null} detail={system?.localtonetBinary.detail} />
+                ) : (
+                  <>
+                    <CheckRow label="Daemon Playit (playitd) dans PATH" ok={system ? system.playitBinary.ok : null} detail={system?.playitBinary.detail} />
+                    <CheckRow label="CLI Playit (claim) dans PATH" ok={system ? system.playitCliBinary.ok : null} detail={system?.playitCliBinary.detail} />
+                  </>
+                )}
               </div>
               {system?.warnings.map((warning) => <p key={warning} className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">⚠ {warning}</p>)}
             </section>

@@ -121,14 +121,20 @@ cmd_env_menu() {
   node "$ENV_HELPER" init >/dev/null || return 1
   local choice key description value masked index
   local -a keys descriptions
-  keys=(PANEL_TOKEN PORT PLAYIT_BIN PLAYIT_CLI_BIN PLAYIT_SECRET_PATH DATA_DIR BEDROCK_SERVER_DIR PANEL_ORIGIN PANEL_TRUST_PROXY BDS_START_TIMEOUT_MS BDS_STOP_TIMEOUT_MS PLAYIT_START_TIMEOUT_MS PLAYIT_ADDRESS_TIMEOUT_MS BDS_MAX_ZIP_BYTES)
+  keys=(PANEL_TOKEN PORT TUNNEL_PROVIDER LOCALTONET_BIN LOCALTONET_AUTH_TOKEN LOCALTONET_API_KEY LOCALTONET_API_POLL_INTERVAL_MS LOCALTONET_API_TIMEOUT_MS PLAYIT_BIN PLAYIT_CLI_BIN PLAYIT_SECRET_PATH DATA_DIR BEDROCK_SERVER_DIR PANEL_ORIGIN PANEL_TRUST_PROXY BDS_START_TIMEOUT_MS BDS_STOP_TIMEOUT_MS PLAYIT_START_TIMEOUT_MS PLAYIT_ADDRESS_TIMEOUT_MS BDS_MAX_ZIP_BYTES)
   descriptions=(
     'Jeton privé du dashboard (au moins 32 caractères).'
     'Port HTTP du panneau.'
+    'Fournisseur de tunnel par défaut : localtonet ou playit.'
+    'Binaire du client Localtonet headless.'
+    'AuthToken du client Localtonet (secret masqué).'
+    'Clé API Localtonet pour détecter l’adresse (secret masqué).'
+    'Intervalle de détection de l’adresse Localtonet.'
+    'Délai maximal des requêtes API Localtonet.'
     'Binaire du daemon Playit Agent 1.x.'
     'CLI Playit officiel utilisé pour le claim.'
     'Chemin facultatif du fichier secret Playit, pas la clé.'
-    'Dossier persistant pour state/logs/Playit.'
+    'Dossier persistant pour état et journaux du panneau.'
     'Dossier serveur supprimé puis recréé à chaque Deploy.'
     'Origine HTTPS publique exacte, si nécessaire.'
     'Proxies de confiance ; 0 par défaut.'
@@ -162,7 +168,7 @@ cmd_env_menu() {
     key="${keys[$index]}"
     description="${descriptions[$index]}"
     printf '%s — valeur actuelle masquée si sensible. Entrée vide = conserver ; utilise `ncraft env unset %s` pour supprimer.%s\n' "$description" "$key" "$C_RESET"
-    if [[ "$key" == PANEL_TOKEN ]]; then
+    if [[ "$key" == PANEL_TOKEN || "$key" == LOCALTONET_AUTH_TOKEN || "$key" == LOCALTONET_API_KEY ]]; then
       printf 'Nouvelle valeur (saisie masquée) : ' > /dev/tty
       IFS= read -r -s value < /dev/tty || return 1
       printf '\n' > /dev/tty
@@ -171,7 +177,7 @@ cmd_env_menu() {
       IFS= read -r value < /dev/tty || return 1
     fi
     [[ -z "$value" ]] && continue
-    if [[ "$key" == PANEL_TOKEN ]]; then
+    if [[ "$key" == PANEL_TOKEN || "$key" == LOCALTONET_AUTH_TOKEN || "$key" == LOCALTONET_API_KEY ]]; then
       printf '%s' "$value" | node "$ENV_HELPER" set-stdin "$key" || { value=""; continue; }
     else
       node "$ENV_HELPER" set "$key" "$value" || continue
@@ -191,15 +197,15 @@ cmd_env() {
     menu) cmd_env_menu ;;
     list|get|unset|help|--help|-h) node "$ENV_HELPER" "$sub" "$@" ;;
     set)
-      if [[ "${1:-}" == PANEL_TOKEN && $# -eq 1 ]]; then
-        require_tty || { fail 'Utilise un terminal pour saisir le PANEL_TOKEN sans l’exposer dans l’historique.'; return 1; }
-        local token_value
-        printf 'Nouveau PANEL_TOKEN (saisie masquée) : ' > /dev/tty
-        IFS= read -r -s token_value < /dev/tty || return 1
+      if [[ "${1:-}" =~ ^(PANEL_TOKEN|LOCALTONET_AUTH_TOKEN|LOCALTONET_API_KEY)$ && $# -eq 1 ]]; then
+        local secret_value secret_name="${1:-}"
+        require_tty || { fail "Utilise un terminal pour saisir $secret_name sans l’exposer dans l’historique."; return 1; }
+        printf 'Nouvelle valeur pour %s (saisie masquée) : ' "$secret_name" > /dev/tty
+        IFS= read -r -s secret_value < /dev/tty || return 1
         printf '\n' > /dev/tty
-        [[ -n "$token_value" ]] || { warn 'Valeur vide : aucun changement.'; return 1; }
-        printf '%s' "$token_value" | node "$ENV_HELPER" set-stdin PANEL_TOKEN
-        token_value=""
+        [[ -n "$secret_value" ]] || { warn 'Valeur vide : aucun changement.'; return 1; }
+        printf '%s' "$secret_value" | node "$ENV_HELPER" set-stdin "$secret_name"
+        secret_value=""
       else
         node "$ENV_HELPER" set "$@"
       fi
@@ -215,7 +221,7 @@ cmd_env() {
 
 cmd_setup() {
   require_repo || return 1
-  local no_prompt=0 env_preexisted=0 node_version memory_mb playit_daemon playit_cli
+  local no_prompt=0 env_preexisted=0 node_version memory_mb playit_daemon playit_cli localtonet_bin tunnel_provider
   for arg in "$@"; do [[ "$arg" == --no-prompt ]] && no_prompt=1; done
   [[ -f "$ENV_FILE" ]] && env_preexisted=1
   node_version="$(node -p 'process.versions.node' 2>/dev/null || true)"
@@ -237,10 +243,19 @@ cmd_setup() {
   (cd "$APP_DIR" && npm run build) || { fail 'Build échoué ; aucune donnée Bedrock n’a été supprimée.'; return 1; }
   [[ -f "$APP_DIR/build/server.js" && -f "$APP_DIR/dist/index.html" ]] || { fail 'Fichiers de build attendus absents.'; return 1; }
   ok 'Dépendances et build prêts.'
-  playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
-  playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
-  if ! is_executable_setting "$playit_daemon"; then warn "$playit_daemon absent ; le daemon Playit ne démarrera pas."; fi
-  if ! is_executable_setting "$playit_cli"; then warn "$playit_cli absent ; le dashboard ne pourra pas générer le claim."; fi
+  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-localtonet}"
+  tunnel_provider="${tunnel_provider,,}"
+  if [[ "$tunnel_provider" == playit ]]; then
+    playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
+    playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
+    if ! is_executable_setting "$playit_daemon"; then warn "$playit_daemon absent ; le daemon Playit ne démarrera pas."; fi
+    if ! is_executable_setting "$playit_cli"; then warn "$playit_cli absent ; le dashboard ne pourra pas générer le claim."; fi
+  else
+    localtonet_bin="${LOCALTONET_BIN:-$(read_env LOCALTONET_BIN)}"; localtonet_bin="${localtonet_bin:-localtonet}"
+    if ! is_executable_setting "$localtonet_bin"; then warn "$localtonet_bin absent ; installe le client Localtonet Linux officiel avec support headless pour le tunnel par défaut."; fi
+    [[ -n "${LOCALTONET_AUTH_TOKEN:-$(read_env LOCALTONET_AUTH_TOKEN)}" ]] || warn 'LOCALTONET_AUTH_TOKEN absent ; le client Localtonet ne pourra pas s’authentifier.'
+    [[ -n "${LOCALTONET_API_KEY:-$(read_env LOCALTONET_API_KEY)}" ]] || warn 'LOCALTONET_API_KEY absente ; l’adresse publique ne pourra pas être détectée.'
+  fi
   if (( env_preexisted == 0 && no_prompt == 0 )) && require_tty; then
     printf 'Ouvrir maintenant le menu ncraft env ? [Y/n] ' > /dev/tty
     local answer
@@ -350,7 +365,7 @@ cmd_status() {
   else
     warn 'Limite mémoire cgroup non détectée.'
   fi
-  [[ -f "$ENV_FILE" ]] && node "$ENV_HELPER" list | sed -n '1,8p' || warn '.env absent.'
+  [[ -f "$ENV_FILE" ]] && node "$ENV_HELPER" list | sed -n '1,12p' || warn '.env absent.'
   [[ -f "$LOG_FILE" ]] && printf 'Log : %s\n' "$LOG_FILE"
   return 0
 }
@@ -363,15 +378,24 @@ cmd_logs() {
 
 cmd_doctor() {
   require_repo || return 1
-  local failed=0 node_version memory_mb token playit_daemon playit_cli libcurl_found=0 candidate code
+  local failed=0 node_version memory_mb token playit_daemon playit_cli localtonet_bin tunnel_provider libcurl_found=0 candidate code
   node_version="$(node -p 'process.versions.node' 2>/dev/null || true)"
   if node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit((a===20&&b>=19)||(a===22&&b>=12)||a>22?0:1)' 2>/dev/null; then ok "Node.js $node_version"; else warn "Node.js $node_version ; 20.19+ ou 22.12+ requis."; failed=1; fi
   command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || { warn 'npm absent.'; failed=1; }
   command -v git >/dev/null 2>&1 && ok "git $(git --version | awk '{print $3}')" || warn 'git absent.'
-  playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
-  playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
-  if is_executable_setting "$playit_daemon"; then ok "Daemon Playit présent : $playit_daemon."; else warn "Daemon Playit absent : $playit_daemon."; fi
-  if is_executable_setting "$playit_cli"; then ok "CLI Playit présent : $playit_cli."; else warn "CLI Playit absent : $playit_cli."; fi
+  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-localtonet}"
+  tunnel_provider="${tunnel_provider,,}"
+  if [[ "$tunnel_provider" == playit ]]; then
+    playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
+    playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
+    if is_executable_setting "$playit_daemon"; then ok "Daemon Playit présent : $playit_daemon."; else warn "Daemon Playit absent : $playit_daemon."; fi
+    if is_executable_setting "$playit_cli"; then ok "CLI Playit présent : $playit_cli."; else warn "CLI Playit absent : $playit_cli."; fi
+  else
+    localtonet_bin="${LOCALTONET_BIN:-$(read_env LOCALTONET_BIN)}"; localtonet_bin="${localtonet_bin:-localtonet}"
+    if is_executable_setting "$localtonet_bin"; then ok "Client Localtonet présent : $localtonet_bin."; else warn "Client Localtonet absent : $localtonet_bin."; fi
+    [[ -n "${LOCALTONET_AUTH_TOKEN:-$(read_env LOCALTONET_AUTH_TOKEN)}" ]] && ok 'LOCALTONET_AUTH_TOKEN configuré.' || warn 'LOCALTONET_AUTH_TOKEN absent.'
+    [[ -n "${LOCALTONET_API_KEY:-$(read_env LOCALTONET_API_KEY)}" ]] && ok 'LOCALTONET_API_KEY configurée.' || warn 'LOCALTONET_API_KEY absente.'
+  fi
   [[ -f "$APP_DIR/build/server.js" ]] && ok 'Build serveur présent.' || { warn 'Build absent ; lance ncraft setup.'; failed=1; }
   [[ -f "$APP_DIR/dist/index.html" ]] && ok 'Build frontend présent.' || { warn 'Build frontend absent ; lance ncraft setup.'; failed=1; }
   [[ -f "$ENV_FILE" ]] && { token="$(read_env PANEL_TOKEN)"; [[ ${#token} -ge 32 ]] && ok 'PANEL_TOKEN configuré.' || { warn 'PANEL_TOKEN absent/trop court.'; failed=1; }; } || { warn '.env absent.'; failed=1; }
@@ -437,12 +461,13 @@ Usage : ncraft <commande>
   status                État du processus, santé HTTP, mémoire et configuration masquée
   logs                  Suit les logs du panneau
   update                Pull --ff-only + npm ci + build, sans toucher au monde Bedrock
-  doctor                Vérifie runtime, fichiers, Playit, libcurl et mémoire
+  doctor                Vérifie runtime, fichiers, le tunnel actif, libcurl et mémoire
   env                   Menu interactif de configuration .env
   env list              Liste .env en masquant les secrets
   env get CLE [--reveal] Lit une valeur (secrets masqués par défaut)
   env set CLE VALEUR    Modifie une variable sans écraser les autres
-  env set PANEL_TOKEN   Saisie masquée du token, sans l’exposer dans la ligne de commande
+  env set PANEL_TOKEN|LOCALTONET_AUTH_TOKEN|LOCALTONET_API_KEY
+                        Saisie masquée des secrets, sans les exposer dans l’historique
   env unset CLE         Supprime une variable
   env edit              Ouvre le .env dans l’éditeur
 
