@@ -159,7 +159,7 @@ fi
 
 [ -f "$INSTALL_DIR/package.json" ] || die 'Le clone ne contient pas package.json.'
 [ -f "$INSTALL_DIR/manage.sh" ] || die 'Le clone ne contient pas manage.sh.'
-chmod 755 "$INSTALL_DIR/manage.sh" "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/install-portwarp.sh" "$INSTALL_DIR/scripts/env-manager.mjs"
+chmod 755 "$INSTALL_DIR/manage.sh" "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/env-manager.mjs"
 mkdir -p "$BIN_DIR"
 
 if [ -e "$BIN_DIR/ncraft" ] && [ ! -L "$BIN_DIR/ncraft" ]; then
