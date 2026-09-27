@@ -1,4 +1,45 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Copy,
+  Cpu,
+  Database,
+  ExternalLink,
+  Globe,
+  HardDrive,
+  Layers,
+  Loader2,
+  LockKeyhole,
+  LogOut,
+  Package,
+  Play,
+  Power,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Terminal,
+  Users,
+  Wifi,
+  X,
+} from 'lucide-react';
+import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
+import { NetherCard } from '../components/NetherCard.tsx';
+import {
+  appendMetricSample,
+  loadMetricHistory,
+  normalizeMetricHistory,
+  saveMetricHistory,
+  type BedrockMetricSample,
+  type MetricStorage,
+} from '../utils/metricHistory.ts';
 import type {
   AuthStatus,
   ConsoleLog,
@@ -25,6 +66,14 @@ interface StatusResponse {
 }
 
 type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
+
+function getMetricStorage(): MetricStorage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -113,6 +162,12 @@ function statusLabel(status: string): string {
     waiting_for_secret: 'CLAIM PLAYIT À FINALISER',
     claim_pending: 'APPROBATION PLAYIT EN ATTENTE',
     configuration_missing: 'CONFIGURATION MANQUANTE',
+    client_missing: 'CLI PORTWARP ABSENT',
+    authentication_required: 'AUTORISATION REQUISE',
+    awaiting_approval: 'APPROBATION EN ATTENTE',
+    tunnel_missing: 'TUNNEL À CRÉER',
+    tunnel_misconfigured: 'RÈGLE UDP À CORRIGER',
+    connecting: 'CONNEXION',
     exited: 'AGENT ARRÊTÉ',
   };
   return labels[status] ?? status.toUpperCase();
@@ -141,6 +196,8 @@ export function LivePanelView() {
   const [loginError, setLoginError] = useState('');
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [clockNow, setClockNow] = useState(Date.now());
+  const [metricHistory, setMetricHistory] = useState<BedrockMetricSample[]>(() => loadMetricHistory(getMetricStorage()));
+  const reduceMotion = useReducedMotion();
   const [versions, setVersions] = useState<PublicVersion[]>([]);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
   const [configTouched, setConfigTouched] = useState(false);
@@ -180,6 +237,29 @@ export function LivePanelView() {
     const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [authenticated]);
+
+  useEffect(() => {
+    saveMetricHistory(metricHistory, getMetricStorage());
+  }, [metricHistory]);
+
+  useEffect(() => {
+    const server = status?.state.server;
+    if (!authenticated || server?.status !== 'running' || !server.metricsUpdatedAt) return;
+    const timestamp = Date.parse(server.metricsUpdatedAt);
+    if (!Number.isSafeInteger(timestamp)) return;
+    setMetricHistory((current) => appendMetricSample(current, {
+      timestamp,
+      cpuPercent: server.cpuPercent,
+      memoryBytes: server.memoryBytes,
+    }));
+  }, [authenticated, status?.state.server.status, status?.state.server.metricsUpdatedAt, status?.state.server.cpuPercent, status?.state.server.memoryBytes]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMetricHistory((current) => normalizeMetricHistory(current));
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -467,46 +547,96 @@ export function LivePanelView() {
     changeField('adminXuids', configuration.adminXuids.filter((_value, currentIndex) => currentIndex !== index));
   };
 
+  const handleCopy = async (value: string, label: string) => {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(value);
+      setNotice(`${label} copié.`);
+      setFormError('');
+    } catch {
+      setNotice(`Copie automatique indisponible. Sélectionne ${label.toLowerCase()} puis copie-le manuellement.`);
+    }
+  };
+
   if (authLoading) {
-    return <div className="min-h-screen bg-[#131314] flex items-center justify-center text-[#97d85d] font-jb">Chargement du panneau…</div>;
+    return (
+      <main className="ncraft-shell ncraft-auth-shell">
+        <div className="ncraft-auth-orbit" aria-hidden="true" />
+        <motion.div
+          className="ncraft-loading-card"
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <span className="brand-mark"><Activity size={22} /></span>
+          <Loader2 className="spin-soft" size={18} />
+          <span>Chargement du panneau…</span>
+        </motion.div>
+      </main>
+    );
   }
 
   if (!authenticated) {
     return (
-      <main className="min-h-screen bg-[#131314] text-[#e4e2e2] font-space flex items-center justify-center p-4">
-        <section className="w-full max-w-lg mc-bevel bg-[#1b1c1c] p-4 sm:p-6 shadow-2xl">
-          <div className="flex items-center gap-3 border-b-2 border-[#0e0e0e] pb-4 mb-4">
-            <div className="w-12 h-12 mc-inset bg-[#0e0e0e] flex items-center justify-center text-[#97d85d] text-2xl">✦</div>
+      <main className="ncraft-shell ncraft-auth-shell">
+        <div className="ncraft-auth-orbit" aria-hidden="true" />
+        <motion.section
+          className="ncraft-login-card"
+          initial={reduceMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="login-brand-row">
+            <span className="brand-mark brand-mark--large"><Activity size={25} /></span>
             <div>
-              <p className="font-pixel text-sm sm:text-base text-[#dfc740] pixel-shadow-gold">NEBULA CRAFT</p>
-              <p className="font-jb text-xs text-[#c2c9b5] mt-2">Bedrock Dedicated Server · Panel privé</p>
+              <p className="nether-eyebrow">BEDROCK CONTROL DECK</p>
+              <h1>NEBULA <span>CRAFT</span></h1>
+              <p className="login-subtitle">Panneau privé · instance Bedrock</p>
             </div>
           </div>
-          <h1 className="font-silk text-lg text-white mb-2">Accès opérateur</h1>
-          <p className="font-jb text-xs leading-6 text-[#c2c9b5] mb-5">Entre le jeton du panel. Il sera échangé contre un cookie de session HttpOnly et ne sera jamais stocké dans le navigateur.</p>
+          <div className="login-divider" />
+          <div className="login-heading">
+            <span className="login-heading__icon"><LockKeyhole size={18} /></span>
+            <div>
+              <h2>Accès opérateur</h2>
+              <p>Connecte-toi pour gérer ton serveur.</p>
+            </div>
+          </div>
+          <p className="login-security-copy">
+            Le jeton est échangé contre un cookie de session HttpOnly. Il n’est pas conservé dans le navigateur.
+          </p>
           {!authStatus?.configured && (
-            <div role="alert" className="mc-inset bg-[#311719] border-l-4 border-[#ff8782] p-3 mb-4 font-jb text-xs text-[#ffb3ae] leading-5">
-              PANEL_TOKEN n’est pas configuré dans l’environnement du conteneur. Définis-le, puis redémarre le panel.
+            <div role="alert" className="nether-callout nether-callout--danger">
+              <AlertTriangle size={17} />
+              <span>PANEL_TOKEN n’est pas configuré dans l’environnement du conteneur. Définis-le, puis redémarre le panneau.</span>
             </div>
           )}
-          <form onSubmit={handleLogin} className="flex flex-col gap-3">
-            <label className="font-jb text-xs text-[#dfc740]" htmlFor="panel-token">JETON PANEL</label>
-            <input
-              id="panel-token"
-              type="password"
-              autoComplete="current-password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              disabled={!authStatus?.configured || loginBusy}
-              className="mc-inset bg-[#0e0e0e] p-3 font-mono text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50"
-              placeholder="PANEL_TOKEN"
-            />
-            {loginError && <p role="alert" className="font-jb text-xs text-[#ff8782]">{loginError}</p>}
-            <button disabled={!authStatus?.configured || loginBusy || !token} className="mc-bevel-green bg-[#97d85d] text-[#1b3700] p-3 font-pixel text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-40">
-              {loginBusy ? 'VÉRIFICATION…' : 'OUVRIR LE PANNEAU'}
-            </button>
+          <form onSubmit={handleLogin} className="login-form">
+            <label className="nether-field" htmlFor="panel-token">
+              <span>Jeton du panneau</span>
+              <input
+                id="panel-token"
+                type="password"
+                autoComplete="current-password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                disabled={!authStatus?.configured || loginBusy}
+                className="nether-input"
+                placeholder="PANEL_TOKEN"
+              />
+            </label>
+            {loginError && <p role="alert" className="inline-error">{loginError}</p>}
+            <motion.button
+              type="submit"
+              disabled={!authStatus?.configured || loginBusy || !token}
+              whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+              className="nether-btn nether-btn--primary nether-btn--wide"
+            >
+              {loginBusy ? <Loader2 className="spin-soft" size={17} /> : <ArrowRight size={17} />}
+              {loginBusy ? 'Vérification…' : 'Ouvrir le panneau'}
+            </motion.button>
           </form>
-        </section>
+          <p className="login-footer"><ShieldCheck size={14} /> Session protégée · connexion chiffrée</p>
+        </motion.section>
       </main>
     );
   }
@@ -524,377 +654,602 @@ export function LivePanelView() {
   const system = status?.system;
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
-  const isExistingDeployment = Boolean(status?.state.activeConfig);
+  const activeConfig = status?.state.activeConfig;
+  const isExistingDeployment = Boolean(activeConfig);
   const uptimeSeconds = server?.status === 'running' && server.startedAt
     ? Math.floor((clockNow - Date.parse(server.startedAt)) / 1000)
     : null;
+  const providerName = tunnelProvider === 'portwarp' ? 'Portwarp' : tunnelProvider === 'localtonet' ? 'Localtonet' : 'Playit';
+  const selectedVersion = versions.find((version) => version.version === configuration.version);
+  const versionEntry = activeConfig?.version
+    ? versions.find((version) => version.version === activeConfig.version)
+    : undefined;
+  const currentServerStatus = server?.status ?? 'stopped';
+  const tunnelStatus = activeTunnel?.status ?? 'starting';
+  const startDisabled = isPipelineBusy || !activeConfig || !system?.bedrockBinary.ok || server?.status === 'running' || busyAction === 'stop';
+  const stopDisabled = isPipelineBusy || busyAction === 'stop' || server?.status !== 'running';
 
   return (
-    <main className="min-h-screen bg-[#131314] text-[#e4e2e2] font-space">
-      <header className="sticky top-0 z-40 border-b-2 border-[#0e0e0e] bg-[#1b1c1c] shadow-xl">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 mc-inset bg-[#0e0e0e] flex items-center justify-center text-[#97d85d] text-xl">✦</div>
-            <div className="min-w-0">
-              <h1 className="font-pixel text-xs sm:text-sm text-[#dfc740] pixel-shadow-gold">NEBULA CRAFT <span className="text-[#97d85d]">BEDROCK</span></h1>
-              <p className="font-jb text-[10px] text-[#c2c9b5] mt-1">INSTANCE UNIQUE · PORT UDP 19132</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex mc-inset bg-[#0e0e0e] px-2 py-1 font-jb text-[10px] text-[#97d85d]">SESSION PRIVÉE</span>
-            <button onClick={() => void handleLogout()} disabled={busyAction === 'logout'} className="mc-stone-btn bg-[#2a2a2a] px-3 py-2 font-jb text-xs text-white hover:text-[#ff8782] disabled:opacity-50">Déconnexion</button>
+    <main className="ncraft-shell">
+      <div className="ncraft-ambient ncraft-ambient--magma" aria-hidden="true" />
+      <div className="ncraft-ambient ncraft-ambient--portal" aria-hidden="true" />
+      <div className="ncraft-grid-glow" aria-hidden="true" />
+
+      <header className="ncraft-header">
+        <div className="ncraft-header__inner">
+          <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil">
+            <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { rotate: 8, scale: 1.04 }}>
+              <Activity size={21} strokeWidth={2.2} />
+            </motion.span>
+            <span className="ncraft-brand__copy">
+              <strong>NEBULA <em>CRAFT</em></strong>
+              <small>BEDROCK CONTROL DECK</small>
+            </span>
+          </a>
+
+          <nav className="ncraft-nav" aria-label="Navigation du panneau">
+            <a className="is-current" href="#overview"><Server size={15} /> Vue générale</a>
+            <a href="#deploy"><Package size={15} /> Déploiement</a>
+            <a href="#diagnostics"><ShieldCheck size={15} /> Diagnostics</a>
+            <a href="#console"><Terminal size={15} /> Console</a>
+          </nav>
+
+          <div className="ncraft-header__actions">
+            <StatusPill status={currentServerStatus} />
+            <motion.button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={busyAction === 'logout'}
+              whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+              className="icon-button logout-button"
+              aria-label="Déconnexion"
+              title="Déconnexion"
+            >
+              {busyAction === 'logout' ? <Loader2 className="spin-soft" size={17} /> : <LogOut size={17} />}
+              <span>Quitter</span>
+            </motion.button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1500px] p-3 sm:p-5 flex flex-col gap-4 pb-12">
-        {(notice || formError) && (
-          <div role="status" className={`mc-inset p-3 font-jb text-xs leading-5 ${formError ? 'bg-[#311719] text-[#ffb3ae]' : 'bg-[#20281b] text-[#c7ef9c]'}`}>
-            {formError || notice}
-            <button className="float-right text-white" aria-label="Fermer le message" onClick={() => { setNotice(''); setFormError(''); }}>×</button>
-          </div>
-        )}
+      <div className="ncraft-main">
+        <AnimatePresence initial={false}>
+          {(notice || formError) && (
+            <motion.div
+              key={formError ? 'error' : 'notice'}
+              role={formError ? 'alert' : 'status'}
+              aria-live={formError ? 'assertive' : 'polite'}
+              className={`nether-banner ${formError ? 'nether-banner--danger' : 'nether-banner--success'}`}
+              initial={reduceMotion ? false : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+            >
+              {formError ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+              <span>{formError || notice}</span>
+              <button type="button" onClick={() => { setNotice(''); setFormError(''); }} aria-label="Fermer le message"><X size={17} /></button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <article className="mc-bevel bg-[#1b1c1c] p-4">
-            <p className="font-jb text-[10px] text-[#8c9380]">BEDROCK DEDICATED SERVER</p>
-            <div className="mt-2 flex items-center gap-2">
-              <span className={`h-3 w-3 ${server?.status === 'running' ? 'bg-[#97d85d]' : server?.status === 'failed' ? 'bg-[#ff8782]' : 'bg-[#dfc740]'} mc-bevel`} />
-              <strong className={`font-pixel text-xs ${server?.status === 'running' ? 'text-[#97d85d]' : server?.status === 'failed' ? 'text-[#ff8782]' : 'text-[#dfc740]'}`}>
-                {statusLabel(server?.status ?? 'stopped')}
-              </strong>
+        <section id="overview" className="ncraft-overview-grid">
+          <motion.section
+            className="nether-hero"
+            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="nether-hero__ambient" aria-hidden="true"><span /><span /><span /></div>
+            <div className="nether-hero__topline">
+              <span className="nether-hero__mark"><Server size={17} /></span>
+              <span className="nether-eyebrow">CONTRÔLE DU SERVEUR</span>
+              <StatusPill status={currentServerStatus} />
             </div>
-            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">{status?.state.activeConfig ? `${status.state.activeConfig.version} · ${status.state.activeConfig.levelName}` : 'Aucun déploiement actif'}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Metric label="JOUEURS" value={`${server?.playersOnline ?? '—'} / ${status?.state.activeConfig?.maxPlayers ?? '—'}`} />
-              <Metric label="UPTIME" value={formatDuration(uptimeSeconds)} />
-              <Metric label="CPU BEDROCK" value={server?.cpuPercent === null || server?.cpuPercent === undefined ? '—' : `${server.cpuPercent.toFixed(1)} %`} />
-              <Metric label="RAM BEDROCK" value={formatBytes(server?.memoryBytes ?? null)} />
+            <div className="nether-hero__intro">
+              <h1>Ton monde,<br /><span>sous contrôle.</span></h1>
+              <p>Bedrock Dedicated Server · Instance unique</p>
             </div>
-            {server?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ff8782]">{server.error}</p>}
-          </article>
 
-          <article className="mc-bevel bg-[#1b1c1c] p-4">
-            <p className="font-jb text-[10px] text-[#8c9380]">ADRESSE PUBLIQUE {tunnelProvider.toUpperCase()}</p>
-            {activeTunnel?.address && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="select-all break-all font-jb text-sm font-bold text-[#dfc740]">{activeTunnel.address}</span>
-                <button type="button" onClick={() => void navigator.clipboard?.writeText(activeTunnel.address ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier</button>
-              </div>
-            )}
-            <p className={`mt-2 font-jb text-xs ${activeTunnel?.status === 'running' ? 'text-[#97d85d]' : activeTunnel?.status === 'failed' || activeTunnel?.status === 'exited' || activeTunnel?.status === 'tunnel_misconfigured' ? 'text-[#ff8782]' : 'text-[#dfc740]'}`}>{statusLabel(activeTunnel?.status ?? 'starting')}</p>
-            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Tunnel Bedrock · destination locale : <strong className="text-white">127.0.0.1:19132/UDP</strong></p>
-            {tunnelProvider === 'portwarp' && portwarp && (
-              <>
-                <p className="mt-2 break-words font-jb text-[10px] text-[#c2c9b5]">
-                  {portwarp.tunnelName} · UDP {portwarp.localPort ?? 19132}
-                  {portwarp.publicPort ? ` → port public ${portwarp.publicPort}` : ''}
-                </p>
-                {portwarpSetup?.phase === 'waiting_for_approval' && portwarpSetup.userCode && (
-                  <div className="mt-3 mc-inset bg-[#0e0e0e] p-3">
-                    <p className="font-jb text-[10px] leading-4 text-[#c2c9b5]">Autorise ce conteneur sur la page officielle Portwarp :</p>
-                    <a href={portwarpSetup.verificationUrl ?? 'https://portwarp.com/device'} target="_blank" rel="noreferrer" className="mt-2 inline-flex font-jb text-xs font-bold text-[#97d85d] underline">Ouvrir portwarp.com/device</a>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <code className="select-all font-jb text-lg font-bold tracking-widest text-[#dfc740]">{portwarpSetup.userCode}</code>
-                      <button type="button" onClick={() => void navigator.clipboard?.writeText(portwarpSetup.userCode ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier le code</button>
-                    </div>
-                    <p className="mt-2 font-jb text-[9px] leading-4 text-[#8c9380]">Code temporaire, affiché uniquement dans cette session authentifiée. Ne le publie pas et ne le partage pas.</p>
-                  </div>
-                )}
-                {portwarpSetup?.phase === 'starting' && (
-                  <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Démarrage de pwrp login; le code temporaire apparaîtra ici. Il n’est ni journalisé ni enregistré dans .env.</p>
-                )}
-                {portwarpSetup?.phase === 'failed' && portwarpSetup.error && (
-                  <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{portwarpSetup.error}</p>
-                )}
-                {portwarp.status === 'tunnel_missing' && (
-                  <div className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">
-                    <p>Crée ou active manuellement dans Portwarp un tunnel nommé « {portwarp.tunnelName} », en UDP vers le port local 19132. N-Craft ne crée ni ne supprime de tunnel et réessaiera automatiquement.</p>
-                    <a href="https://portwarp.com/tunnels" target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[#97d85d] underline">Ouvrir les tunnels Portwarp</a>
-                  </div>
-                )}
-                {portwarp.status === 'client_missing' && <p className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">Le CLI pwrp manque dans le conteneur. Relance ncraft setup pour l’installer depuis les téléchargements officiels vérifiés.</p>}
-                {portwarp.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{portwarp.error}</p>}
-                <p className="mt-3 font-jb text-[9px] leading-4 text-[#8c9380]">« Relais actif » ne prouve pas que Bedrock UDP est joignable de l’extérieur : valide l’adresse depuis un client Bedrock. Un contrôle local TCP n’est pas une mesure de disponibilité UDP.</p>
-                <button type="button" onClick={() => void handlePortwarpRetry()} disabled={busyAction === 'portwarp'} className="mt-3 mc-stone-btn bg-[#2a2a2a] px-3 py-2 font-jb text-[10px] text-white disabled:opacity-40">
-                  {busyAction === 'portwarp' ? 'VÉRIFICATION…' : 'VÉRIFIER / RECONNECTER'}
-                </button>
-              </>
-            )}
-            {tunnelProvider === 'localtonet' && localtonet?.status === 'address_not_detected' && (
-              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Crée et démarre dans Localtonet un tunnel UDP vers 127.0.0.1:19132. Son adresse publique apparaîtra ici.</p>
-            )}
-            {tunnelProvider === 'localtonet' && localtonet?.status === 'configuration_missing' && (
-              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Vérifie le client Localtonet et configure LOCALTONET_AUTH_TOKEN ainsi que LOCALTONET_API_KEY dans le .env du conteneur, puis redémarre le panneau.</p>
-            )}
-            {tunnelProvider === 'localtonet' && localtonet?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{localtonet.error}</p>}
-            {tunnelProvider === 'playit' && playitSetup?.claimUrl && (
-              <a href={playitSetup.claimUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex mc-bevel-green bg-[#97d85d] px-3 py-2 font-jb text-[10px] font-bold text-[#1b3700]">
-                OUVRIR LE LIEN DE CLAIM PLAYIT
-              </a>
-            )}
-            {tunnelProvider === 'playit' && playitSetup?.phase === 'configured' && !playit?.address && (
-              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Agent approuvé. Dans ton compte Playit, crée un tunnel Minecraft Bedrock en UDP ; son adresse apparaîtra ici automatiquement.</p>
-            )}
-            {tunnelProvider === 'playit' && (playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && (
-              <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Préparation du lien de claim… Le panneau le garde ici, sans le placer dans les logs.</p>
-            )}
-            {tunnelProvider === 'playit' && playitSetup?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playitSetup.error}</p>}
-            {tunnelProvider === 'playit' && playit?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{playit.error}</p>}
-            {tunnelProvider === 'playit' && (playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
-              <button type="button" onClick={() => void handlePlayitSetup()} disabled={busyAction === 'playit'} className="mt-3 mc-stone-btn bg-[#2a2a2a] px-3 py-2 font-jb text-[10px] text-white disabled:opacity-40">
-                {busyAction === 'playit' ? 'DÉMARRAGE…' : 'RÉESSAYER LE CLAIM'}
-              </button>
-            )}
-          </article>
-
-          <article className="mc-bevel bg-[#1b1c1c] p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-jb text-[10px] text-[#8c9380]">PIPELINE DE DÉPLOIEMENT</p>
-                <strong className={`mt-2 block font-pixel text-[10px] ${pipeline?.status === 'failed' ? 'text-[#ff8782]' : isPipelineBusy ? 'text-[#dfc740]' : 'text-[#97d85d]'}`}>
-                  {pipeline?.status === 'failed' ? 'ÉCHEC' : isPipelineBusy ? statusLabel(pipeline?.step ?? 'preflight') : pipeline?.step === 'running' ? 'DÉPLOIEMENT TERMINÉ' : 'PRÊT'}
-                </strong>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void handleStart()} disabled={isPipelineBusy || !status?.state.activeConfig || !system?.bedrockBinary.ok || server?.status === 'running'} className="mc-bevel-green bg-[#97d85d] px-3 py-2 font-jb text-[10px] font-bold text-[#1b3700] disabled:cursor-not-allowed disabled:opacity-40">
-                  {busyAction === 'start' ? 'DÉMARRAGE…' : 'START'}
-                </button>
-                <button type="button" onClick={() => void handleStop()} disabled={isPipelineBusy || busyAction === 'stop' || server?.status !== 'running'} className="mc-bevel-red bg-[#93000a] px-3 py-2 font-jb text-[10px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
-                  {busyAction === 'stop' ? 'ARRÊT…' : 'STOP'}
-                </button>
-              </div>
+            <div className="world-capsule">
+              <span className="world-capsule__icon"><Globe size={19} /></span>
+              <span className="world-capsule__copy">
+                <small>MONDE ACTIF</small>
+                <strong>{activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
+              </span>
+              <span className="world-capsule__version">
+                {activeConfig?.version ? `BDS ${activeConfig.version}` : 'À configurer'}
+              </span>
             </div>
-            <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Le tunnel {tunnelProvider} n’est pas arrêté par STOP ni par Deploy.</p>
-            <div className="mt-3 border-t border-[#0e0e0e] pt-3 font-jb text-[10px] leading-5">
-              <p className="text-[#8c9380]">REDÉMARRAGE QUOTIDIEN DU SERVEUR</p>
-              {scheduler?.enabled ? (
-                <>
-                  <p className="text-[#c2c9b5]">{scheduler.time} · {scheduler.timeZone} · prochain : {formatScheduledTime(scheduler.nextRestartAt, scheduler.timeZone)}</p>
-                  {scheduler.phase === 'countdown' && <p className="text-[#dfc740]">Annonce en jeu · redémarrage dans {formatDuration(scheduler.countdownSeconds)}</p>}
-                  {scheduler.phase === 'restarting' && <p className="text-[#dfc740]">Arrêt gracieux puis redémarrage en cours…</p>}
-                  {scheduler.phase === 'failed' && <p className="break-words text-[#ff8782]">{scheduler.error || 'Échec du redémarrage automatique.'}</p>}
-                </>
+
+            <div className="hero-metrics-grid">
+              <MetricTile icon={Users} label="Joueurs" value={`${server?.playersOnline ?? '—'} / ${activeConfig?.maxPlayers ?? '—'}`} detail="connectés / maximum" accent="portal" />
+              <MetricTile icon={Clock3} label="Disponibilité" value={formatDuration(uptimeSeconds)} detail={uptimeSeconds === null ? 'serveur hors ligne' : 'depuis le démarrage'} accent="soul" />
+              <MetricTile icon={Cpu} label="CPU Bedrock" value={server?.cpuPercent == null ? '—' : `${server.cpuPercent.toFixed(1)} %`} detail="processus serveur" accent="magma" />
+              <MetricTile icon={HardDrive} label="RAM Bedrock" value={formatBytes(server?.memoryBytes ?? null)} detail="mémoire résidente" accent="moss" />
+            </div>
+
+            <div className="nether-hero__actions">
+              <motion.button
+                type="button"
+                onClick={() => void handleStart()}
+                disabled={startDisabled}
+                whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                className="nether-btn nether-btn--primary"
+              >
+                {busyAction === 'start' ? <Loader2 className="spin-soft" size={17} /> : <Play size={17} fill="currentColor" />}
+                {busyAction === 'start' ? 'Démarrage…' : 'Démarrer Bedrock'}
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => void handleStop()}
+                disabled={stopDisabled}
+                whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                className="nether-btn nether-btn--danger"
+              >
+                {busyAction === 'stop' ? <Loader2 className="spin-soft" size={17} /> : <Power size={17} />}
+                {busyAction === 'stop' ? 'Arrêt…' : 'Arrêter'}
+              </motion.button>
+              <a className="nether-btn nether-btn--quiet" href="#deploy"><Package size={16} /> Mettre à jour <ArrowRight size={14} /></a>
+            </div>
+
+            <div className="restart-strip">
+              <span className="restart-strip__icon"><Clock3 size={15} /></span>
+              <span className="restart-strip__label">Redémarrage quotidien</span>
+              <strong>{scheduler?.enabled ? `${scheduler.time} · ${scheduler.timeZone}` : 'Désactivé'}</strong>
+              {scheduler?.enabled && <span className="restart-strip__next">Prochain : {formatScheduledTime(scheduler.nextRestartAt, scheduler.timeZone)}</span>}
+              {scheduler?.phase === 'countdown' && <span className="restart-strip__notice">Annonce · {formatDuration(scheduler.countdownSeconds)}</span>}
+              {scheduler?.phase === 'restarting' && <span className="restart-strip__notice">Redémarrage en cours…</span>}
+              {scheduler?.phase === 'failed' && <span className="restart-strip__error">{scheduler.error || 'Échec du redémarrage automatique.'}</span>}
+            </div>
+            {server?.error && <p className="hero-error"><AlertTriangle size={15} />{server.error}</p>}
+          </motion.section>
+
+          <NetherCard
+            id="network"
+            title={`Relais ${providerName}`}
+            eyebrow="ACCÈS BEDROCK · UDP 19132"
+            description="Adresse publique du tunnel sélectionné"
+            icon={Wifi}
+            accent="soul"
+            delay={0.06}
+            className="tunnel-card"
+            action={<StatusPill status={tunnelStatus} />}
+          >
+            <div className="public-address-panel">
+              <div className="public-address-panel__heading"><span>ADRESSE PUBLIQUE</span><Globe size={15} /></div>
+              {activeTunnel?.address ? (
+                <div className="public-address-value">
+                  <code>{activeTunnel.address}</code>
+                  <motion.button
+                    type="button"
+                    onClick={() => void handleCopy(activeTunnel.address ?? '', 'Adresse')}
+                    whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+                    className="copy-button"
+                    aria-label="Copier l’adresse publique"
+                    title="Copier l’adresse"
+                  ><Copy size={15} /></motion.button>
+                </div>
               ) : (
-                <p className="text-[#c2c9b5]">Désactivé{scheduler?.error ? ` · ${scheduler.error}` : ''}</p>
+                <p className="public-address-empty">L’adresse apparaîtra lorsque le relais sera connecté.</p>
               )}
             </div>
-          </article>
-        </section>
-
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
-          <form onSubmit={handleDeploy} className="mc-bevel bg-[#1b1c1c] p-3 sm:p-5 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#0e0e0e] pb-3">
-              <div>
-                <h2 className="font-silk text-base text-[#dfc740]">Configurer & déployer</h2>
-                <p className="mt-1 font-jb text-[10px] text-[#c2c9b5]">Déploie la version choisie en conservant les données existantes et redémarre Bedrock.</p>
-              </div>
-              <span className="mc-inset bg-[#0e0e0e] px-2 py-1 font-jb text-[10px] text-[#dfc740]">TUNNEL BEDROCK · UDP 19132 FIXE</span>
+            <div className="tunnel-meta-row">
+              <span>Destination locale</span>
+              <code>127.0.0.1:19132/UDP</code>
             </div>
-            {isExistingDeployment && (
-              <div className="mc-inset bg-[#20281b] p-3 font-jb text-[10px] leading-5 text-[#c7ef9c]">
-                Mode mise à jour : le sélecteur de version reste actif. Les paramètres du serveur sont verrouillés pour éviter toute modification involontaire ; Deploy préservera le monde, les packs, les permissions et la configuration existants.
+
+            {tunnelProvider === 'portwarp' && portwarp && (
+              <div className="tunnel-detail-stack">
+                <div className="tunnel-meta-row">
+                  <span>{portwarp.tunnelName}</span>
+                  <code>UDP {portwarp.localPort ?? 19132}{portwarp.publicPort ? ` → ${portwarp.publicPort}` : ''}</code>
+                </div>
+                <AnimatePresence initial={false}>
+                  {portwarpSetup?.phase === 'waiting_for_approval' && portwarpSetup.userCode && (
+                    <motion.div
+                      key="portwarp-approval"
+                      className="nether-callout nether-callout--portal"
+                      initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={reduceMotion ? undefined : { opacity: 0, height: 0 }}
+                    >
+                      <LockKeyhole size={17} />
+                      <div className="callout-copy">
+                        <strong>Autorise cette machine</strong>
+                        <span>Ouvre Portwarp avec ta session authentifiée, puis saisis ce code temporaire :</span>
+                        <a href={portwarpSetup.verificationUrl ?? 'https://portwarp.com/device'} target="_blank" rel="noreferrer" className="inline-link">
+                          Ouvrir portwarp.com/device <ExternalLink size={13} />
+                        </a>
+                        <div className="device-code-row">
+                          <code>{portwarpSetup.userCode}</code>
+                          <button type="button" onClick={() => void handleCopy(portwarpSetup.userCode ?? '', 'Code temporaire')} className="copy-button copy-button--small" aria-label="Copier le code temporaire"><Copy size={14} /></button>
+                        </div>
+                        <small>Éphémère : affiché dans cette session authentifiée, jamais enregistré dans .env ou l’état du panel.</small>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {portwarpSetup?.phase === 'starting' && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Démarrage de l’autorisation Portwarp…</p>}
+                {portwarpSetup?.phase === 'failed' && portwarpSetup.error && <p role="alert" className="inline-error">{portwarpSetup.error}</p>}
+                {portwarp.status === 'tunnel_missing' && (
+                  <div className="nether-callout nether-callout--warning">
+                    <AlertTriangle size={17} />
+                    <div className="callout-copy">
+                      <strong>Tunnel existant introuvable</strong>
+                      <span>Crée ou active manuellement « {portwarp.tunnelName} » dans Portwarp : UDP vers 127.0.0.1:19132. N-Craft ne crée ni ne supprime de tunnel.</span>
+                      <a href="https://portwarp.com/tunnels" target="_blank" rel="noreferrer" className="inline-link">Gérer mes tunnels <ExternalLink size={13} /></a>
+                    </div>
+                  </div>
+                )}
+                {portwarp.status === 'client_missing' && <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Le CLI pwrp manque. Relance ncraft setup pour l’installer et le vérifier.</p>}
+                {portwarp.error && <p role="status" className="inline-error">{portwarp.error}</p>}
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Version <span className="text-[#ff8782]">requise</span>
-                <select value={configuration.version} onChange={(event) => changeField('version', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d]" required>
-                  <option value="">Choisir une version…</option>
-                  {versions.map((version) => <option key={version.version} value={version.version}>{version.label} · {version.releaseDate}</option>)}
-                </select>
-                {versions.length === 0 && <span className="text-[10px] text-[#ffb3ae]">Aucun ZIP vérifié dans data/versions.json.</span>}
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Nom du serveur
-                <input value={configuration.serverName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('serverName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" required />
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Nom du monde
-                <input value={configuration.levelName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('levelName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" required />
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Mode de jeu
-                <select value={configuration.gamemode} disabled={isExistingDeployment} onChange={(event) => changeField('gamemode', event.target.value as DeployConfiguration['gamemode'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50">
-                  <option value="survival">Survie</option><option value="creative">Créatif</option><option value="adventure">Aventure</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Difficulté
-                <select value={configuration.difficulty} disabled={isExistingDeployment} onChange={(event) => changeField('difficulty', event.target.value as DeployConfiguration['difficulty'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50">
-                  <option value="peaceful">Paisible</option><option value="easy">Facile</option><option value="normal">Normale</option><option value="hard">Difficile</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Joueurs max
-                <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={isExistingDeployment} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" required />
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Seed <span className="text-[#8c9380]">optionnelle · vide = aléatoire</span>
-                <input value={configuration.seed} maxLength={80} disabled={isExistingDeployment} onChange={(event) => changeField('seed', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" />
-              </label>
-              <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
-                Distance de vue
-                <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={isExistingDeployment} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" />
-              </label>
-            </div>
+            {tunnelProvider === 'localtonet' && localtonet?.status === 'address_not_detected' && (
+              <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Crée et démarre dans Localtonet un tunnel UDP vers 127.0.0.1:19132. Son adresse apparaîtra ici.</p>
+            )}
+            {tunnelProvider === 'localtonet' && localtonet?.status === 'configuration_missing' && (
+              <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Vérifie le client Localtonet et configure LOCALTONET_AUTH_TOKEN ainsi que LOCALTONET_API_KEY dans le .env du conteneur, puis redémarre le panneau.</p>
+            )}
+            {tunnelProvider === 'localtonet' && localtonet?.error && <p role="status" className="inline-error">{localtonet.error}</p>}
+            {tunnelProvider === 'playit' && playitSetup?.claimUrl && (
+              <a href={playitSetup.claimUrl} target="_blank" rel="noreferrer" className="nether-btn nether-btn--primary nether-btn--wide"><ExternalLink size={16} /> Ouvrir le lien Playit</a>
+            )}
+            {tunnelProvider === 'playit' && playitSetup?.phase === 'configured' && !playit?.address && <p className="nether-inline-note">Agent approuvé. Crée un tunnel Bedrock UDP dans ton compte Playit.</p>}
+            {tunnelProvider === 'playit' && (playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Préparation du lien de claim…</p>}
+            {tunnelProvider === 'playit' && playitSetup?.error && <p role="status" className="inline-error">{playitSetup.error}</p>}
+            {tunnelProvider === 'playit' && playit?.error && <p role="status" className="inline-error">{playit.error}</p>}
+            {tunnelProvider === 'playit' && (playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
+              <motion.button type="button" onClick={() => void handlePlayitSetup()} disabled={busyAction === 'playit'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--quiet nether-btn--wide">
+                {busyAction === 'playit' ? <Loader2 className="spin-soft" size={16} /> : <RefreshCw size={16} />}
+                {busyAction === 'playit' ? 'Démarrage…' : 'Réessayer le claim'}
+              </motion.button>
+            )}
 
-            <div className="mc-inset bg-[#0e0e0e] p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="font-jb text-xs font-bold text-[#dfc740]">XUID administrateur(s)</h3>
-                  <p className="mt-1 font-jb text-[10px] text-[#8c9380]">1 à 3 identifiants numériques uniquement ; aucun gamertag.</p>
-                </div>
-                <button type="button" onClick={addAdminField} disabled={isExistingDeployment || configuration.adminXuids.length >= 3} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white disabled:opacity-40">+ Ajouter</button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {configuration.adminXuids.map((xuid, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={isExistingDeployment} onChange={(event) => setAdminXuid(index, event.target.value)} className="mc-inset min-w-0 flex-1 bg-[#161717] p-2 font-mono text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" placeholder="Ex. 2535412894129841" required />
-                    {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={isExistingDeployment} className="mc-stone-btn bg-[#2a2a2a] px-3 font-jb text-xs text-[#ffb3ae] disabled:opacity-40" aria-label={`Retirer le XUID ${index + 1}`}>×</button>}
+            {tunnelProvider === 'portwarp' && (
+              <motion.button
+                type="button"
+                onClick={() => void handlePortwarpRetry()}
+                disabled={busyAction === 'portwarp'}
+                whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                className="nether-btn nether-btn--quiet nether-btn--wide"
+              >
+                {busyAction === 'portwarp' ? <Loader2 className="spin-soft" size={16} /> : <RefreshCw size={16} />}
+                {busyAction === 'portwarp' ? 'Vérification…' : 'Vérifier / reconnecter'}
+              </motion.button>
+            )}
+            <p className="tunnel-caveat">Un relais actif ne prouve pas que Bedrock UDP est joignable depuis Internet. Vérifie l’adresse depuis un client Bedrock.</p>
+          </NetherCard>
+        </section>
+
+        <section className="ncraft-telemetry-grid" aria-label="Mesures et configuration Bedrock">
+          <BedrockMetricsChart samples={metricHistory} now={clockNow} serverStatus={server?.status} />
+          <NetherCard title="Fiche du monde" eyebrow="CONFIGURATION ACTIVE" icon={Database} accent="moss" delay={0.16}>
+            {activeConfig ? (
+              <dl className="world-details-list">
+                <WorldDetail label="Nom du serveur" value={activeConfig.serverName} />
+                <WorldDetail label="Version Bedrock" value={versionEntry?.label ?? activeConfig.version} />
+                <WorldDetail label="Mode de jeu" value={activeConfig.gamemode === 'survival' ? 'Survie' : activeConfig.gamemode === 'creative' ? 'Créatif' : 'Aventure'} />
+                <WorldDetail label="Difficulté" value={activeConfig.difficulty === 'peaceful' ? 'Paisible' : activeConfig.difficulty === 'easy' ? 'Facile' : activeConfig.difficulty === 'normal' ? 'Normale' : 'Difficile'} />
+                <WorldDetail label="Joueurs maximum" value={String(activeConfig.maxPlayers)} />
+                <WorldDetail label="Distance de vue" value={`${activeConfig.viewDistance} chunks`} />
+              </dl>
+            ) : (
+              <div className="empty-state"><Package size={24} /><strong>Aucune version déployée</strong><span>Choisis une version Bedrock vérifiée dans le panneau de déploiement.</span><a href="#deploy">Configurer le serveur <ChevronRight size={14} /></a></div>
+            )}
+          </NetherCard>
+        </section>
+
+        <section className="ncraft-section-heading" aria-label="Gestion du serveur">
+          <div><p className="nether-eyebrow">OUTILS DE L’OPÉRATEUR</p><h2>Maintenance & diagnostics</h2></div>
+          <span className="section-heading-note"><ShieldCheck size={15} /> Actions reliées aux états du backend</span>
+        </section>
+
+        <section className="ncraft-workspace-grid">
+          <NetherCard
+            id="deploy"
+            title="Cartouche de mise à jour"
+            eyebrow="DÉPLOIEMENT BEDROCK"
+            description="Sélectionne une version réelle du catalogue, puis déploie sans effacer le monde."
+            icon={Package}
+            accent="magma"
+            className="deploy-card"
+          >
+            <form onSubmit={handleDeploy} className="deploy-form">
+              {isExistingDeployment && (
+                <div className="nether-callout nether-callout--success">
+                  <ShieldCheck size={18} />
+                  <div className="callout-copy">
+                    <strong>Mise à jour non destructive</strong>
+                    <span>Le monde, les packs, les permissions et les réglages existants sont préservés. Seule la version Bedrock choisie change.</span>
                   </div>
-                ))}
-              </div>
-              {configuration.adminXuids.some((xuid) => xuid.length > 0 && !/^\d{1,20}$/.test(xuid)) && <p className="mt-2 font-jb text-[10px] text-[#ff8782]">Le XUID doit contenir uniquement des chiffres, sans espace.</p>}
-              {configuration.adminXuids.every((xuid) => xuid.length > 0) && new Set(configuration.adminXuids).size !== configuration.adminXuids.length && <p className="mt-2 font-jb text-[10px] text-[#ff8782]">Chaque XUID administrateur doit être unique.</p>}
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="mc-inset flex cursor-pointer items-center gap-3 bg-[#0e0e0e] p-3 font-jb text-xs text-[#c2c9b5]">
-                <input type="checkbox" checked={configuration.allowCheats} disabled={isExistingDeployment} onChange={(event) => changeField('allowCheats', event.target.checked)} className="h-4 w-4 accent-[#97d85d] disabled:opacity-50" />
-                Autoriser les commandes/cheats
-              </label>
-              <div className="mc-inset flex flex-wrap items-center gap-2 bg-[#0e0e0e] p-3 font-jb text-[10px] text-[#dfc740]">
-                <span className="rounded bg-[#2a2a2a] px-2 py-1">online-mode=false</span>
-                <span className="rounded bg-[#2a2a2a] px-2 py-1">allow-list=false</span>
-                <span className="rounded bg-[#2a2a2a] px-2 py-1">19132/UDP</span>
-              </div>
-            </div>
-
-            <label className="mc-inset flex cursor-pointer items-start gap-3 bg-[#161717] p-3 font-jb text-[11px] leading-5 text-[#c2c9b5]">
-              <input type="checkbox" checked={configuration.eulaAccepted} disabled={isExistingDeployment} onChange={(event) => changeField('eulaAccepted', event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#97d85d] disabled:opacity-50" />
-              <span>J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer" className="text-[#dfc740] underline">EULA Minecraft</a>. Si le binaire affiche un prompt EULA reconnu, le backend répondra automatiquement « y ». Aucun fichier EULA non vérifié ne sera inventé.</span>
-            </label>
-
-            <button type="submit" disabled={isPipelineBusy || !isValidForm(configuration) || versions.length === 0 || system?.deployReady === false} className="mc-bevel-gold bg-[#dfc740] p-3 font-pixel text-[10px] font-bold text-[#393000] hover:bg-[#fde35a] disabled:cursor-not-allowed disabled:opacity-40">
-              {isPipelineBusy ? `DÉPLOIEMENT : ${statusLabel(pipeline?.step ?? 'preflight')}` : isExistingDeployment ? 'METTRE À JOUR & REDÉMARRER' : 'INSTALLER & DÉMARRER'}
-            </button>
-          </form>
-
-          <div className="flex flex-col gap-4">
-            <section className="mc-bevel bg-[#1b1c1c] p-3 sm:p-5">
-              <div className="mb-3 flex items-center justify-between gap-2 border-b-2 border-[#0e0e0e] pb-3">
-                <div>
-                  <h2 className="font-silk text-base text-[#dfc740]">État du pipeline</h2>
-                  <p className="mt-1 font-jb text-[10px] text-[#8c9380]">Chaque transition vient du backend.</p>
                 </div>
-                <span className={`font-pixel text-[9px] ${pipeline?.status === 'failed' ? 'text-[#ff8782]' : isPipelineBusy ? 'text-[#dfc740]' : 'text-[#97d85d]'}`}>
-                  {pipeline?.status === 'failed' ? 'FAILED' : isPipelineBusy ? 'RUNNING' : pipeline?.step === 'running' ? 'DONE' : 'IDLE'}
-                </span>
+              )}
+
+              <div className="cartridge-slot">
+                <div className="cartridge-slot__art"><Package size={26} /></div>
+                <label className="nether-field cartridge-slot__picker" htmlFor="bedrock-version">
+                  <span>Version du serveur <b>requise</b></span>
+                  <select id="bedrock-version" value={configuration.version} onChange={(event) => changeField('version', event.target.value)} className="nether-input" required>
+                    <option value="">Choisir une version…</option>
+                    {versions.map((version) => <option key={version.version} value={version.version}>{version.label} · {version.releaseDate}</option>)}
+                  </select>
+                </label>
+                <div className="cartridge-slot__info">
+                  <span className="nether-eyebrow">SÉLECTION</span>
+                  <strong>{selectedVersion?.label ?? (configuration.version || 'Aucune version')}</strong>
+                  <small>{selectedVersion ? `Sortie · ${selectedVersion.releaseDate}` : 'Catalogue vérifié du panneau'}</small>
+                </div>
               </div>
-              <ol className="flex flex-col gap-2">
+              {versions.length === 0 && <p className="inline-error">Aucun ZIP vérifié disponible dans data/versions.json.</p>}
+
+              <div className="nether-form-grid">
+                <label className="nether-field">
+                  <span>Nom du serveur</span>
+                  <input value={configuration.serverName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('serverName', event.target.value)} className="nether-input" required />
+                </label>
+                <label className="nether-field">
+                  <span>Nom du monde</span>
+                  <input value={configuration.levelName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('levelName', event.target.value)} className="nether-input" required />
+                </label>
+                <label className="nether-field">
+                  <span>Mode de jeu</span>
+                  <select value={configuration.gamemode} disabled={isExistingDeployment} onChange={(event) => changeField('gamemode', event.target.value as DeployConfiguration['gamemode'])} className="nether-input">
+                    <option value="survival">Survie</option><option value="creative">Créatif</option><option value="adventure">Aventure</option>
+                  </select>
+                </label>
+                <label className="nether-field">
+                  <span>Difficulté</span>
+                  <select value={configuration.difficulty} disabled={isExistingDeployment} onChange={(event) => changeField('difficulty', event.target.value as DeployConfiguration['difficulty'])} className="nether-input">
+                    <option value="peaceful">Paisible</option><option value="easy">Facile</option><option value="normal">Normale</option><option value="hard">Difficile</option>
+                  </select>
+                </label>
+                <label className="nether-field">
+                  <span>Joueurs maximum</span>
+                  <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={isExistingDeployment} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
+                </label>
+                <label className="nether-field">
+                  <span>Seed <small>optionnelle · vide = aléatoire</small></span>
+                  <input value={configuration.seed} maxLength={80} disabled={isExistingDeployment} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
+                </label>
+                <label className="nether-field">
+                  <span>Distance de vue <small>chunks</small></span>
+                  <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={isExistingDeployment} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="nether-input" />
+                </label>
+              </div>
+
+              <div className="admin-xuid-box">
+                <div className="admin-xuid-box__header">
+                  <div><strong>Administrateurs Bedrock</strong><small>1 à 3 XUID numériques uniques · aucun gamertag</small></div>
+                  <motion.button type="button" onClick={addAdminField} disabled={isExistingDeployment || configuration.adminXuids.length >= 3} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--tiny nether-btn--quiet">
+                    <Users size={14} /> Ajouter
+                  </motion.button>
+                </div>
+                <div className="admin-xuid-list">
+                  {configuration.adminXuids.map((xuid, index) => (
+                    <div key={index} className="admin-xuid-row">
+                      <span className="admin-xuid-row__number">{String(index + 1).padStart(2, '0')}</span>
+                      <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={isExistingDeployment} onChange={(event) => setAdminXuid(index, event.target.value)} className="nether-input" placeholder="Ex. 2535412894129841" required />
+                      {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={isExistingDeployment} className="icon-button icon-button--danger" aria-label={`Retirer le XUID ${index + 1}`}><X size={16} /></button>}
+                    </div>
+                  ))}
+                </div>
+                {configuration.adminXuids.some((xuid) => xuid.length > 0 && !/^\d{1,20}$/.test(xuid)) && <p className="inline-error">Le XUID doit contenir uniquement des chiffres, sans espace.</p>}
+                {configuration.adminXuids.every((xuid) => xuid.length > 0) && new Set(configuration.adminXuids).size !== configuration.adminXuids.length && <p className="inline-error">Chaque XUID administrateur doit être unique.</p>}
+              </div>
+
+              <div className="deploy-options-grid">
+                <label className="nether-check-card">
+                  <input type="checkbox" checked={configuration.allowCheats} disabled={isExistingDeployment} onChange={(event) => changeField('allowCheats', event.target.checked)} />
+                  <span className="nether-check-card__box"><Check size={13} /></span>
+                  <span><strong>Autoriser les commandes</strong><small>Cheats et commandes de jeu</small></span>
+                </label>
+                <div className="security-badges">
+                  <span><LockKeyhole size={13} /> Auth Bedrock</span>
+                  <span><Wifi size={13} /> UDP 19132</span>
+                  <span><ShieldCheck size={13} /> Allow-list off</span>
+                </div>
+              </div>
+
+              <label className="eula-card">
+                <input type="checkbox" checked={configuration.eulaAccepted} disabled={isExistingDeployment} onChange={(event) => changeField('eulaAccepted', event.target.checked)} />
+                <span className="nether-check-card__box"><Check size={13} /></span>
+                <span>J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">EULA Minecraft</a>. Si le binaire affiche un prompt connu, le backend y répondra automatiquement; aucun fichier EULA non vérifié ne sera inventé.</span>
+              </label>
+
+              <motion.button
+                type="submit"
+                disabled={isPipelineBusy || !isValidForm(configuration) || versions.length === 0 || system?.deployReady === false}
+                whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                className="nether-btn nether-btn--primary nether-btn--wide deploy-submit"
+              >
+                {isPipelineBusy ? <Loader2 className="spin-soft" size={18} /> : <ArrowRight size={18} />}
+                {isPipelineBusy ? `Déploiement : ${statusLabel(pipeline?.step ?? 'preflight')}` : isExistingDeployment ? 'Mettre à jour & redémarrer' : 'Installer & démarrer'}
+              </motion.button>
+            </form>
+          </NetherCard>
+
+          <aside className="ncraft-operations-stack">
+            <NetherCard
+              id="diagnostics"
+              title="Pipeline de déploiement"
+              eyebrow="ÉTAT EN TEMPS RÉEL"
+              description="Chaque étape vient du backend."
+              icon={Layers}
+              accent="portal"
+              delay={0.12}
+              action={<StatusPill status={pipeline?.status === 'failed' ? 'failed' : isPipelineBusy ? 'starting' : pipeline?.step === 'running' ? 'running' : 'stopped'} label={pipeline?.status === 'failed' ? 'ÉCHEC' : isPipelineBusy ? 'EN COURS' : pipeline?.step === 'running' ? 'TERMINÉ' : 'PRÊT'} />}
+            >
+              <ol className="pipeline-list">
                 {pipelineSteps.map((step, index) => {
                   const done = (pipeline?.status !== 'failed' && pipeline?.step === 'running') || (currentStepIndex >= 0 && index < currentStepIndex);
                   const active = isPipelineBusy && pipeline?.step === step.id;
                   const failed = pipeline?.status === 'failed' && index === currentStepIndex;
                   return (
-                    <li key={step.id} className={`mc-inset flex items-center gap-3 bg-[#0e0e0e] px-2.5 py-2 font-jb text-[10px] ${failed ? 'text-[#ff8782]' : active ? 'text-[#dfc740]' : done ? 'text-[#97d85d]' : 'text-[#777d71]'}`}>
-                      <span className="w-6 shrink-0 font-bold">{failed ? '×' : done ? '✓' : active ? '…' : String(index + 1).padStart(2, '0')}</span>
+                    <li key={step.id} className={`pipeline-step ${failed ? 'is-failed' : active ? 'is-active' : done ? 'is-done' : ''}`}>
+                      <span className="pipeline-step__marker">{failed ? <X size={14} /> : done ? <Check size={14} /> : active ? <Loader2 size={14} className="spin-soft" /> : String(index + 1).padStart(2, '0')}</span>
                       <span>{step.label}</span>
-                      {active && <span className="ml-auto animate-pulse">EN COURS</span>}
+                      {active && <small>EN COURS</small>}
                     </li>
                   );
                 })}
               </ol>
-              {pipeline?.error && <div role="alert" className="mt-3 mc-inset bg-[#311719] p-3 font-jb text-[11px] leading-5 text-[#ffb3ae]">{pipeline.error}</div>}
-            </section>
+              {pipeline?.error && <div role="alert" className="nether-callout nether-callout--danger"><AlertTriangle size={17} /><span>{pipeline.error}</span></div>}
+              <p className="pipeline-footnote"><ShieldCheck size={14} /> Le monde, les packs et les permissions sont préservés pendant Deploy.</p>
+            </NetherCard>
 
-            <section className="mc-bevel bg-[#1b1c1c] p-3 sm:p-5">
-              <div className="mb-3 border-b-2 border-[#0e0e0e] pb-3">
-                <h2 className="font-silk text-base text-[#dfc740]">Précontrôle du conteneur</h2>
-                <p className="mt-1 break-all font-jb text-[10px] text-[#8c9380]">Mesures dans le conteneur du panel, pas sur l’hôte Docker. Dossier Bedrock : {status?.serverDirectory ?? 'en attente du statut'} (aucun effacement automatique).</p>
-              </div>
-              <div className="flex flex-col gap-2 font-jb text-[10px]">
+            <NetherCard
+              id="preflight"
+              title="Précontrôle système"
+              eyebrow="CONTENEUR DU PANNEAU"
+              description={`Bedrock · ${status?.serverDirectory ?? 'répertoire en attente'}`}
+              icon={ShieldCheck}
+              accent="moss"
+              delay={0.18}
+            >
+              <div className="system-check-list">
                 <CheckRow label={`Linux x64 · Node ${system?.nodeVersion ?? '…'}`} ok={system ? system.platform === 'linux' && system.arch === 'x64' : null} />
-                <CheckRow label={`glibc ${system?.glibcVersion ?? 'non détectée'} (minimum visé 2.29)`} ok={system ? system.glibc.ok : null} detail={system?.glibc.detail} />
+                <CheckRow label={`glibc ${system?.glibcVersion ?? 'non détectée'} · minimum visé 2.29`} ok={system ? system.glibc.ok : null} detail={system?.glibc.detail} />
                 <CheckRow label="libcurl.so.4" ok={system ? system.libcurl.ok : null} detail={system?.libcurl.detail} />
-                <CheckRow label={`Mémoire allouée : ${formatBytes(system?.memoryLimitBytes ?? null)} · cible 4 Go`} ok={system ? !system.memoryWarning : null} detail={system?.memoryWarning ? 'Avertissement uniquement : le test reste autorisé, mais un OOM est possible.' : undefined} />
-                <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres · ${formatBytes(system?.dataDiskRequiredBytes ?? null)} estimés`} ok={system ? !system.diskWarning : null} detail={system?.sharedDiskVolume ? 'Même volume que BEDROCK_SERVER_DIR : l’estimation inclut archive + extraction.' : undefined} />
-                {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · ${formatBytes(system.serverDiskRequiredBytes)} estimés`} ok={!system.diskWarning} />}
-                {system && system.sharedDiskVolume === null && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · estimation du volume incertaine`} ok={!system.diskWarning} />}
+                <CheckRow label={`Mémoire : ${formatBytes(system?.memoryLimitBytes ?? null)} · cible 4 Go`} ok={system ? !system.memoryWarning : null} detail={system?.memoryWarning ? 'Avertissement : un arrêt OOM est possible; le test reste autorisé.' : undefined} />
+                <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres`} ok={system ? !system.diskWarning : null} detail={system ? `${formatBytes(system.dataDiskRequiredBytes)} estimés${system.sharedDiskVolume ? ' · volume partagé' : ''}` : undefined} />
+                {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres`} ok={!system.diskWarning} detail={`${formatBytes(system.serverDiskRequiredBytes)} estimés`} />}
+                {system && system.sharedDiskVolume === null && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres`} ok={!system.diskWarning} detail="Volume incertain" />}
                 {tunnelProvider === 'portwarp' ? (
-                  <CheckRow label="CLI Portwarp (pwrp) dans PATH" ok={system ? system.portwarpBinary.ok : null} detail={system?.portwarpBinary.detail} />
+                  <CheckRow label="CLI Portwarp (pwrp)" ok={system ? system.portwarpBinary.ok : null} detail={system?.portwarpBinary.detail} />
                 ) : tunnelProvider === 'localtonet' ? (
-                  <CheckRow label="Client Localtonet dans PATH" ok={system ? system.localtonetBinary.ok : null} detail={system?.localtonetBinary.detail} />
+                  <CheckRow label="Client Localtonet" ok={system ? system.localtonetBinary.ok : null} detail={system?.localtonetBinary.detail} />
                 ) : (
                   <>
-                    <CheckRow label="Daemon Playit (playitd) dans PATH" ok={system ? system.playitBinary.ok : null} detail={system?.playitBinary.detail} />
-                    <CheckRow label="CLI Playit (claim) dans PATH" ok={system ? system.playitCliBinary.ok : null} detail={system?.playitCliBinary.detail} />
+                    <CheckRow label="Daemon Playit (playitd)" ok={system ? system.playitBinary.ok : null} detail={system?.playitBinary.detail} />
+                    <CheckRow label="CLI Playit (claim)" ok={system ? system.playitCliBinary.ok : null} detail={system?.playitCliBinary.detail} />
                   </>
                 )}
+                {system && <CheckRow label="Binaire Bedrock" ok={system.bedrockBinary.ok} detail={system.bedrockBinary.detail} />}
               </div>
-              {system?.warnings.map((warning) => <p key={warning} className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">⚠ {warning}</p>)}
-            </section>
+              {system?.warnings.map((warning) => <p key={warning} className="system-warning"><AlertTriangle size={14} />{warning}</p>)}
+            </NetherCard>
 
-            <section className="mc-bevel bg-[#2a2114] p-3 sm:p-4">
-              <h2 className="font-jb text-xs font-bold text-[#dfc740]">Vérifications Bedrock non clôturées</h2>
-              <ul className="mt-2 list-disc pl-4 font-jb text-[10px] leading-5 text-[#d6cda8]">
-                <li>EULA : le format réel doit être confirmé avec le binaire téléchargé ; le statut restera « non vérifié » si aucun prompt connu n’apparaît.</li>
-                <li>Avec online-mode=false, la persistance des opérateurs/XUID après un second déploiement n’a pas été testée. La décision n’est pas modifiée automatiquement.</li>
+            <NetherCard title="Points de vérification" eyebrow="TRANSPARENCE" icon={AlertTriangle} accent="magma" delay={0.22}>
+              <ul className="verification-list">
+                <li>EULA : son format réel doit encore être confirmé avec le binaire téléchargé.</li>
+                <li>La persistance des permissions/XUID après un second déploiement n’est pas encore vérifiée; aucune décision n’est modifiée automatiquement.</li>
               </ul>
-            </section>
-          </div>
+            </NetherCard>
+          </aside>
         </section>
 
-        <section className="mc-bevel bg-[#1b1c1c] p-3 sm:p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#0e0e0e] pb-3">
-            <div>
-              <h2 className="font-silk text-base text-[#97d85d]">Console Bedrock</h2>
-              <p className="mt-1 font-jb text-[10px] text-[#8c9380]">stdin/stdout du processus · WebSocket authentifié par cookie de session</p>
-            </div>
-            <span className={`font-jb text-[10px] ${consoleConnected ? 'text-[#97d85d]' : 'text-[#dfc740]'}`}>{consoleConnected ? '● WS CONNECTÉ' : '○ WS RECONNEXION'}</span>
+        <NetherCard
+          id="console"
+          title="Console Bedrock"
+          eyebrow="STDIN / STDOUT DU SERVEUR"
+          description="Flux temps réel · WebSocket protégé par la session du panneau"
+          icon={Terminal}
+          accent="moss"
+          delay={0.1}
+          action={<StatusPill status={consoleConnected ? 'running' : 'starting'} label={consoleConnected ? 'CONNECTÉE' : 'RECONNEXION'} />}
+          className="console-card"
+        >
+          <div ref={logViewportRef} className="nether-terminal" aria-live="polite" aria-label="Journal Bedrock">
+            {consoleLogs.length === 0 && <p className="terminal-empty">Aucun log Bedrock reçu. Le serveur est peut-être arrêté.</p>}
+            {consoleLogs.map((line) => (
+              <div key={line.id} className={`terminal-line terminal-line--${line.level}`}>
+                <time dateTime={line.timestamp}>[{new Date(line.timestamp).toLocaleTimeString('fr-FR')}]</time>
+                <b>[{line.tag}]</b>
+                <span>{line.message}</span>
+              </div>
+            ))}
           </div>
-          <div ref={logViewportRef} className="crt-screen h-72 overflow-y-auto mc-inset p-3 font-jb text-[11px] leading-5">
-            {consoleLogs.length === 0 && <p className="text-[#8c9380]">Aucun log Bedrock reçu. Le serveur est peut-être arrêté.</p>}
-            {consoleLogs.map((line) => <div key={line.id} className={`break-all ${line.level === 'error' ? 'text-[#ff8782]' : line.level === 'warn' ? 'text-[#dfc740]' : line.level === 'success' ? 'text-[#97d85d]' : line.level === 'exec' ? 'text-[#dfc740]' : 'text-[#c2c9b5]'}`}>
-              <span className="text-[#777d71]">[{new Date(line.timestamp).toLocaleTimeString()}]</span> <span className="text-[#dfc740]">[{line.tag}]</span> {line.message}
-            </div>)}
-          </div>
-          {consoleError && <p role="alert" className="mt-2 font-jb text-xs text-[#ff8782]">{consoleError}</p>}
-          <form onSubmit={handleCommand} className="mt-3 flex gap-2">
-            <input value={command} onChange={(event) => setCommand(event.target.value)} maxLength={1000} disabled={server?.status !== 'running'} className="mc-inset min-w-0 flex-1 bg-[#0e0e0e] px-3 py-2 font-jb text-xs text-white outline-none focus:border-[#97d85d] disabled:opacity-50" placeholder={server?.status === 'running' ? 'Commande Bedrock (sans / requis)' : 'Le serveur doit être en ligne pour envoyer une commande'} />
-            <button type="submit" disabled={server?.status !== 'running' || !command.trim()} className="mc-bevel-green bg-[#97d85d] px-4 font-pixel text-[9px] font-bold text-[#1b3700] disabled:opacity-40">ENVOYER</button>
+          {consoleError && <p role="alert" className="inline-error">{consoleError}</p>}
+          <form onSubmit={handleCommand} className="console-command-form">
+            <label className="console-command-input">
+              <Terminal size={16} />
+              <input
+                value={command}
+                onChange={(event) => setCommand(event.target.value)}
+                maxLength={1000}
+                disabled={server?.status !== 'running'}
+                aria-label="Commande Bedrock"
+                placeholder={server?.status === 'running' ? 'Commande Bedrock (sans /)' : 'Le serveur doit être en ligne pour envoyer une commande'}
+              />
+            </label>
+            <motion.button type="submit" disabled={server?.status !== 'running' || !command.trim()} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--primary">
+              <ArrowRight size={16} /> Envoyer
+            </motion.button>
           </form>
-          <p className="mt-2 font-jb text-[9px] text-[#8c9380]">Aucun shell n’est lancé : la commande est écrite directement sur stdin de bedrock_server.</p>
-        </section>
+          <p className="console-footnote">Aucun shell n’est lancé : la commande est écrite directement sur stdin de bedrock_server.</p>
+        </NetherCard>
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 font-jb text-[9px] text-[#777d71]">
-          <span>Panel mono-instance · pas de Docker imbriqué · aucune base de données</span>
-          <span>{system?.checkedAt ? `Contrôle système ${new Date(system.checkedAt).toLocaleTimeString()}` : 'Contrôle système en attente'}</span>
+        <footer className="ncraft-footer">
+          <span><Activity size={14} /> Panel mono-instance · pas de Docker imbriqué · aucune base de données</span>
+          <span>{system?.checkedAt ? `Dernier précontrôle · ${new Date(system.checkedAt).toLocaleTimeString('fr-FR')}` : 'Précontrôle en attente'}</span>
         </footer>
       </div>
+
+      <nav className="mobile-dock" aria-label="Navigation rapide">
+        <a href="#overview"><Server size={17} /><span>Accueil</span></a>
+        <a href="#deploy"><Package size={17} /><span>Déployer</span></a>
+        <a href="#diagnostics"><ShieldCheck size={17} /><span>État</span></a>
+        <a href="#console"><Terminal size={17} /><span>Console</span></a>
+      </nav>
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function StatusPill({ status, label }: { status: string; label?: string }) {
+  const positive = ['running', 'configured', 'authenticated', 'success'].includes(status);
+  const negative = ['failed', 'exited', 'tunnel_misconfigured'].includes(status);
+  const tone = positive ? 'good' : negative ? 'bad' : ['stopped', 'idle'].includes(status) ? 'neutral' : 'warning';
   return (
-    <div className="mc-inset min-w-0 bg-[#0e0e0e] px-2 py-2">
-      <p className="font-jb text-[8px] tracking-wide text-[#8c9380]">{label}</p>
-      <p className="mt-1 truncate font-jb text-xs font-bold text-[#c2c9b5]">{value}</p>
+    <span className={`status-pill status-pill--${tone}`}>
+      <span className="status-pill__dot" />
+      {label ?? statusLabel(status)}
+    </span>
+  );
+}
+
+function MetricTile({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  accent,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  detail: string;
+  accent: 'portal' | 'soul' | 'magma' | 'moss';
+}) {
+  return (
+    <div className={`metric-tile metric-tile--${accent}`}>
+      <span className="metric-tile__icon"><Icon size={16} strokeWidth={1.9} /></span>
+      <div className="metric-tile__copy">
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </div>
+    </div>
+  );
+}
+
+function WorldDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="world-detail-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
 
 function CheckRow({ label, ok, detail }: { label: string; ok: boolean | null; detail?: string }) {
   return (
-    <div className="mc-inset bg-[#0e0e0e] p-2">
-      <div className="flex items-start gap-2">
-        <span className={`mt-0.5 ${ok === null ? 'text-[#8c9380]' : ok ? 'text-[#97d85d]' : 'text-[#ff8782]'}`}>{ok === null ? '○' : ok ? '✓' : '!'}</span>
-        <span className="text-[#c2c9b5]">{label}</span>
+    <div className={`system-check-row ${ok === null ? 'is-pending' : ok ? 'is-ok' : 'is-warning'}`}>
+      <span className="system-check-row__icon" aria-hidden="true">{ok === null ? <Clock3 size={14} /> : ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}</span>
+      <div className="system-check-row__copy">
+        <span>{label}</span>
+        {detail && <small>{detail}</small>}
       </div>
-      {detail && <p className="ml-5 mt-1 break-words text-[9px] leading-4 text-[#8c9380]">{detail}</p>}
     </div>
   );
 }
