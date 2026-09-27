@@ -3,6 +3,7 @@ import type { PanelAuthService } from '../auth.ts';
 import { DeployInProgressError, DeployPipeline, ServerNotInstalledError } from '../bedrock/deployPipeline.ts';
 import { ConfigurationError, validateDeployConfiguration } from '../bedrock/configWriter.ts';
 import { BedrockConsole } from '../bedrock/console.ts';
+import type { BedrockRestartScheduler } from '../bedrock/scheduler.ts';
 import type { StateStore } from '../state.ts';
 import { requireSameOrigin } from '../security.ts';
 import { SystemInspector } from '../preflight.ts';
@@ -15,6 +16,7 @@ export interface ServerRouteDependencies {
   state: StateStore;
   pipeline: DeployPipeline;
   bedrockConsole: BedrockConsole;
+  scheduler: BedrockRestartScheduler;
   inspector: SystemInspector;
   catalog: VersionCatalog;
   playitRunner: PlayitRunner;
@@ -36,6 +38,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         system,
         serverDirectory: dependencies.pipeline.serverDirectoryPath,
         deployBusy: dependencies.pipeline.isRunning,
+        scheduler: dependencies.scheduler.getSnapshot(),
       });
     } catch (error) {
       next(error);

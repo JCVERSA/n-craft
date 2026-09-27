@@ -93,12 +93,15 @@ Avec Playit sélectionné, le dashboard lance le CLI officiel `playit` (`PLAYIT_
 
 Aucune valeur `PLAYIT_SECRET_KEY` n’est requise dans `.env` pour ce parcours. Le daemon stocke le secret dans un fichier local privé ; il n’est pas exposé à l’API ni enregistré dans l’état JSON. Si le claim ou le tunnel n’est pas prêt, le dashboard permet par défaut de démarrer Bedrock avec un avertissement. La disponibilité réelle dépend du binaire installé, de l’approbation du claim et de la configuration manuelle du tunnel ; valide chaque étape dans ton environnement. Un ancien agent/CLI incompatible (par exemple Playit 0.17.x) doit être remplacé ou configuré manuellement en v1.x compatible IPC v2. Le test local simule le protocole IPC et ne prouve pas l’accès au service Playit réel.
 
-## Deploy destructif, Start non destructif et données
+## Deploy non destructif, Start/Stop et données
 
-- **Deploy** efface puis recrée `bedrock/server`, installe la version sélectionnée et démarre le serveur. Le monde et la configuration déjà présents à cet emplacement sont donc détruits. L’interface exige une confirmation ; le backend garde un verrou anti-concurrence, vérifie les prérequis avant le wipe et ne tente pas de lancer un serveur partiellement extrait.
-- **Start** démarre le binaire Bedrock déjà installé sans effacer ni modifier le monde. **Stop** demande un arrêt gracieux au serveur. L’essai automatisé vérifie que Start préserve les fichiers du monde ; le comportement exact du binaire Bedrock cible doit néanmoins être confirmé.
-- Bedrock est géré comme processus enfant du panneau. Fermer le navigateur ne l’arrête pas ; l’arrêt du conteneur/panneau arrête l’enfant. À la prochaine ouverture du conteneur, Bedrock reste arrêté jusqu’à un clic Start.
-- Les opérateurs proviennent de XUID numériques dans `permissions.json`. Le panneau verrouille `server-port=19132`, `server-portv6=19133`, `online-mode=false` et `allow-list=false`; l’allow-list/whitelist fournie par l’archive est retirée.
+- **Deploy** télécharge et extrait d’abord le ZIP dans un dossier temporaire, pendant que la version actuelle continue de fonctionner. Lorsque la nouvelle version est prête, le panneau arrête Bedrock gracieusement, met à jour les fichiers du serveur et le redémarre automatiquement. Il ne supprime jamais `BEDROCK_SERVER_DIR`.
+- Lors d’une mise à jour, le monde (`worlds`), les sauvegardes, packs, structures et configurations (`server.properties`, `permissions.json`, allowlist et fichiers du dossier `config`) déjà présents sont conservés. Les fichiers inconnus qui ne figurent pas dans la nouvelle archive ne sont pas supprimés. Seule la version sélectionnée est modifiable depuis le formulaire pendant une mise à jour ; les champs de réglage sont verrouillés pour éviter une modification involontaire. Lors d’une première installation, le formulaire initialise la configuration.
+- Si le précontrôle, le téléchargement ou l’extraction échoue, le serveur existant reste en ligne. Si une erreur intervient pendant la copie des nouveaux fichiers, le monde et les configurations restent sur disque ; le serveur est signalé en échec/arrêté afin que l’opérateur puisse relancer Deploy.
+- **Start** démarre le binaire installé sans effacer ni réécrire le monde. **Stop** demande un arrêt gracieux au serveur. Ces opérations ne démarrent, n’arrêtent ni ne suppriment le tunnel Localtonet/Playit.
+- Le dashboard affiche le nombre de joueurs à partir des événements de connexion/déconnexion Bedrock, l’uptime depuis le dernier démarrage et l’usage CPU/RAM du processus Bedrock dans le conteneur. L’usage CPU/RAM est mesuré pour le processus enfant, pas pour le panneau ni l’hôte.
+- Par défaut, Bedrock annonce le compte à rebours de **03:55 à 04:00**, puis redémarre quotidiennement à **04:00 Africa/Douala**. Les annonces sont répétées chaque minute ; l’arrêt gracieux et le redémarrage ont lieu même si des joueurs sont connectés. Heure, fuseau, durée et activation sont configurables avec `BDS_RESTART_TIME`, `BDS_RESTART_TIMEZONE`, `BDS_RESTART_WARNING_MINUTES` et `BDS_RESTART_ENABLED` dans `.env` (redémarre le panneau après modification). À l’arrêt/redémarrage du conteneur, Bedrock lui-même reste arrêté jusqu’à Start ; l’horaire redémarre uniquement une instance déjà en ligne.
+- Le panneau verrouille à la première installation `server-port=19132`, `server-portv6=19133`, `online-mode=false` et `allow-list=false`. Sur les mises à jour, les fichiers de configuration et permissions existants sont préservés tels quels.
 
 | Chemin | Rôle / durée de vie |
 |---|---|
@@ -108,7 +111,7 @@ Aucune valeur `PLAYIT_SECRET_KEY` n’est requise dans `.env` pour ce parcours. 
 | `data/panel.log`, `data/panel.pid` | Journal et PID du gestionnaire `ncraft`. |
 | `data/playit/` | Fichier secret privé par défaut de l’agent ; une configuration Playit déjà existante dans `~/.local/share/playit/secret.toml` peut aussi être réutilisée. |
 | `data/versions.json` | Catalogue édité manuellement ; il n’est jamais remplacé par `.env` ou une opération Deploy. |
-| `bedrock/server/` | Dossier serveur destructif de Deploy, à persister si le monde doit survivre aux recréations du conteneur. |
+| `bedrock/server/` | Dossier persistant du binaire, monde, packs et configurations Bedrock ; Deploy le met à jour sans l’effacer. |
 
 Monte `DATA_DIR` et, si nécessaire, `BEDROCK_SERVER_DIR` en volumes persistants selon l’environnement d’hébergement. Un arrêt forcé du conteneur peut encore interrompre une sauvegarde en cours ; laisse l’arrêt gracieux se terminer.
 

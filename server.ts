@@ -7,6 +7,8 @@ import path from 'node:path';
 import { PanelAuthService } from './src/auth.ts';
 import { BedrockConsole, attachConsoleWebSocket } from './src/bedrock/console.ts';
 import { DeployPipeline } from './src/bedrock/deployPipeline.ts';
+import { BedrockRestartScheduler } from './src/bedrock/scheduler.ts';
+import { BedrockMetricsSampler } from './src/bedrock/processMetrics.ts';
 import { SystemInspector } from './src/preflight.ts';
 import { PlayitRunner } from './src/playit/playitRunner.ts';
 import { LocaltonetRunner } from './src/localtonet/localtonetRunner.ts';
@@ -52,6 +54,8 @@ const pipeline = new DeployPipeline(
   serverDirectory,
   (version) => catalog.get(version),
 );
+const scheduler = new BedrockRestartScheduler(state, bedrockConsole, pipeline);
+const metricsSampler = new BedrockMetricsSampler(state);
 const playitRunner = new PlayitRunner(playitCommand, process.env.PLAYIT_SECRET_KEY, state, {
   cliCommand: process.env.PLAYIT_CLI_BIN || 'playit',
   dataDirectory,
@@ -80,7 +84,7 @@ app.get('/api/health', (_request, response) => {
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
 app.use('/api/auth', createAuthRouter(auth));
-app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, inspector, catalog, playitRunner, tunnelProvider }));
+app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, playitRunner, tunnelProvider }));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 
 let viteServer: ViteDevServer | null = null;
@@ -124,9 +128,19 @@ app.use(errorHandler);
 const httpServer = createServer(app);
 const consoleGateway = attachConsoleWebSocket(httpServer, auth, bedrockConsole, state);
 
+bedrockConsole.on('players', (playersOnline: number) => {
+  if (state.getSnapshot().server.playersOnline === playersOnline) return;
+  void state.updateServer({ playersOnline }).catch((error) => {
+    console.error(`[server] Could not persist online player count: ${(error as Error).message}`);
+  });
+});
+
 bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals | null; wasReady: boolean; intentional?: boolean }) => {
   if (event.intentional) {
-    void state.updateServer({ status: 'stopped', pid: null, startedAt: null, error: null }).catch((error) => {
+    void state.updateServer({
+      status: 'stopped', pid: null, startedAt: null, error: null,
+      playersOnline: 0, cpuPercent: null, memoryBytes: null, metricsUpdatedAt: null,
+    }).catch((error) => {
       console.error(`[server] Could not persist Bedrock stop: ${(error as Error).message}`);
     });
     return;
@@ -134,7 +148,10 @@ bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals 
   if (event.wasReady) {
     const reason = event.signal ? `signal ${event.signal}` : `code ${event.code ?? 'inconnu'}`;
     const message = `bedrock_server s’est arrêté de façon inattendue (${reason}).`;
-    void state.updateServer({ status: 'failed', pid: null, startedAt: null, error: message }).catch((error) => {
+    void state.updateServer({
+      status: 'failed', pid: null, startedAt: null, error: message,
+      playersOnline: 0, cpuPercent: null, memoryBytes: null, metricsUpdatedAt: null,
+    }).catch((error) => {
       console.error(`[server] Could not persist Bedrock failure: ${(error as Error).message}`);
     });
     void state.updatePipeline({ status: 'failed', step: 'running', error: message }).catch((error) => {
@@ -145,6 +162,8 @@ bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals 
 
 httpServer.listen(port, '0.0.0.0', () => {
   console.info(`[Nebula Craft] Panel listening on 0.0.0.0:${port}`);
+  metricsSampler.start();
+  scheduler.start();
   if (!auth.configured) console.warn('[Nebula Craft] PANEL_TOKEN absent : la connexion au panel est désactivée.');
   if (tunnelProvider === 'localtonet') {
     localtonetRunner.startOnce();
@@ -164,6 +183,8 @@ const shutdown = async (signal: NodeJS.Signals) => {
   });
   await Promise.all([
     consoleGateway.close().catch((error) => console.error(`[server] WebSocket close: ${(error as Error).message}`)),
+    scheduler.shutdown().catch((error) => console.error(`[server] Scheduler shutdown: ${(error as Error).message}`)),
+    metricsSampler.shutdown().catch((error) => console.error(`[server] Metrics shutdown: ${(error as Error).message}`)),
     pipeline.shutdown().catch((error) => console.error(`[server] Bedrock shutdown: ${(error as Error).message}`)),
     playitRunner.shutdown().catch((error) => console.error(`[server] Playit shutdown: ${(error as Error).message}`)),
     localtonetRunner.shutdown().catch((error) => console.error(`[server] Localtonet shutdown: ${(error as Error).message}`)),

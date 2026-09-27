@@ -6,6 +6,7 @@ import type {
   PersistentPanelState,
   PipelineStep,
   PlayitSetupSnapshot,
+  ScheduledRestartSnapshot,
   SystemPreflight,
   TunnelProvider,
   VersionEntry,
@@ -18,6 +19,7 @@ interface StatusResponse {
   system: SystemPreflight;
   serverDirectory: string;
   deployBusy: boolean;
+  scheduler: ScheduledRestartSnapshot;
 }
 
 type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
@@ -58,13 +60,13 @@ const defaultConfiguration: DeployConfiguration = {
 
 const pipelineSteps: Array<{ id: PipelineStep; label: string }> = [
   { id: 'preflight', label: 'Vérification système' },
-  { id: 'stopping', label: 'Arrêt de Bedrock' },
-  { id: 'wiping', label: 'Wipe intégral du serveur' },
   { id: 'downloading', label: 'Téléchargement du ZIP' },
-  { id: 'extracting', label: 'Extraction sécurisée' },
-  { id: 'writing_config', label: 'Écriture des configurations' },
+  { id: 'extracting', label: 'Extraction sécurisée en staging' },
+  { id: 'stopping', label: 'Arrêt gracieux de Bedrock' },
+  { id: 'updating_files', label: 'Mise à jour sans effacement des données' },
+  { id: 'writing_config', label: 'Préservation / création des réglages' },
   { id: 'accepting_eula', label: 'EULA (prompt détecté uniquement)' },
-  { id: 'starting', label: 'Démarrage et contrôle' },
+  { id: 'starting', label: 'Redémarrage et contrôle' },
   { id: 'running', label: 'Serveur en ligne' },
 ];
 
@@ -72,6 +74,29 @@ function formatBytes(bytes: number | null): string {
   if (bytes === null) return 'inconnu';
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} Go`;
   return `${(bytes / 1024 ** 2).toFixed(0)} Mio`;
+}
+
+function formatDuration(totalSeconds: number | null): string {
+  if (totalSeconds === null || !Number.isFinite(totalSeconds)) return '—';
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const remainder = seconds % 60;
+  const clock = [hours, minutes, remainder].map((value) => String(value).padStart(2, '0')).join(':');
+  return days > 0 ? `${days} j ${clock}` : clock;
+}
+
+function formatScheduledTime(value: string | null, timeZone: string): string {
+  if (!value) return 'calcul en cours';
+  return new Date(value).toLocaleString('fr-FR', {
+    timeZone,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function statusLabel(status: string): string {
@@ -113,6 +138,7 @@ export function LivePanelView() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [clockNow, setClockNow] = useState(Date.now());
   const [versions, setVersions] = useState<PublicVersion[]>([]);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
   const [configTouched, setConfigTouched] = useState(false);
@@ -146,6 +172,12 @@ export function LivePanelView() {
       }
     }
   }, [configTouched]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [authenticated]);
 
   useEffect(() => {
     let alive = true;
@@ -317,13 +349,17 @@ export function LivePanelView() {
       return;
     }
 
-    const destructiveMessage = [
-      `ATTENTION : chaque Deploy efface entièrement ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} (monde, sauvegardes, fichiers et configuration), même si tu redéploies la même version.`,
+    const confirmationMessage = [
+      `Mettre à jour Bedrock vers ${configuration.version} dans ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} ?`,
+      isExistingDeployment
+        ? 'Déploiement non destructif : le monde, les sauvegardes, les packs, server.properties et permissions.json existants seront conservés. Seule la version du serveur sera modifiée.'
+        : 'Première installation : le dossier existant n’est pas supprimé. Le monde et les fichiers déjà présents seront conservés autant que possible.',
+      'Le serveur restera en ligne pendant le téléchargement et l’extraction, puis sera arrêté proprement et redémarré automatiquement. Le tunnel ne sera pas interrompu.',
       status?.system.memoryWarning ? 'Le conteneur est sous le budget mémoire recommandé ; un arrêt OOM est possible.' : '',
       status?.system.diskWarning ? `Espace disque détecté : DATA_DIR ${formatBytes(status.system.dataDiskFreeBytes)} libres / ${formatBytes(status.system.dataDiskRequiredBytes)} estimés${status.system.sharedDiskVolume === false ? ` ; BEDROCK_SERVER_DIR ${formatBytes(status.system.serverDiskFreeBytes)} libres / ${formatBytes(status.system.serverDiskRequiredBytes)} estimés` : status.system.sharedDiskVolume === null ? ' ; volume de BEDROCK_SERVER_DIR incertain' : ' ; volume partagé, archive + extraction incluses'}. Le déploiement reste autorisé, mais peut échouer si le volume est plein.` : '',
-      'Confirmer le wipe et le nouveau déploiement ?',
+      'Confirmer le déploiement non destructif ?',
     ].filter(Boolean).join('\n\n');
-    if (!window.confirm(destructiveMessage)) return;
+    if (!window.confirm(confirmationMessage)) return;
 
     setBusyAction('deploy');
     try {
@@ -466,6 +502,11 @@ export function LivePanelView() {
   const playitSetup = status?.playitSetup;
   const system = status?.system;
   const pipeline = status?.state.pipeline;
+  const scheduler = status?.scheduler;
+  const isExistingDeployment = Boolean(status?.state.activeConfig);
+  const uptimeSeconds = server?.status === 'running' && server.startedAt
+    ? Math.floor((clockNow - Date.parse(server.startedAt)) / 1000)
+    : null;
 
   return (
     <main className="min-h-screen bg-[#131314] text-[#e4e2e2] font-space">
@@ -503,6 +544,12 @@ export function LivePanelView() {
               </strong>
             </div>
             <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">{status?.state.activeConfig ? `${status.state.activeConfig.version} · ${status.state.activeConfig.levelName}` : 'Aucun déploiement actif'}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Metric label="JOUEURS" value={`${server?.playersOnline ?? '—'} / ${status?.state.activeConfig?.maxPlayers ?? '—'}`} />
+              <Metric label="UPTIME" value={formatDuration(uptimeSeconds)} />
+              <Metric label="CPU BEDROCK" value={server?.cpuPercent === null || server?.cpuPercent === undefined ? '—' : `${server.cpuPercent.toFixed(1)} %`} />
+              <Metric label="RAM BEDROCK" value={formatBytes(server?.memoryBytes ?? null)} />
+            </div>
             {server?.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ff8782]">{server.error}</p>}
           </article>
 
@@ -561,6 +608,19 @@ export function LivePanelView() {
               </div>
             </div>
             <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Le tunnel {tunnelProvider} n’est pas arrêté par STOP ni par Deploy.</p>
+            <div className="mt-3 border-t border-[#0e0e0e] pt-3 font-jb text-[10px] leading-5">
+              <p className="text-[#8c9380]">REDÉMARRAGE QUOTIDIEN DU SERVEUR</p>
+              {scheduler?.enabled ? (
+                <>
+                  <p className="text-[#c2c9b5]">{scheduler.time} · {scheduler.timeZone} · prochain : {formatScheduledTime(scheduler.nextRestartAt, scheduler.timeZone)}</p>
+                  {scheduler.phase === 'countdown' && <p className="text-[#dfc740]">Annonce en jeu · redémarrage dans {formatDuration(scheduler.countdownSeconds)}</p>}
+                  {scheduler.phase === 'restarting' && <p className="text-[#dfc740]">Arrêt gracieux puis redémarrage en cours…</p>}
+                  {scheduler.phase === 'failed' && <p className="break-words text-[#ff8782]">{scheduler.error || 'Échec du redémarrage automatique.'}</p>}
+                </>
+              ) : (
+                <p className="text-[#c2c9b5]">Désactivé{scheduler?.error ? ` · ${scheduler.error}` : ''}</p>
+              )}
+            </div>
           </article>
         </section>
 
@@ -569,10 +629,15 @@ export function LivePanelView() {
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#0e0e0e] pb-3">
               <div>
                 <h2 className="font-silk text-base text-[#dfc740]">Configurer & déployer</h2>
-                <p className="mt-1 font-jb text-[10px] text-[#c2c9b5]">Deploy repart de zéro et efface sans sauvegarde le dossier du serveur.</p>
+                <p className="mt-1 font-jb text-[10px] text-[#c2c9b5]">Déploie la version choisie en conservant les données existantes et redémarre Bedrock.</p>
               </div>
               <span className="mc-inset bg-[#0e0e0e] px-2 py-1 font-jb text-[10px] text-[#dfc740]">TUNNEL BEDROCK · UDP 19132 FIXE</span>
             </div>
+            {isExistingDeployment && (
+              <div className="mc-inset bg-[#20281b] p-3 font-jb text-[10px] leading-5 text-[#c7ef9c]">
+                Mode mise à jour : le sélecteur de version reste actif. Les paramètres du serveur sont verrouillés pour éviter toute modification involontaire ; Deploy préservera le monde, les packs, les permissions et la configuration existants.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
@@ -585,35 +650,35 @@ export function LivePanelView() {
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Nom du serveur
-                <input value={configuration.serverName} maxLength={64} onChange={(event) => changeField('serverName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d]" required />
+                <input value={configuration.serverName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('serverName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" required />
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Nom du monde
-                <input value={configuration.levelName} maxLength={64} onChange={(event) => changeField('levelName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d]" required />
+                <input value={configuration.levelName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('levelName', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" required />
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Mode de jeu
-                <select value={configuration.gamemode} onChange={(event) => changeField('gamemode', event.target.value as DeployConfiguration['gamemode'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none">
+                <select value={configuration.gamemode} disabled={isExistingDeployment} onChange={(event) => changeField('gamemode', event.target.value as DeployConfiguration['gamemode'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50">
                   <option value="survival">Survie</option><option value="creative">Créatif</option><option value="adventure">Aventure</option>
                 </select>
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Difficulté
-                <select value={configuration.difficulty} onChange={(event) => changeField('difficulty', event.target.value as DeployConfiguration['difficulty'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none">
+                <select value={configuration.difficulty} disabled={isExistingDeployment} onChange={(event) => changeField('difficulty', event.target.value as DeployConfiguration['difficulty'])} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50">
                   <option value="peaceful">Paisible</option><option value="easy">Facile</option><option value="normal">Normale</option><option value="hard">Difficile</option>
                 </select>
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Joueurs max
-                <input type="number" min={1} step={1} value={configuration.maxPlayers} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none" required />
+                <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={isExistingDeployment} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" required />
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Seed <span className="text-[#8c9380]">optionnelle · vide = aléatoire</span>
-                <input value={configuration.seed} maxLength={80} onChange={(event) => changeField('seed', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none" />
+                <input value={configuration.seed} maxLength={80} disabled={isExistingDeployment} onChange={(event) => changeField('seed', event.target.value)} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" />
               </label>
               <label className="flex flex-col gap-1 font-jb text-[11px] text-[#c2c9b5]">
                 Distance de vue
-                <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none" />
+                <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={isExistingDeployment} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="mc-inset bg-[#0e0e0e] p-2.5 text-sm text-white outline-none disabled:opacity-50" />
               </label>
             </div>
 
@@ -623,13 +688,13 @@ export function LivePanelView() {
                   <h3 className="font-jb text-xs font-bold text-[#dfc740]">XUID administrateur(s)</h3>
                   <p className="mt-1 font-jb text-[10px] text-[#8c9380]">1 à 3 identifiants numériques uniquement ; aucun gamertag.</p>
                 </div>
-                <button type="button" onClick={addAdminField} disabled={configuration.adminXuids.length >= 3} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white disabled:opacity-40">+ Ajouter</button>
+                <button type="button" onClick={addAdminField} disabled={isExistingDeployment || configuration.adminXuids.length >= 3} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white disabled:opacity-40">+ Ajouter</button>
               </div>
               <div className="flex flex-col gap-2">
                 {configuration.adminXuids.map((xuid, index) => (
                   <div key={index} className="flex gap-2">
-                    <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} onChange={(event) => setAdminXuid(index, event.target.value)} className="mc-inset min-w-0 flex-1 bg-[#161717] p-2 font-mono text-sm text-white outline-none focus:border-[#97d85d]" placeholder="Ex. 2535412894129841" required />
-                    {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} className="mc-stone-btn bg-[#2a2a2a] px-3 font-jb text-xs text-[#ffb3ae]" aria-label={`Retirer le XUID ${index + 1}`}>×</button>}
+                    <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={isExistingDeployment} onChange={(event) => setAdminXuid(index, event.target.value)} className="mc-inset min-w-0 flex-1 bg-[#161717] p-2 font-mono text-sm text-white outline-none focus:border-[#97d85d] disabled:opacity-50" placeholder="Ex. 2535412894129841" required />
+                    {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={isExistingDeployment} className="mc-stone-btn bg-[#2a2a2a] px-3 font-jb text-xs text-[#ffb3ae] disabled:opacity-40" aria-label={`Retirer le XUID ${index + 1}`}>×</button>}
                   </div>
                 ))}
               </div>
@@ -639,7 +704,7 @@ export function LivePanelView() {
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="mc-inset flex cursor-pointer items-center gap-3 bg-[#0e0e0e] p-3 font-jb text-xs text-[#c2c9b5]">
-                <input type="checkbox" checked={configuration.allowCheats} onChange={(event) => changeField('allowCheats', event.target.checked)} className="h-4 w-4 accent-[#97d85d]" />
+                <input type="checkbox" checked={configuration.allowCheats} disabled={isExistingDeployment} onChange={(event) => changeField('allowCheats', event.target.checked)} className="h-4 w-4 accent-[#97d85d] disabled:opacity-50" />
                 Autoriser les commandes/cheats
               </label>
               <div className="mc-inset flex flex-wrap items-center gap-2 bg-[#0e0e0e] p-3 font-jb text-[10px] text-[#dfc740]">
@@ -650,12 +715,12 @@ export function LivePanelView() {
             </div>
 
             <label className="mc-inset flex cursor-pointer items-start gap-3 bg-[#161717] p-3 font-jb text-[11px] leading-5 text-[#c2c9b5]">
-              <input type="checkbox" checked={configuration.eulaAccepted} onChange={(event) => changeField('eulaAccepted', event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#97d85d]" />
+              <input type="checkbox" checked={configuration.eulaAccepted} disabled={isExistingDeployment} onChange={(event) => changeField('eulaAccepted', event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#97d85d] disabled:opacity-50" />
               <span>J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer" className="text-[#dfc740] underline">EULA Minecraft</a>. Si le binaire affiche un prompt EULA reconnu, le backend répondra automatiquement « y ». Aucun fichier EULA non vérifié ne sera inventé.</span>
             </label>
 
             <button type="submit" disabled={isPipelineBusy || !isValidForm(configuration) || versions.length === 0 || system?.deployReady === false} className="mc-bevel-gold bg-[#dfc740] p-3 font-pixel text-[10px] font-bold text-[#393000] hover:bg-[#fde35a] disabled:cursor-not-allowed disabled:opacity-40">
-              {isPipelineBusy ? `DÉPLOIEMENT : ${statusLabel(pipeline?.step ?? 'preflight')}` : 'WIPE COMPLET & DEPLOY'}
+              {isPipelineBusy ? `DÉPLOIEMENT : ${statusLabel(pipeline?.step ?? 'preflight')}` : isExistingDeployment ? 'METTRE À JOUR & REDÉMARRER' : 'INSTALLER & DÉMARRER'}
             </button>
           </form>
 
@@ -690,7 +755,7 @@ export function LivePanelView() {
             <section className="mc-bevel bg-[#1b1c1c] p-3 sm:p-5">
               <div className="mb-3 border-b-2 border-[#0e0e0e] pb-3">
                 <h2 className="font-silk text-base text-[#dfc740]">Précontrôle du conteneur</h2>
-                <p className="mt-1 break-all font-jb text-[10px] text-[#8c9380]">Mesures dans le conteneur du panel, pas sur l’hôte Docker. Cible du Wipe : {status?.serverDirectory ?? 'en attente du statut'}.</p>
+                <p className="mt-1 break-all font-jb text-[10px] text-[#8c9380]">Mesures dans le conteneur du panel, pas sur l’hôte Docker. Dossier Bedrock : {status?.serverDirectory ?? 'en attente du statut'} (aucun effacement automatique).</p>
               </div>
               <div className="flex flex-col gap-2 font-jb text-[10px]">
                 <CheckRow label={`Linux x64 · Node ${system?.nodeVersion ?? '…'}`} ok={system ? system.platform === 'linux' && system.arch === 'x64' : null} />
@@ -750,6 +815,15 @@ export function LivePanelView() {
         </footer>
       </div>
     </main>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mc-inset min-w-0 bg-[#0e0e0e] px-2 py-2">
+      <p className="font-jb text-[8px] tracking-wide text-[#8c9380]">{label}</p>
+      <p className="mt-1 truncate font-jb text-xs font-bold text-[#c2c9b5]">{value}</p>
+    </div>
   );
 }
 

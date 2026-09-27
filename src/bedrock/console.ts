@@ -11,6 +11,7 @@ import type { PanelAuthService } from '../auth.ts';
 import type { StateStore } from '../state.ts';
 import type { ConsoleLog, LogLevel } from '../types/backend.ts';
 import { isSameOriginRequest } from '../security.ts';
+import { parsePlayerLifecycleMessage } from './playerTracker.ts';
 
 const MAX_RECENT_LINES = 500;
 const MAX_LOG_FILE_BYTES = 10 * 1024 * 1024;
@@ -104,6 +105,7 @@ export class BedrockConsole extends EventEmitter {
   private readonly readyChildren = new WeakSet<ChildProcess>();
   private readonly intentionalStops = new WeakSet<ChildProcess>();
   private readonly closedChildren = new WeakSet<ChildProcess>();
+  private readonly onlinePlayerKeys = new Set<string>();
   private stopPromise: Promise<void> | null = null;
 
   constructor(dataDirectory: string) {
@@ -123,6 +125,10 @@ export class BedrockConsole extends EventEmitter {
     return this.ready && this.isRunning;
   }
 
+  get onlinePlayersCount(): number {
+    return this.onlinePlayerKeys.size;
+  }
+
   getRecentLines(): ConsoleLog[] {
     return this.recentLines.map((line) => ({ ...line }));
   }
@@ -130,6 +136,8 @@ export class BedrockConsole extends EventEmitter {
   async start(options: StartOptions): Promise<void> {
     if (this.isRunning) throw new Error('bedrock_server est déjà en cours d’exécution.');
     this.ready = false;
+    this.onlinePlayerKeys.clear();
+    this.emit('players', 0);
 
     const existingLibraryPath = process.env.LD_LIBRARY_PATH;
     const environment: NodeJS.ProcessEnv = { ...process.env };
@@ -241,6 +249,8 @@ export class BedrockConsole extends EventEmitter {
           this.child = null;
           this.ready = false;
         }
+        this.onlinePlayerKeys.clear();
+        this.emit('players', 0);
         const description = signal ? `signal ${signal}` : `code ${code ?? 'inconnu'}`;
         const level: LogLevel = code === 0 || intentional ? 'warn' : 'error';
         this.appendLine('PROCESS', `bedrock_server arrêté (${description}).`, level);
@@ -316,7 +326,7 @@ export class BedrockConsole extends EventEmitter {
     }
     const killed = await this.waitForExit(child, 5000);
     if (!killed && child.exitCode === null && child.signalCode === null) {
-      throw new Error('bedrock_server est toujours actif après SIGKILL ; Wipe/arrêt annulé pour protéger les données.');
+      throw new Error('bedrock_server est toujours actif après SIGKILL ; arrêt annulé pour protéger les données.');
     }
   }
 
@@ -354,6 +364,15 @@ export class BedrockConsole extends EventEmitter {
   private consumeLine(rawLine: string, stream: 'stdout' | 'stderr'): void {
     const message = rawLine.replace(/\0/g, '').trimEnd();
     if (!message.trim()) return;
+
+    const playerEvent = parsePlayerLifecycleMessage(message);
+    if (playerEvent) {
+      const previousCount = this.onlinePlayerKeys.size;
+      if (playerEvent.action === 'connected') this.onlinePlayerKeys.add(playerEvent.playerKey);
+      else this.onlinePlayerKeys.delete(playerEvent.playerKey);
+      if (previousCount !== this.onlinePlayerKeys.size) this.emit('players', this.onlinePlayerKeys.size);
+    }
+
     const level: LogLevel = /\b(error|fatal|failed|exception)\b/i.test(message)
       ? 'error'
       : /\b(warn|warning)\b/i.test(message)

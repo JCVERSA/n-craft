@@ -26,6 +26,10 @@ function initialState(): PersistentPanelState {
       pid: null,
       startedAt: null,
       error: null,
+      playersOnline: null,
+      cpuPercent: null,
+      memoryBytes: null,
+      metricsUpdatedAt: null,
     },
     playit: {
       status: 'starting',
@@ -67,7 +71,7 @@ function normalizeState(value: unknown): PersistentPanelState {
   const pipelineStatus: PipelineStatus =
     pipeline.status === 'running' || pipeline.status === 'failed' ? pipeline.status : 'idle';
   const validSteps: PipelineStep[] = [
-    'idle', 'preflight', 'stopping', 'wiping', 'downloading', 'extracting',
+    'idle', 'preflight', 'downloading', 'extracting', 'stopping', 'updating_files',
     'writing_config', 'accepting_eula', 'starting', 'running', 'failed',
   ];
   const serverStatus: ServerLifecycle = [
@@ -99,6 +103,16 @@ function normalizeState(value: unknown): PersistentPanelState {
       pid: typeof server.pid === 'number' ? server.pid : null,
       startedAt: typeof server.startedAt === 'string' ? server.startedAt : null,
       error: typeof server.error === 'string' ? server.error : null,
+      playersOnline: typeof server.playersOnline === 'number' && Number.isFinite(server.playersOnline)
+        ? Math.max(0, Math.floor(server.playersOnline))
+        : null,
+      cpuPercent: typeof server.cpuPercent === 'number' && Number.isFinite(server.cpuPercent)
+        ? Math.max(0, Math.min(100, server.cpuPercent))
+        : null,
+      memoryBytes: typeof server.memoryBytes === 'number' && Number.isFinite(server.memoryBytes)
+        ? Math.max(0, Math.floor(server.memoryBytes))
+        : null,
+      metricsUpdatedAt: typeof server.metricsUpdatedAt === 'string' ? server.metricsUpdatedAt : null,
     },
     playit: {
       status: playitStatuses.includes(playit.status as PlayitLifecycle)
@@ -157,7 +171,16 @@ export class StateStore extends EventEmitter {
     // A container restart normally kills its children, but a Node-only restart may
     // leave an orphan process. Do not present persisted state as proof of liveness;
     // graceful panel shutdown is responsible for stopping children before exit.
-    this.state.server = { status: 'stopped', pid: null, startedAt: null, error: null };
+    this.state.server = {
+      status: 'stopped',
+      pid: null,
+      startedAt: null,
+      error: null,
+      playersOnline: null,
+      cpuPercent: null,
+      memoryBytes: null,
+      metricsUpdatedAt: null,
+    };
     if (this.state.pipeline.status === 'running') {
       this.state.pipeline = {
         status: 'failed',

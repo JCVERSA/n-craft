@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, rm, stat } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { BedrockConsole } from './console.ts';
@@ -6,6 +6,7 @@ import { downloadBedrockArchive } from './download.ts';
 import { extractZipSafely } from './extractArchive.ts';
 import { writeBedrockConfiguration } from './configWriter.ts';
 import { getMaxArchiveBytes } from './limits.ts';
+import { mergeBedrockRelease } from './installRelease.ts';
 import { SystemInspector } from '../preflight.ts';
 import { StateStore } from '../state.ts';
 import type { DeployConfiguration, PipelineStep, VersionEntry } from '../types/backend.ts';
@@ -43,7 +44,7 @@ function assertSafeServerDirectory(serverDirectory: string, dataDirectory: strin
     path.basename(target) !== 'server' ||
     (insideProject && relativeToProject !== path.join('bedrock', 'server'))
   ) {
-    throw new Error(`BEDROCK_SERVER_DIR refuse un dossier dangereux à effacer : ${target}`);
+    throw new Error(`BEDROCK_SERVER_DIR refuse un emplacement dangereux : ${target}`);
   }
 }
 
@@ -53,7 +54,21 @@ function throwIfAborted(signal: AbortSignal): void {
   throw reason instanceof Error ? reason : new Error('Déploiement annulé.');
 }
 
-/** One exclusive, destructive deployment pipeline; Playit is intentionally not a dependency. */
+async function assertNoSymlinkInPath(directory: string): Promise<void> {
+  let current = path.resolve(directory);
+  while (true) {
+    const info = await lstat(current).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (info?.isSymbolicLink()) throw new Error(`Le chemin ${current} contient un lien symbolique ; mise à jour refusée.`);
+    const parent = path.dirname(current);
+    if (parent === current) return;
+    current = parent;
+  }
+}
+
+/** One exclusive, non-destructive deployment pipeline; Playit is intentionally not a dependency. */
 export class DeployPipeline {
   private active = false;
   private shuttingDown = false;
@@ -71,6 +86,10 @@ export class DeployPipeline {
     private readonly dataDirectory: string,
     serverDirectory: string,
     private readonly findVersion: (version: string) => VersionEntry | undefined,
+    private readonly artifacts: {
+      download: typeof downloadBedrockArchive;
+      extract: typeof extractZipSafely;
+    } = { download: downloadBedrockArchive, extract: extractZipSafely },
   ) {
     this.serverDirectory = path.resolve(serverDirectory);
     this.stopTimeoutMs = this.readTimeout('BDS_STOP_TIMEOUT_MS', 10_000);
@@ -121,12 +140,46 @@ export class DeployPipeline {
     );
   }
 
+  /** Atomic stop/start operation used by the scheduled restart countdown. */
+  restartExisting(): Promise<void> {
+    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    if (!this.bedrockConsole.isReady) throw new Error('Le redémarrage planifié a été annulé : Bedrock n’est plus en ligne.');
+    if (!this.state.getSnapshot().activeConfig) throw new ServerNotInstalledError();
+
+    this.active = true;
+    const controller = new AbortController();
+    this.activeController = controller;
+    const runPromise = this.runExistingRestart(controller.signal);
+    this.activeRun = runPromise;
+    return runPromise.finally(() => this.finishRun(runPromise));
+  }
+
   async stop(): Promise<void> {
     if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    this.active = true;
+    const runPromise = this.performStop();
+    this.activeRun = runPromise;
+    try {
+      await runPromise;
+    } finally {
+      this.finishRun(runPromise);
+    }
+  }
+
+  private async performStop(): Promise<void> {
     await this.state.updateServer({ status: 'stopping', error: null });
     try {
       await this.bedrockConsole.stop(this.stopTimeoutMs);
-      await this.state.updateServer({ status: 'stopped', pid: null, startedAt: null, error: null });
+      await this.state.updateServer({
+        status: 'stopped',
+        pid: null,
+        startedAt: null,
+        error: null,
+        playersOnline: 0,
+        cpuPercent: null,
+        memoryBytes: null,
+        metricsUpdatedAt: null,
+      });
     } catch (error) {
       const stillRunning = this.bedrockConsole.isRunning;
       const previous = this.state.getSnapshot().server;
@@ -134,6 +187,10 @@ export class DeployPipeline {
         status: stillRunning ? 'failed' : 'stopped',
         pid: stillRunning ? this.bedrockConsole.pid : null,
         startedAt: stillRunning ? previous.startedAt : null,
+        playersOnline: stillRunning ? previous.playersOnline : 0,
+        cpuPercent: stillRunning ? previous.cpuPercent : null,
+        memoryBytes: stillRunning ? previous.memoryBytes : null,
+        metricsUpdatedAt: stillRunning ? previous.metricsUpdatedAt : null,
         error: (error as Error).message || 'Échec de l’arrêt du serveur.',
       }).catch(() => undefined);
       throw error;
@@ -166,11 +223,14 @@ export class DeployPipeline {
 
   private async run(configuration: DeployConfiguration, signal: AbortSignal): Promise<void> {
     let reachedStopStage = false;
-    let didWipe = false;
+    let didModifyServer = false;
     let attemptedStart = false;
+    let preserveExisting = false;
+    let deploymentConfig = configuration;
     const wasRunningAtStart = this.bedrockConsole.isRunning;
     let unexpectedReadyExit: string | null = null;
     let temporaryArchive: string | null = null;
+    let stagingDirectory: string | null = null;
     const trackUnexpectedExit = (event: { code: number | null; signal: NodeJS.Signals | null; wasReady: boolean; intentional?: boolean }) => {
       if (!event.intentional && event.wasReady) {
         const reason = event.signal ? `signal ${event.signal}` : `code ${event.code ?? 'inconnu'}`;
@@ -184,7 +244,7 @@ export class DeployPipeline {
       await this.setStep('preflight');
       const preflight = await this.inspector.inspect(true);
       throwIfAborted(signal);
-      if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Le déploiement est interrompu avant le Wipe.`);
+      if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Déploiement interrompu avant la mise à jour.`);
       if (!preflight.deployReady) {
         const failures = [preflight.glibc, preflight.libcurl]
           .filter((check) => !check.ok)
@@ -195,6 +255,56 @@ export class DeployPipeline {
         throw new Error(`Vérification système bloquante : ${failures.join(' ')}`);
       }
 
+      assertSafeServerDirectory(this.serverDirectory, this.dataDirectory);
+      await assertNoSymlinkInPath(path.dirname(this.serverDirectory));
+      const currentDirectory = await lstat(this.serverDirectory).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+      });
+      if (currentDirectory?.isSymbolicLink() || (currentDirectory && !currentDirectory.isDirectory())) {
+        throw new Error('BEDROCK_SERVER_DIR doit être un dossier réel ; aucune donnée n’a été touchée.');
+      }
+      preserveExisting = Boolean(currentDirectory?.isDirectory());
+      const currentConfig = this.state.getSnapshot().activeConfig;
+      if (preserveExisting && currentConfig) {
+        // On updates only the game version changes. Keep the settings represented by
+        // the existing files, as well as all player/world data.
+        deploymentConfig = { ...currentConfig, version: configuration.version };
+      }
+
+      const version = this.findVersion(configuration.version);
+      if (!version) throw new Error(`La version ${configuration.version} n’existe plus dans le catalogue.`);
+
+      await this.setStep('downloading');
+      throwIfAborted(signal);
+      temporaryArchive = path.join(this.dataDirectory, `bedrock-${randomUUID()}.zip`);
+      const download = await this.artifacts.download(
+        version.downloadUrl,
+        temporaryArchive,
+        getMaxArchiveBytes(),
+        signal,
+      );
+      throwIfAborted(signal);
+      console.info(`[deploy] ZIP ${version.version} téléchargé (${download.bytes} octets).`);
+      if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Le serveur s’est arrêté pendant le téléchargement.`);
+
+      await this.setStep('extracting');
+      throwIfAborted(signal);
+      const serverParent = path.dirname(this.serverDirectory);
+      await mkdir(serverParent, { recursive: true });
+      await assertNoSymlinkInPath(serverParent);
+      stagingDirectory = await mkdtemp(path.join(serverParent, '.ncraft-bedrock-stage-'));
+      await this.artifacts.extract(temporaryArchive, stagingDirectory, signal);
+      throwIfAborted(signal);
+      const stagedBinaryPath = path.join(stagingDirectory, 'bedrock_server');
+      const binaryStats = await lstat(stagedBinaryPath).catch(() => null);
+      if (!binaryStats?.isFile() || binaryStats.isSymbolicLink()) {
+        throw new Error('L’archive n’a pas fourni un fichier bedrock_server sûr à la racine.');
+      }
+      if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Le serveur s’est arrêté avant la mise à jour.`);
+
+      // Keep the current version live during download/extraction. Stop gracefully
+      // only when the staged release is valid and ready to be merged.
       await this.setStep('stopping');
       throwIfAborted(signal);
       reachedStopStage = true;
@@ -204,45 +314,27 @@ export class DeployPipeline {
         await this.bedrockConsole.stop(this.stopTimeoutMs);
       }
       throwIfAborted(signal);
-      await this.state.updateServer({ status: 'stopped', pid: null, startedAt: null, error: null });
+      await this.state.updateServer({
+        status: 'stopped',
+        pid: null,
+        startedAt: null,
+        error: null,
+        playersOnline: 0,
+        cpuPercent: null,
+        memoryBytes: null,
+        metricsUpdatedAt: null,
+      });
 
-      await this.setStep('wiping');
+      await this.setStep('updating_files');
       throwIfAborted(signal);
-      if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Le Wipe est annulé.`);
-      await this.removePreviousServerDirectory();
-      didWipe = true;
-      await mkdir(this.serverDirectory, { recursive: true });
-      throwIfAborted(signal);
-
-      const version = this.findVersion(configuration.version);
-      if (!version) throw new Error(`La version ${configuration.version} n’existe plus dans le catalogue.`);
-
-      await this.setStep('downloading');
-      throwIfAborted(signal);
-      temporaryArchive = path.join(this.dataDirectory, `bedrock-${randomUUID()}.zip`);
-      const download = await downloadBedrockArchive(
-        version.downloadUrl,
-        temporaryArchive,
-        getMaxArchiveBytes(),
-        signal,
-      );
-      throwIfAborted(signal);
-      console.info(`[deploy] ZIP ${version.version} téléchargé (${download.bytes} octets).`);
-
-      await this.setStep('extracting');
-      throwIfAborted(signal);
-      await extractZipSafely(temporaryArchive, this.serverDirectory, signal);
-      throwIfAborted(signal);
+      didModifyServer = true;
+      await mergeBedrockRelease(stagingDirectory, this.serverDirectory, { preserveExisting, signal });
       const binaryPath = path.join(this.serverDirectory, 'bedrock_server');
-      const binaryStats = await stat(binaryPath).catch(() => null);
-      if (!binaryStats?.isFile()) {
-        throw new Error('L’archive n’a pas fourni de fichier bedrock_server à la racine.');
-      }
       await chmod(binaryPath, 0o755);
 
       await this.setStep('writing_config');
       throwIfAborted(signal);
-      await writeBedrockConfiguration(this.serverDirectory, configuration);
+      await writeBedrockConfiguration(this.serverDirectory, deploymentConfig, { preserveExisting });
 
       // The EULA response is performed only if the real binary emits a matching
       // interactive prompt. No undocumented eula.txt format is guessed here.
@@ -252,7 +344,16 @@ export class DeployPipeline {
       await this.setStep('starting');
       throwIfAborted(signal);
       attemptedStart = true;
-      await this.state.updateServer({ status: 'starting', pid: null, startedAt: null, error: null });
+      await this.state.updateServer({
+        status: 'starting',
+        pid: null,
+        startedAt: null,
+        error: null,
+        playersOnline: 0,
+        cpuPercent: null,
+        memoryBytes: null,
+        metricsUpdatedAt: null,
+      });
       throwIfAborted(signal);
       await this.bedrockConsole.start({
         binaryPath,
@@ -271,13 +372,14 @@ export class DeployPipeline {
       if (this.state.getSnapshot().verification.eula === 'unverified') {
         await this.state.setEulaVerification('no_prompt_observed');
       }
-      await this.state.setActiveConfig(configuration);
+      await this.state.setActiveConfig(deploymentConfig);
       throwIfAborted(signal);
       if (!this.bedrockConsole.isReady) throw new Error('bedrock_server s’est arrêté avant la validation finale du déploiement.');
       await this.state.updateServer({
         status: 'running',
         pid: this.bedrockConsole.pid,
         startedAt: new Date().toISOString(),
+        playersOnline: this.bedrockConsole.onlinePlayersCount,
         error: null,
       });
       if (!this.bedrockConsole.isReady) throw new Error('bedrock_server s’est arrêté pendant la finalisation du déploiement.');
@@ -297,30 +399,69 @@ export class DeployPipeline {
         }
       }
 
-      if (signal.aborted && didWipe && !this.bedrockConsole.isRunning) {
-        await this.removePreviousServerDirectory().catch((cleanupError) => {
-          console.error(`[deploy] Could not remove cancelled server directory: ${(cleanupError as Error).message}`);
-        });
-      }
-
       const failedStep = this.state.getSnapshot().pipeline.step;
       await this.state.updatePipeline({ status: 'failed', step: failedStep === 'failed' ? 'preflight' : failedStep, error: message }).catch(() => undefined);
       if (!reachedStopStage && wasRunningAtStart && this.bedrockConsole.isRunning) {
-        // A failed preflight must not stop or misreport the previously running server.
+        // A failed preflight/download must not stop or misreport the old server.
         await this.state.updateServer({ status: 'running', pid: this.bedrockConsole.pid }).catch(() => undefined);
       } else if (this.bedrockConsole.isRunning) {
         await this.state.updateServer({ status: 'failed', pid: this.bedrockConsole.pid, error: message }).catch(() => undefined);
       } else {
         await this.state.updateServer({
-          status: attemptedStart || didWipe ? 'failed' : 'stopped',
+          status: attemptedStart || didModifyServer || Boolean(unexpectedReadyExit) ? 'failed' : 'stopped',
           pid: null,
           startedAt: null,
+          playersOnline: 0,
+          cpuPercent: null,
+          memoryBytes: null,
+          metricsUpdatedAt: null,
           error: message,
         }).catch(() => undefined);
       }
     } finally {
       this.bedrockConsole.removeListener('exit', trackUnexpectedExit);
       if (temporaryArchive) await rm(temporaryArchive, { force: true }).catch(() => undefined);
+      if (stagingDirectory) await rm(stagingDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch((error) => {
+        console.error(`[deploy] Could not remove temporary staging folder: ${(error as Error).message}`);
+      });
+    }
+  }
+
+  private async runExistingRestart(signal: AbortSignal): Promise<void> {
+    try {
+      throwIfAborted(signal);
+      await this.setStep('stopping');
+      await this.state.updateServer({ status: 'stopping', error: null });
+      await this.bedrockConsole.stop(this.stopTimeoutMs);
+      await this.state.updateServer({
+        status: 'stopped',
+        pid: null,
+        startedAt: null,
+        error: null,
+        playersOnline: 0,
+        cpuPercent: null,
+        memoryBytes: null,
+        metricsUpdatedAt: null,
+      });
+      throwIfAborted(signal);
+      await this.runExistingStart(signal);
+    } catch (error) {
+      const message = (error as Error).message || 'Échec du redémarrage planifié de Bedrock.';
+      const failedStep = this.state.getSnapshot().pipeline.step;
+      await this.state.updatePipeline({ status: 'failed', step: failedStep === 'failed' ? 'stopping' : failedStep, error: message }).catch(() => undefined);
+      if (!this.bedrockConsole.isRunning) {
+        await this.state.updateServer({
+          status: 'failed',
+          pid: null,
+          startedAt: null,
+          playersOnline: 0,
+          cpuPercent: null,
+          memoryBytes: null,
+          metricsUpdatedAt: null,
+          error: message,
+        }).catch(() => undefined);
+      }
+      throw error;
     }
   }
 
@@ -359,7 +500,10 @@ export class DeployPipeline {
       throwIfAborted(signal);
       await this.setStep('starting');
       attemptedStart = true;
-      await this.state.updateServer({ status: 'starting', pid: null, startedAt: null, error: null });
+      await this.state.updateServer({
+        status: 'starting', pid: null, startedAt: null, error: null,
+        playersOnline: 0, cpuPercent: null, memoryBytes: null, metricsUpdatedAt: null,
+      });
       await this.bedrockConsole.start({
         binaryPath,
         workingDirectory: this.serverDirectory,
@@ -381,6 +525,7 @@ export class DeployPipeline {
         status: 'running',
         pid: this.bedrockConsole.pid,
         startedAt: new Date().toISOString(),
+        playersOnline: this.bedrockConsole.onlinePlayersCount,
         error: null,
       });
       await this.state.updatePipeline({ status: 'idle', step: 'running', error: null });
@@ -401,6 +546,10 @@ export class DeployPipeline {
         status: stillRunning ? 'failed' : (attemptedStart ? 'failed' : 'stopped'),
         pid: stillRunning ? this.bedrockConsole.pid : null,
         startedAt: stillRunning ? this.state.getSnapshot().server.startedAt : null,
+        playersOnline: stillRunning ? this.bedrockConsole.onlinePlayersCount : 0,
+        cpuPercent: stillRunning ? this.state.getSnapshot().server.cpuPercent : null,
+        memoryBytes: stillRunning ? this.state.getSnapshot().server.memoryBytes : null,
+        metricsUpdatedAt: stillRunning ? this.state.getSnapshot().server.metricsUpdatedAt : null,
         error: message,
       }).catch(() => undefined);
       console.error(`[start] ${message}`);
@@ -409,29 +558,6 @@ export class DeployPipeline {
 
   private async setStep(step: PipelineStep): Promise<void> {
     await this.state.updatePipeline({ status: 'running', step, error: null });
-  }
-
-  private async removePreviousServerDirectory(): Promise<void> {
-    assertSafeServerDirectory(this.serverDirectory, this.dataDirectory);
-    let ancestor = path.dirname(this.serverDirectory);
-    while (ancestor !== path.dirname(ancestor)) {
-      const ancestorStats = await lstat(ancestor).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === 'ENOENT') return null;
-        throw error;
-      });
-      if (ancestorStats?.isSymbolicLink()) {
-        throw new Error(`Le parent ${ancestor} est un lien symbolique ; Wipe annulé pour éviter une suppression hors dossier.`);
-      }
-      ancestor = path.dirname(ancestor);
-    }
-    const current = await lstat(this.serverDirectory).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return null;
-      throw error;
-    });
-    if (current?.isSymbolicLink()) {
-      throw new Error('BEDROCK_SERVER_DIR ne peut pas être un lien symbolique ; Wipe annulé pour éviter une suppression hors dossier.');
-    }
-    await rm(this.serverDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
 
   private readTimeout(variable: string, fallback: number): number {

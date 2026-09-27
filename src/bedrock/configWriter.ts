@@ -1,4 +1,5 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { DeployConfiguration } from '../types/backend.ts';
 
@@ -107,12 +108,13 @@ export function validateDeployConfiguration(input: unknown, allowedVersions: Rea
 }
 
 /**
- * Generates the two supported configuration files from scratch. Network ports,
- * online-mode and allow-list are deliberately locked and never accepted from input.
+ * Writes initial settings, or fills only missing files when preserving an existing
+ * server. Network ports, online-mode and allow-list remain application-controlled.
  */
 export async function writeBedrockConfiguration(
   serverDirectory: string,
   configuration: DeployConfiguration,
+  options: { preserveExisting?: boolean } = {},
 ): Promise<void> {
   await mkdir(serverDirectory, { recursive: true });
 
@@ -136,16 +138,39 @@ export async function writeBedrockConfiguration(
     xuid,
   }));
 
-  await writeFile(path.join(serverDirectory, 'server.properties'), properties, { encoding: 'utf8', mode: 0o600 });
-  await writeFile(path.join(serverDirectory, 'permissions.json'), `${JSON.stringify(permissions, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+  await writeConfigurationFile(path.join(serverDirectory, 'server.properties'), properties, options.preserveExisting === true);
+  await writeConfigurationFile(
+    path.join(serverDirectory, 'permissions.json'),
+    `${JSON.stringify(permissions, null, 2)}\n`,
+    options.preserveExisting === true,
+  );
 
-  // Official archives can contain a default allowlist. The product decision is an
-  // open server, so remove both historical filenames and do not create either one.
-  await Promise.all([
-    rm(path.join(serverDirectory, 'allowlist.json'), { force: true }),
-    rm(path.join(serverDirectory, 'whitelist.json'), { force: true }),
-  ]);
+  if (!options.preserveExisting) {
+    // On a fresh server, an archive-provided default allowlist must not turn on
+    // access restrictions contrary to the confirmed open-server setup.
+    await Promise.all([
+      rm(path.join(serverDirectory, 'allowlist.json'), { force: true }),
+      rm(path.join(serverDirectory, 'whitelist.json'), { force: true }),
+    ]);
+  }
+}
+
+async function writeConfigurationFile(filePath: string, content: string, onlyIfMissing: boolean): Promise<void> {
+  const current = await lstat(filePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (current?.isSymbolicLink() || (current && !current.isFile())) {
+    throw new Error(`Le fichier de configuration ${path.basename(filePath)} n’est pas un fichier sûr.`);
+  }
+  if (onlyIfMissing && current) return;
+
+  const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    await rename(temporaryPath, filePath);
+  } catch (error) {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }

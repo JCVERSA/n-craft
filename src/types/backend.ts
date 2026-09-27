@@ -27,10 +27,10 @@ export interface DeployConfiguration {
 export type PipelineStep =
   | 'idle'
   | 'preflight'
-  | 'stopping'
-  | 'wiping'
   | 'downloading'
   | 'extracting'
+  | 'stopping'
+  | 'updating_files'
   | 'writing_config'
   | 'accepting_eula'
   | 'starting'
@@ -38,6 +38,17 @@ export type PipelineStep =
   | 'failed';
 
 export type PipelineStatus = 'idle' | 'running' | 'failed';
+export type ScheduledRestartPhase = 'idle' | 'countdown' | 'restarting' | 'failed';
+export interface ScheduledRestartSnapshot {
+  enabled: boolean;
+  time: string;
+  timeZone: string;
+  warningMinutes: number;
+  nextRestartAt: string | null;
+  phase: ScheduledRestartPhase;
+  countdownSeconds: number | null;
+  error: string | null;
+}
 export type ServerLifecycle = 'stopped' | 'stopping' | 'starting' | 'running' | 'failed';
 export type TunnelProvider = 'localtonet' | 'playit';
 export type LocaltonetLifecycle =
@@ -86,6 +97,10 @@ export interface PersistentPanelState {
     pid: number | null;
     startedAt: string | null;
     error: string | null;
+    playersOnline: number | null;
+    cpuPercent: number | null;
+    memoryBytes: number | null;
+    metricsUpdatedAt: string | null;
   };
   playit: {
     status: PlayitLifecycle;

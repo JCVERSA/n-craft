@@ -111,7 +111,7 @@ test('rejects concurrent deploy calls in process', async () => {
   }
 });
 
-test('a failed Bedrock stop prevents Wipe and reports the still-running process', async () => {
+test('an unavailable release leaves the running server and existing data untouched', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-stop-failure-'));
   try {
     const dataDirectory = path.join(directory, 'data');
@@ -149,15 +149,15 @@ test('a failed Bedrock stop prevents Wipe and reports the still-running process'
     await state.flush();
 
     assert.equal(await readFile(sentinelPath, 'utf8'), 'old world');
-    assert.equal(stopCalls, 1);
-    assert.equal(state.getSnapshot().server.status, 'failed');
-    assert.match(state.getSnapshot().server.error ?? '', /process did not exit/);
+    assert.equal(stopCalls, 0, 'the running Bedrock server is not stopped when the release is unavailable');
+    assert.equal(state.getSnapshot().server.status, 'running');
+    assert.equal(state.getSnapshot().pipeline.status, 'failed');
   } finally {
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   }
 });
 
-test('shutdown cancels an in-flight preflight and never wipes or starts Bedrock', async () => {
+test('shutdown cancels an in-flight preflight without changing server files or starting Bedrock', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-shutdown-'));
   try {
     const dataDirectory = path.join(directory, 'data');
