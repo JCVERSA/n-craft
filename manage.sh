@@ -9,6 +9,8 @@ while [[ -L "$SELF" ]]; do
   if [[ "$TARGET" = /* ]]; then SELF="$TARGET"; else SELF="$SELF_DIR/$TARGET"; fi
 done
 APP_DIR="$(cd -P "$(dirname "$SELF")" >/dev/null 2>&1 && pwd)"
+if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; fi
+export PATH
 ENV_FILE="$APP_DIR/.env"
 ENV_HELPER="$APP_DIR/scripts/env-manager.mjs"
 UPDATE_BRANCH='arena/01a0e06a-n-craft'
@@ -121,12 +123,15 @@ cmd_env_menu() {
   node "$ENV_HELPER" init >/dev/null || return 1
   local choice key description value masked index
   local -a keys descriptions
-  keys=(PANEL_TOKEN PORT TUNNEL_PROVIDER LOCALTONET_BIN LOCALTONET_AUTH_TOKEN LOCALTONET_API_KEY LOCALTONET_API_POLL_INTERVAL_MS LOCALTONET_API_TIMEOUT_MS PLAYIT_BIN PLAYIT_CLI_BIN PLAYIT_SECRET_PATH DATA_DIR BEDROCK_SERVER_DIR PANEL_ORIGIN PANEL_TRUST_PROXY BDS_START_TIMEOUT_MS BDS_STOP_TIMEOUT_MS BDS_RESTART_ENABLED BDS_RESTART_TIME BDS_RESTART_TIMEZONE BDS_RESTART_WARNING_MINUTES PLAYIT_START_TIMEOUT_MS PLAYIT_ADDRESS_TIMEOUT_MS BDS_MAX_ZIP_BYTES)
+  keys=(PANEL_TOKEN PORT TUNNEL_PROVIDER PORTWARP_BIN PORTWARP_TUNNEL_NAME PORTWARP_POLL_INTERVAL_MS LOCALTONET_BIN LOCALTONET_AUTH_TOKEN LOCALTONET_API_KEY LOCALTONET_API_POLL_INTERVAL_MS LOCALTONET_API_TIMEOUT_MS PLAYIT_BIN PLAYIT_CLI_BIN PLAYIT_SECRET_PATH DATA_DIR BEDROCK_SERVER_DIR PANEL_ORIGIN PANEL_TRUST_PROXY BDS_START_TIMEOUT_MS BDS_STOP_TIMEOUT_MS BDS_RESTART_ENABLED BDS_RESTART_TIME BDS_RESTART_TIMEZONE BDS_RESTART_WARNING_MINUTES PLAYIT_START_TIMEOUT_MS PLAYIT_ADDRESS_TIMEOUT_MS BDS_MAX_ZIP_BYTES)
   descriptions=(
     'Jeton privé du dashboard (au moins 32 caractères).'
     'Port HTTP du panneau.'
-    'Fournisseur de tunnel par défaut : localtonet ou playit.'
-    'Binaire du client Localtonet headless.'
+    'Fournisseur de tunnel : Portwarp par défaut, Localtonet ou Playit en option.'
+    'CLI Portwarp officiel (pwrp), sans secret dans .env.'
+    'Nom exact du tunnel Portwarp UDP existant.'
+    'Intervalle de vérification et reconnexion Portwarp.'
+    'Binaire du client Localtonet headless (optionnel).'
     'AuthToken du client Localtonet (secret masqué).'
     'Clé API Localtonet pour détecter l’adresse (secret masqué).'
     'Intervalle de détection de l’adresse Localtonet.'
@@ -135,11 +140,15 @@ cmd_env_menu() {
     'CLI Playit officiel utilisé pour le claim.'
     'Chemin facultatif du fichier secret Playit, pas la clé.'
     'Dossier persistant pour état et journaux du panneau.'
-    'Dossier serveur supprimé puis recréé à chaque Deploy.'
+    'Dossier Bedrock persistant ; Deploy conserve monde et configurations.'
     'Origine HTTPS publique exacte, si nécessaire.'
     'Proxies de confiance ; 0 par défaut.'
     'Délai de démarrage Bedrock en millisecondes.'
     'Délai d’arrêt Bedrock en millisecondes.'
+    'Active le redémarrage quotidien de Bedrock.'
+    'Heure locale du redémarrage quotidien.'
+    'Fuseau IANA du redémarrage quotidien.'
+    'Durée de l’avertissement en jeu avant redémarrage.'
     'Délai IPC Playit en millisecondes.'
     'Délai de détection de l’adresse Playit.'
     'Taille maximale du ZIP Bedrock en octets.'
@@ -232,6 +241,12 @@ cmd_setup() {
   fi
   command -v npm >/dev/null 2>&1 || { fail 'npm est introuvable.'; return 1; }
   node "$ENV_HELPER" init || return 1
+  node "$ENV_HELPER" migrate-tunnel-provider-default >/dev/null || warn 'Migration du fournisseur .env impossible ; vérifie les permissions de .env.'
+  if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; export PATH; fi
+  if ! bash "$APP_DIR/scripts/install-portwarp.sh"; then
+    warn 'CLI Portwarp non installé automatiquement ; le tunnel restera indisponible jusqu’à l’installation vérifiée de pwrp.'
+  fi
+  if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; export PATH; fi
   if [[ ! -L "$ENV_FILE" ]]; then chmod 600 "$ENV_FILE" 2>/dev/null || true; fi
   memory_mb="$(read_memory_limit_mb || true)"
   if [[ -n "$memory_mb" ]] && (( memory_mb < 4096 )); then
@@ -243,16 +258,23 @@ cmd_setup() {
   (cd "$APP_DIR" && npm run build) || { fail 'Build échoué ; aucune donnée Bedrock n’a été supprimée.'; return 1; }
   [[ -f "$APP_DIR/build/server.js" && -f "$APP_DIR/dist/index.html" ]] || { fail 'Fichiers de build attendus absents.'; return 1; }
   ok 'Dépendances et build prêts.'
-  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-localtonet}"
+  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-portwarp}"
   tunnel_provider="${tunnel_provider,,}"
-  if [[ "$tunnel_provider" == playit ]]; then
+  case "$tunnel_provider" in portwarp|localtonet|playit) ;; *) tunnel_provider=portwarp ;; esac
+  if [[ "$tunnel_provider" == portwarp ]]; then
+    local portwarp_bin portwarp_name
+    portwarp_bin="${PORTWARP_BIN:-$(read_env PORTWARP_BIN)}"; portwarp_bin="${portwarp_bin:-pwrp}"
+    portwarp_name="${PORTWARP_TUNNEL_NAME:-$(read_env PORTWARP_TUNNEL_NAME)}"; portwarp_name="${portwarp_name:-Minecraft Bedrock}"
+    if ! is_executable_setting "$portwarp_bin"; then warn "$portwarp_bin absent ; lier le compte et connecter « $portwarp_name » sera impossible."; fi
+    info 'Aucun code Portwarp ni jeton de compte ne doit être ajouté à .env ; l’autorisation se fait dans le dashboard.'
+  elif [[ "$tunnel_provider" == playit ]]; then
     playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
     playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
     if ! is_executable_setting "$playit_daemon"; then warn "$playit_daemon absent ; le daemon Playit ne démarrera pas."; fi
     if ! is_executable_setting "$playit_cli"; then warn "$playit_cli absent ; le dashboard ne pourra pas générer le claim."; fi
   else
     localtonet_bin="${LOCALTONET_BIN:-$(read_env LOCALTONET_BIN)}"; localtonet_bin="${localtonet_bin:-localtonet}"
-    if ! is_executable_setting "$localtonet_bin"; then warn "$localtonet_bin absent ; installe le client Localtonet Linux officiel avec support headless pour le tunnel par défaut."; fi
+    if ! is_executable_setting "$localtonet_bin"; then warn "$localtonet_bin absent ; installe le client Localtonet Linux officiel avec support headless pour le tunnel facultatif."; fi
     [[ -n "${LOCALTONET_AUTH_TOKEN:-$(read_env LOCALTONET_AUTH_TOKEN)}" ]] || warn 'LOCALTONET_AUTH_TOKEN absent ; le client Localtonet ne pourra pas s’authentifier.'
     [[ -n "${LOCALTONET_API_KEY:-$(read_env LOCALTONET_API_KEY)}" ]] || warn 'LOCALTONET_API_KEY absente ; l’adresse publique ne pourra pas être détectée.'
   fi
@@ -378,14 +400,19 @@ cmd_logs() {
 
 cmd_doctor() {
   require_repo || return 1
-  local failed=0 node_version memory_mb token playit_daemon playit_cli localtonet_bin tunnel_provider libcurl_found=0 candidate code
+  local failed=0 node_version memory_mb token playit_daemon playit_cli localtonet_bin portwarp_bin tunnel_provider libcurl_found=0 candidate code
   node_version="$(node -p 'process.versions.node' 2>/dev/null || true)"
   if node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit((a===20&&b>=19)||(a===22&&b>=12)||a>22?0:1)' 2>/dev/null; then ok "Node.js $node_version"; else warn "Node.js $node_version ; 20.19+ ou 22.12+ requis."; failed=1; fi
   command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || { warn 'npm absent.'; failed=1; }
   command -v git >/dev/null 2>&1 && ok "git $(git --version | awk '{print $3}')" || warn 'git absent.'
-  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-localtonet}"
+  tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-portwarp}"
   tunnel_provider="${tunnel_provider,,}"
-  if [[ "$tunnel_provider" == playit ]]; then
+  case "$tunnel_provider" in portwarp|localtonet|playit) ;; *) tunnel_provider=portwarp ;; esac
+  if [[ "$tunnel_provider" == portwarp ]]; then
+    portwarp_bin="${PORTWARP_BIN:-$(read_env PORTWARP_BIN)}"; portwarp_bin="${portwarp_bin:-pwrp}"
+    if is_executable_setting "$portwarp_bin"; then ok "CLI Portwarp présent : $portwarp_bin."; else warn "CLI Portwarp absent : $portwarp_bin ; relance ncraft setup."; fi
+    info 'L’état du compte est visible dans le panneau authentifié; aucun code Portwarp n’est lu ni affiché par doctor.'
+  elif [[ "$tunnel_provider" == playit ]]; then
     playit_daemon="${PLAYIT_BIN:-$(read_env PLAYIT_BIN)}"; playit_daemon="${playit_daemon:-playitd}"
     playit_cli="${PLAYIT_CLI_BIN:-$(read_env PLAYIT_CLI_BIN)}"; playit_cli="${playit_cli:-playit}"
     if is_executable_setting "$playit_daemon"; then ok "Daemon Playit présent : $playit_daemon."; else warn "Daemon Playit absent : $playit_daemon."; fi
@@ -438,6 +465,11 @@ cmd_update() {
     return 1
   fi
   new_rev="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  node "$ENV_HELPER" migrate-tunnel-provider-default >/dev/null || warn 'Migration du fournisseur .env impossible ; vérifie les permissions de .env.'
+  if ! bash "$APP_DIR/scripts/install-portwarp.sh"; then
+    warn 'CLI Portwarp non installé automatiquement ; le panneau pourra être utilisé, mais son tunnel restera indisponible.'
+  fi
+  if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; export PATH; fi
   step "Dépendances et build ($old_rev → $new_rev)"
   if ! (cd "$APP_DIR" && npm ci --no-audit --no-fund && npm run build); then
     warn 'Update/build échoué. Les données Bedrock et .env sont conservés.'
@@ -454,7 +486,7 @@ Nebula Craft — gestion de l’installation et du panneau
 
 Usage : ncraft <commande>
 
-  setup                 Installe les dépendances, prépare .env et construit le panneau
+  setup                 Vérifie/installe pwrp, prépare .env et construit le panneau
   start                 Démarre le panneau en arrière-plan dans le conteneur
   stop                  Arrêt gracieux du panneau et de ses enfants
   restart               Redémarre le panneau

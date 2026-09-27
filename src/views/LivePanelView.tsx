@@ -6,6 +6,7 @@ import type {
   PersistentPanelState,
   PipelineStep,
   PlayitSetupSnapshot,
+  PortwarpLoginSnapshot,
   ScheduledRestartSnapshot,
   SystemPreflight,
   TunnelProvider,
@@ -16,6 +17,7 @@ interface StatusResponse {
   state: PersistentPanelState;
   tunnelProvider: TunnelProvider;
   playitSetup: PlayitSetupSnapshot;
+  portwarpSetup: PortwarpLoginSnapshot;
   system: SystemPreflight;
   serverDirectory: string;
   deployBusy: boolean;
@@ -144,7 +146,7 @@ export function LivePanelView() {
   const [configTouched, setConfigTouched] = useState(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
-  const [busyAction, setBusyAction] = useState<'deploy' | 'start' | 'stop' | 'playit' | 'logout' | null>(null);
+  const [busyAction, setBusyAction] = useState<'deploy' | 'start' | 'stop' | 'playit' | 'portwarp' | 'logout' | null>(null);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleConnected, setConsoleConnected] = useState(false);
   const [command, setCommand] = useState('');
@@ -391,6 +393,21 @@ export function LivePanelView() {
     }
   };
 
+  const handlePortwarpRetry = async () => {
+    setBusyAction('portwarp');
+    setNotice('');
+    try {
+      await apiRequest('/api/server/portwarp/retry', { method: 'POST', body: '{}' });
+      setNotice('Vérification Portwarp relancée. Le code d’autorisation, s’il est nécessaire, apparaîtra ici sans être enregistré.');
+      await refreshStatus();
+    } catch (error) {
+      setNotice((error as Error).message);
+      await refreshStatus();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const handleStart = async () => {
     setBusyAction('start');
     setNotice('');
@@ -495,11 +512,15 @@ export function LivePanelView() {
   }
 
   const server = status?.state.server;
-  const tunnelProvider = status?.tunnelProvider ?? 'localtonet';
+  const tunnelProvider = status?.tunnelProvider ?? 'portwarp';
   const playit = status?.state.playit;
   const localtonet = status?.state.localtonet;
-  const activeTunnel = tunnelProvider === 'localtonet' ? localtonet : playit;
+  const portwarp = status?.state.portwarp;
+  const activeTunnel = tunnelProvider === 'portwarp'
+    ? portwarp
+    : tunnelProvider === 'localtonet' ? localtonet : playit;
   const playitSetup = status?.playitSetup;
+  const portwarpSetup = status?.portwarpSetup;
   const system = status?.system;
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
@@ -561,8 +582,45 @@ export function LivePanelView() {
                 <button type="button" onClick={() => void navigator.clipboard?.writeText(activeTunnel.address ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier</button>
               </div>
             )}
-            <p className={`mt-2 font-jb text-xs ${activeTunnel?.status === 'running' ? 'text-[#97d85d]' : activeTunnel?.status === 'failed' || activeTunnel?.status === 'exited' ? 'text-[#ff8782]' : 'text-[#dfc740]'}`}>{statusLabel(activeTunnel?.status ?? 'starting')}</p>
+            <p className={`mt-2 font-jb text-xs ${activeTunnel?.status === 'running' ? 'text-[#97d85d]' : activeTunnel?.status === 'failed' || activeTunnel?.status === 'exited' || activeTunnel?.status === 'tunnel_misconfigured' ? 'text-[#ff8782]' : 'text-[#dfc740]'}`}>{statusLabel(activeTunnel?.status ?? 'starting')}</p>
             <p className="mt-3 font-jb text-[11px] text-[#c2c9b5]">Tunnel Bedrock · destination locale : <strong className="text-white">127.0.0.1:19132/UDP</strong></p>
+            {tunnelProvider === 'portwarp' && portwarp && (
+              <>
+                <p className="mt-2 break-words font-jb text-[10px] text-[#c2c9b5]">
+                  {portwarp.tunnelName} · UDP {portwarp.localPort ?? 19132}
+                  {portwarp.publicPort ? ` → port public ${portwarp.publicPort}` : ''}
+                </p>
+                {portwarpSetup?.phase === 'waiting_for_approval' && portwarpSetup.userCode && (
+                  <div className="mt-3 mc-inset bg-[#0e0e0e] p-3">
+                    <p className="font-jb text-[10px] leading-4 text-[#c2c9b5]">Autorise ce conteneur sur la page officielle Portwarp :</p>
+                    <a href={portwarpSetup.verificationUrl ?? 'https://portwarp.com/device'} target="_blank" rel="noreferrer" className="mt-2 inline-flex font-jb text-xs font-bold text-[#97d85d] underline">Ouvrir portwarp.com/device</a>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <code className="select-all font-jb text-lg font-bold tracking-widest text-[#dfc740]">{portwarpSetup.userCode}</code>
+                      <button type="button" onClick={() => void navigator.clipboard?.writeText(portwarpSetup.userCode ?? '')} className="mc-stone-btn bg-[#2a2a2a] px-2 py-1 font-jb text-[10px] text-white">Copier le code</button>
+                    </div>
+                    <p className="mt-2 font-jb text-[9px] leading-4 text-[#8c9380]">Code temporaire, affiché uniquement dans cette session authentifiée. Ne le publie pas et ne le partage pas.</p>
+                  </div>
+                )}
+                {portwarpSetup?.phase === 'starting' && (
+                  <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Démarrage de pwrp login; le code temporaire apparaîtra ici. Il n’est ni journalisé ni enregistré dans .env.</p>
+                )}
+                {portwarpSetup?.phase === 'failed' && portwarpSetup.error && (
+                  <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{portwarpSetup.error}</p>
+                )}
+                {portwarp.status === 'tunnel_missing' && (
+                  <div className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">
+                    <p>Crée ou active manuellement dans Portwarp un tunnel nommé « {portwarp.tunnelName} », en UDP vers le port local 19132. N-Craft ne crée ni ne supprime de tunnel et réessaiera automatiquement.</p>
+                    <a href="https://portwarp.com/tunnels" target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[#97d85d] underline">Ouvrir les tunnels Portwarp</a>
+                  </div>
+                )}
+                {portwarp.status === 'client_missing' && <p className="mt-2 font-jb text-[10px] leading-4 text-[#dfc740]">Le CLI pwrp manque dans le conteneur. Relance ncraft setup pour l’installer depuis les téléchargements officiels vérifiés.</p>}
+                {portwarp.error && <p className="mt-2 break-words font-jb text-[10px] text-[#ffb3ae]">{portwarp.error}</p>}
+                <p className="mt-3 font-jb text-[9px] leading-4 text-[#8c9380]">« Relais actif » ne prouve pas que Bedrock UDP est joignable de l’extérieur : valide l’adresse depuis un client Bedrock. Un contrôle local TCP n’est pas une mesure de disponibilité UDP.</p>
+                <button type="button" onClick={() => void handlePortwarpRetry()} disabled={busyAction === 'portwarp'} className="mt-3 mc-stone-btn bg-[#2a2a2a] px-3 py-2 font-jb text-[10px] text-white disabled:opacity-40">
+                  {busyAction === 'portwarp' ? 'VÉRIFICATION…' : 'VÉRIFIER / RECONNECTER'}
+                </button>
+              </>
+            )}
             {tunnelProvider === 'localtonet' && localtonet?.status === 'address_not_detected' && (
               <p className="mt-2 font-jb text-[10px] leading-4 text-[#c2c9b5]">Crée et démarre dans Localtonet un tunnel UDP vers 127.0.0.1:19132. Son adresse publique apparaîtra ici.</p>
             )}
@@ -765,7 +823,9 @@ export function LivePanelView() {
                 <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres · ${formatBytes(system?.dataDiskRequiredBytes ?? null)} estimés`} ok={system ? !system.diskWarning : null} detail={system?.sharedDiskVolume ? 'Même volume que BEDROCK_SERVER_DIR : l’estimation inclut archive + extraction.' : undefined} />
                 {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · ${formatBytes(system.serverDiskRequiredBytes)} estimés`} ok={!system.diskWarning} />}
                 {system && system.sharedDiskVolume === null && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres · estimation du volume incertaine`} ok={!system.diskWarning} />}
-                {tunnelProvider === 'localtonet' ? (
+                {tunnelProvider === 'portwarp' ? (
+                  <CheckRow label="CLI Portwarp (pwrp) dans PATH" ok={system ? system.portwarpBinary.ok : null} detail={system?.portwarpBinary.detail} />
+                ) : tunnelProvider === 'localtonet' ? (
                   <CheckRow label="Client Localtonet dans PATH" ok={system ? system.localtonetBinary.ok : null} detail={system?.localtonetBinary.detail} />
                 ) : (
                   <>

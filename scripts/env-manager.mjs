@@ -10,8 +10,12 @@ const examplePath = path.join(appDirectory, '.env.example');
 const known = [
   ['PANEL_TOKEN', 'Jeton privé de connexion au dashboard.'],
   ['PORT', 'Port HTTP du panneau dans le conteneur.'],
-  ['TUNNEL_PROVIDER', 'Fournisseur de tunnel : localtonet (par défaut) ou playit.'],
-  ['LOCALTONET_BIN', 'Chemin ou nom du client Localtonet headless.'],
+  ['TUNNEL_PROVIDER', 'Fournisseur de tunnel : portwarp par défaut, ou localtonet/playit en option.'],
+  ['PORTWARP_BIN', 'Chemin ou nom du CLI officiel Portwarp (pwrp).'],
+  ['PORTWARP_TUNNEL_NAME', 'Nom exact du tunnel Portwarp UDP existant, créé manuellement dans son dashboard.'],
+  ['PORTWARP_POLL_INTERVAL_MS', 'Intervalle de vérification/reconnexion du tunnel Portwarp.'],
+  ['NCRAFT_TUNNEL_PROVIDER_MIGRATION', 'Marqueur interne de migration du défaut Localtonet vers Portwarp.'],
+  ['LOCALTONET_BIN', 'Chemin ou nom du client Localtonet headless (optionnel).'],
   ['LOCALTONET_AUTH_TOKEN', 'AuthToken du client Localtonet (secret, masqué).'],
   ['LOCALTONET_API_KEY', 'Clé API Localtonet pour détecter le tunnel (secret, masqué).'],
   ['LOCALTONET_API_POLL_INTERVAL_MS', 'Intervalle de détection de l’adresse Localtonet.'],
@@ -155,6 +159,20 @@ async function unsetValue(key) {
   await atomicWrite(next);
 }
 
+async function migrateTunnelProviderDefault() {
+  const values = parseEnv(await readCurrent());
+  const marker = values.get('NCRAFT_TUNNEL_PROVIDER_MIGRATION');
+  let provider = (values.get('TUNNEL_PROVIDER') ?? '').trim().toLowerCase();
+  if (marker !== 'portwarp-v1') {
+    if (!provider || provider === 'localtonet') {
+      await setValue('TUNNEL_PROVIDER', 'portwarp');
+      provider = 'portwarp';
+    }
+    await setValue('NCRAFT_TUNNEL_PROVIDER_MIGRATION', 'portwarp-v1');
+  }
+  console.log(provider || 'portwarp');
+}
+
 function masked(value) {
   if (!value) return '(non défini)';
   if (value.length <= 6) return '••••••';
@@ -215,6 +233,10 @@ async function main() {
     const values = parseEnv(await readCurrent());
     const value = values.get(key) ?? '';
     console.log(secretName(key) && !args.includes('--reveal') ? masked(value) : value);
+    return;
+  }
+  if (command === 'migrate-tunnel-provider-default') {
+    await migrateTunnelProviderDefault();
     return;
   }
   if (command === 'list') {

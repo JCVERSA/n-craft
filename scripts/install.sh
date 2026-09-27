@@ -81,7 +81,10 @@ if ! command -v curl >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
   apt_install ca-certificates curl git
 fi
 command -v sha256sum >/dev/null 2>&1 || {
-  if [ "$APT_AVAILABLE" -eq 1 ]; then apt-get update; apt_install coreutils; else die 'sha256sum requis pour vérifier les binaires Playit.'; fi
+  if [ "$APT_AVAILABLE" -eq 1 ]; then apt-get update; apt_install coreutils; else die 'sha256sum requis pour vérifier les binaires téléchargés.'; fi
+}
+command -v tar >/dev/null 2>&1 || {
+  if [ "$APT_AVAILABLE" -eq 1 ]; then apt-get update; apt_install tar; else die 'tar requis pour installer le CLI Portwarp vérifié.'; fi
 }
 
 node_supported() {
@@ -156,7 +159,7 @@ fi
 
 [ -f "$INSTALL_DIR/package.json" ] || die 'Le clone ne contient pas package.json.'
 [ -f "$INSTALL_DIR/manage.sh" ] || die 'Le clone ne contient pas manage.sh.'
-chmod 755 "$INSTALL_DIR/manage.sh" "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/env-manager.mjs"
+chmod 755 "$INSTALL_DIR/manage.sh" "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/install-portwarp.sh" "$INSTALL_DIR/scripts/env-manager.mjs"
 mkdir -p "$BIN_DIR"
 
 if [ -e "$BIN_DIR/ncraft" ] && [ ! -L "$BIN_DIR/ncraft" ]; then
@@ -244,13 +247,17 @@ say '  Démarrer le dashboard : ncraft start'
 ACTIVE_TUNNEL_PROVIDER=$(node "$INSTALL_DIR/scripts/env-manager.mjs" get TUNNEL_PROVIDER 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
 if [ "$ACTIVE_TUNNEL_PROVIDER" = playit ]; then
   say '  Playit sélectionné : ouvre le dashboard, approuve le lien de claim et configure manuellement un tunnel UDP local 19132.'
+elif [ "$ACTIVE_TUNNEL_PROVIDER" = localtonet ]; then
+  say '  Localtonet sélectionné comme alternative : configure ses clés via ncraft env et crée manuellement le tunnel UDP local 19132.'
 else
-  say '  Localtonet par défaut : installe/vérifie le client headless, configure LOCALTONET_AUTH_TOKEN et LOCALTONET_API_KEY via ncraft env, puis crée manuellement le tunnel UDP local 19132 dans Localtonet.'
+  say '  Portwarp par défaut : pwrp est téléchargé depuis le domaine officiel et vérifié par SHA-256 avec la somme officielle épinglée.'
+  say '  Lie ce conteneur depuis le dashboard authentifié; crée manuellement un tunnel nommé Minecraft Bedrock en UDP local 19132 si nécessaire.'
+  say '  Aucun code, mot de passe ni jeton Portwarp n’est écrit dans .env; Playit reste disponible en alternative.'
 fi
 say '  Bedrock ne démarre pas automatiquement : utilise Start dans le dashboard.'
 say '  Le jeton de connexion reste privé ; pour l’afficher localement : ncraft env get PANEL_TOKEN --reveal'
 if [ "$ENV_EXISTED" -eq 1 ]; then
-  say '  .env existant conservé ; aucun secret ni réglage n’a été remplacé.'
+  say '  .env et ses secrets conservés ; l’ancien défaut TUNNEL_PROVIDER=localtonet devient Portwarp, avec un marqueur interne non secret pour respecter les choix ultérieurs.'
 else
   say '  Un .env avec PANEL_TOKEN aléatoire (permissions 0600) a été créé.'
 fi

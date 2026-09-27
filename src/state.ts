@@ -9,6 +9,7 @@ import type {
   PipelineStep,
   PipelineStatus,
   PlayitLifecycle,
+  PortwarpLifecycle,
   ServerLifecycle,
 } from './types/backend.ts';
 
@@ -35,6 +36,16 @@ function initialState(): PersistentPanelState {
       status: 'starting',
       address: null,
       error: null,
+      startedAt: null,
+      addressDetectedAt: null,
+    },
+    portwarp: {
+      status: 'starting',
+      address: null,
+      error: null,
+      tunnelName: process.env.PORTWARP_TUNNEL_NAME?.trim() || 'Minecraft Bedrock',
+      localPort: 19132,
+      publicPort: null,
       startedAt: null,
       addressDetectedAt: null,
     },
@@ -65,6 +76,7 @@ function normalizeState(value: unknown): PersistentPanelState {
   const pipeline = isRecord(value.pipeline) ? value.pipeline : {};
   const server = isRecord(value.server) ? value.server : {};
   const playit = isRecord(value.playit) ? value.playit : {};
+  const portwarp = isRecord(value.portwarp) ? value.portwarp : {};
   const localtonet = isRecord(value.localtonet) ? value.localtonet : {};
   const verification = isRecord(value.verification) ? value.verification : {};
 
@@ -84,6 +96,10 @@ function normalizeState(value: unknown): PersistentPanelState {
   ];
   const localtonetStatuses: LocaltonetLifecycle[] = [
     'starting', 'running', 'address_not_detected', 'configuration_missing', 'failed', 'exited',
+  ];
+  const portwarpStatuses: PortwarpLifecycle[] = [
+    'starting', 'client_missing', 'authentication_required', 'awaiting_approval', 'tunnel_missing',
+    'tunnel_misconfigured', 'connecting', 'running', 'failed',
   ];
 
   const activeConfig = isRecord(value.activeConfig)
@@ -122,6 +138,24 @@ function normalizeState(value: unknown): PersistentPanelState {
       error: typeof playit.error === 'string' ? playit.error : null,
       startedAt: typeof playit.startedAt === 'string' ? playit.startedAt : null,
       addressDetectedAt: typeof playit.addressDetectedAt === 'string' ? playit.addressDetectedAt : null,
+    },
+    portwarp: {
+      status: portwarpStatuses.includes(portwarp.status as PortwarpLifecycle)
+        ? (portwarp.status as PortwarpLifecycle)
+        : 'starting',
+      address: typeof portwarp.address === 'string' ? portwarp.address : null,
+      error: typeof portwarp.error === 'string' ? portwarp.error : null,
+      tunnelName: typeof portwarp.tunnelName === 'string' && portwarp.tunnelName.trim()
+        ? portwarp.tunnelName
+        : base.portwarp.tunnelName,
+      localPort: typeof portwarp.localPort === 'number' && Number.isInteger(portwarp.localPort)
+        ? Math.max(1, Math.min(65_535, portwarp.localPort))
+        : 19_132,
+      publicPort: typeof portwarp.publicPort === 'number' && Number.isInteger(portwarp.publicPort)
+        ? Math.max(1, Math.min(65_535, portwarp.publicPort))
+        : null,
+      startedAt: typeof portwarp.startedAt === 'string' ? portwarp.startedAt : null,
+      addressDetectedAt: typeof portwarp.addressDetectedAt === 'string' ? portwarp.addressDetectedAt : null,
     },
     localtonet: {
       status: localtonetStatuses.includes(localtonet.status as LocaltonetLifecycle)
@@ -181,6 +215,15 @@ export class StateStore extends EventEmitter {
       memoryBytes: null,
       metricsUpdatedAt: null,
     };
+    this.state.portwarp = {
+      ...this.state.portwarp,
+      status: 'starting',
+      address: null,
+      error: null,
+      publicPort: null,
+      startedAt: null,
+      addressDetectedAt: null,
+    };
     if (this.state.pipeline.status === 'running') {
       this.state.pipeline = {
         status: 'failed',
@@ -216,6 +259,12 @@ export class StateStore extends EventEmitter {
   async updatePlayit(patch: Partial<PersistentPanelState['playit']>): Promise<void> {
     await this.update(() => {
       this.state.playit = { ...this.state.playit, ...patch };
+    });
+  }
+
+  async updatePortwarp(patch: Partial<PersistentPanelState['portwarp']>): Promise<void> {
+    await this.update(() => {
+      this.state.portwarp = { ...this.state.portwarp, ...patch };
     });
   }
 

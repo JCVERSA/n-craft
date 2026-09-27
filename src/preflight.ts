@@ -126,6 +126,7 @@ export class SystemInspector {
     private readonly playitCliCommand = process.env.PLAYIT_CLI_BIN?.trim() || 'playit',
     private readonly localtonetCommand = process.env.LOCALTONET_BIN?.trim() || 'localtonet',
     private readonly tunnelProvider: TunnelProvider = resolveTunnelProvider(),
+    private readonly portwarpCommand = process.env.PORTWARP_BIN?.trim() || 'pwrp',
   ) {}
 
   async inspect(force = false): Promise<SystemPreflight> {
@@ -149,6 +150,10 @@ export class SystemInspector {
       ? await libcurlCheck()
       : { ok: false, detail: 'BDS Linux exige un conteneur Linux.' };
 
+    const portwarpPath = resolveExecutable(this.portwarpCommand);
+    const portwarpBinary: SystemCheck = portwarpPath
+      ? { ok: true, detail: `CLI Portwarp détecté : ${portwarpPath}` }
+      : { ok: false, detail: `CLI Portwarp « ${this.portwarpCommand} » absent du PATH.` };
     const playitPath = resolveExecutable(this.playitCommand);
     const playitBinary: SystemCheck = playitPath
       ? { ok: true, detail: `Daemon Playit détecté : ${playitPath}` }
@@ -208,7 +213,9 @@ export class SystemInspector {
     } else if (memoryWarning) {
       warnings.push(`Mémoire limitée à ${(memoryLimitBytes / GIB).toFixed(1)} Go ; la page officielle BDS indique 4 Go. L’essai est autorisé, mais un OOM est possible.`);
     }
-    if (this.tunnelProvider === 'localtonet') {
+    if (this.tunnelProvider === 'portwarp') {
+      if (!portwarpPath) warnings.push('Le tunnel Portwarp ne démarrera pas tant que le CLI pwrp ne sera pas présent dans le PATH. Relance ncraft setup pour l’installer.');
+    } else if (this.tunnelProvider === 'localtonet') {
       if (!localtonetPath) warnings.push('Le tunnel Localtonet ne démarrera pas tant que le client localtonet ne sera pas présent dans le PATH.');
       if (!process.env.LOCALTONET_AUTH_TOKEN?.trim()) warnings.push('LOCALTONET_AUTH_TOKEN absent : le client Localtonet ne peut pas s’authentifier.');
       if (!process.env.LOCALTONET_API_KEY?.trim()) warnings.push('LOCALTONET_API_KEY absente : le dashboard ne peut pas détecter l’adresse publique Localtonet.');
@@ -250,6 +257,7 @@ export class SystemInspector {
       serverDiskRequiredBytes,
       sharedDiskVolume,
       diskWarning,
+      portwarpBinary,
       localtonetBinary,
       playitBinary,
       playitCliBinary,

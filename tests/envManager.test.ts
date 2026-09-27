@@ -128,6 +128,32 @@ test('env set/unset preserves unrelated values and masks secrets by default', as
   assert.match(content, /^PORT=32123$/m);
 });
 
+test('migrates the old Localtonet default once and preserves later explicit choices', async (t) => {
+  const root = await createFixture();
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const envPath = path.join(root, '.env');
+  const token = '0123456789abcdef0123456789abcdef';
+  await writeFile(envPath, `# keep settings\nPANEL_TOKEN=${token}\nTUNNEL_PROVIDER=localtonet\nLOCALTONET_AUTH_TOKEN=private-localtonet-secret\n`, { mode: 0o600 });
+
+  let result = invoke(root, 'migrate-tunnel-provider-default');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'portwarp');
+  let content = await readFile(envPath, 'utf8');
+  assert.match(content, /^TUNNEL_PROVIDER=portwarp$/m);
+  assert.match(content, /^NCRAFT_TUNNEL_PROVIDER_MIGRATION=portwarp-v1$/m);
+  assert.match(content, new RegExp(`^PANEL_TOKEN=${token}$`, 'm'));
+  assert.match(content, /^LOCALTONET_AUTH_TOKEN=private-localtonet-secret$/m);
+  assert.equal((await stat(envPath)).mode & 0o777, 0o600);
+
+  result = invoke(root, 'set', 'TUNNEL_PROVIDER', 'localtonet');
+  assert.equal(result.status, 0, result.stderr);
+  result = invoke(root, 'migrate-tunnel-provider-default');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'localtonet', 'an explicit fallback choice after migration must remain active');
+  content = await readFile(envPath, 'utf8');
+  assert.match(content, /^TUNNEL_PROVIDER=localtonet$/m);
+});
+
 test('env refuses to rewrite an existing .env symlink', async (t) => {
   const root = await createFixture();
   t.after(async () => rm(root, { recursive: true, force: true }));

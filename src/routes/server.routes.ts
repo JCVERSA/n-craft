@@ -9,6 +9,7 @@ import { requireSameOrigin } from '../security.ts';
 import { SystemInspector } from '../preflight.ts';
 import { VersionCatalog } from '../versionCatalog.ts';
 import type { PlayitRunner } from '../playit/playitRunner.ts';
+import type { PortwarpRunner } from '../portwarp/portwarpRunner.ts';
 import type { TunnelProvider } from '../types/backend.ts';
 
 export interface ServerRouteDependencies {
@@ -20,6 +21,7 @@ export interface ServerRouteDependencies {
   inspector: SystemInspector;
   catalog: VersionCatalog;
   playitRunner: PlayitRunner;
+  portwarpRunner: PortwarpRunner;
   tunnelProvider: TunnelProvider;
 }
 
@@ -35,6 +37,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         state: dependencies.state.getSnapshot(),
         tunnelProvider: dependencies.tunnelProvider,
         playitSetup: dependencies.playitRunner.getSetupSnapshot(),
+        portwarpSetup: dependencies.portwarpRunner.getSetupSnapshot(),
         system,
         serverDirectory: dependencies.pipeline.serverDirectoryPath,
         deployBusy: dependencies.pipeline.isRunning,
@@ -67,6 +70,22 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       response.status(409).json({
         error: (error as Error).message || 'Impossible de démarrer le setup Playit.',
         playitSetup: dependencies.playitRunner.getSetupSnapshot(),
+      });
+    }
+  });
+
+  router.post('/portwarp/retry', requireSameOrigin, (_request, response) => {
+    if (dependencies.tunnelProvider !== 'portwarp') {
+      response.status(409).json({ error: 'Portwarp n’est pas le fournisseur de tunnel actif.' });
+      return;
+    }
+    try {
+      dependencies.portwarpRunner.retry();
+      response.status(202).json({ accepted: true, portwarpSetup: dependencies.portwarpRunner.getSetupSnapshot() });
+    } catch (error) {
+      response.status(409).json({
+        error: (error as Error).message || 'Impossible de relancer Portwarp.',
+        portwarpSetup: dependencies.portwarpRunner.getSetupSnapshot(),
       });
     }
   });

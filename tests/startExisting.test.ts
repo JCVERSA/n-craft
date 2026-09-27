@@ -41,6 +41,7 @@ const preflight: SystemPreflight = {
   serverDiskRequiredBytes: 0,
   sharedDiskVolume: true,
   diskWarning: false,
+  portwarpBinary: { ok: true, detail: 'CLI' },
   playitBinary: { ok: true, detail: 'daemon' },
   playitCliBinary: { ok: true, detail: 'cli' },
   localtonetBinary: { ok: true, detail: 'client' },

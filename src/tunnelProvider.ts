@@ -1,6 +1,9 @@
 import type { TunnelProvider } from './types/backend.ts';
 
-/** Localtonet is the default; Playit remains available as an explicit fallback. */
+/** Portwarp is the default; Localtonet and Playit remain explicit alternatives. */
 export function resolveTunnelProvider(value = process.env.TUNNEL_PROVIDER): TunnelProvider {
-  return value?.trim().toLowerCase() === 'playit' ? 'playit' : 'localtonet';
+  const provider = value?.trim().toLowerCase();
+  if (provider === 'localtonet') return 'localtonet';
+  if (provider === 'playit') return 'playit';
+  return 'portwarp';
 }

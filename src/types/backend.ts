@@ -50,7 +50,38 @@ export interface ScheduledRestartSnapshot {
   error: string | null;
 }
 export type ServerLifecycle = 'stopped' | 'stopping' | 'starting' | 'running' | 'failed';
-export type TunnelProvider = 'localtonet' | 'playit';
+export type TunnelProvider = 'portwarp' | 'localtonet' | 'playit';
+export type PortwarpLifecycle =
+  | 'starting'
+  | 'client_missing'
+  | 'authentication_required'
+  | 'awaiting_approval'
+  | 'tunnel_missing'
+  | 'tunnel_misconfigured'
+  | 'connecting'
+  | 'running'
+  | 'failed';
+export type PortwarpLoginPhase = 'idle' | 'starting' | 'waiting_for_approval' | 'authenticated' | 'failed';
+
+/** Device code is exposed only to the authenticated dashboard and kept in memory. */
+export interface PortwarpLoginSnapshot {
+  phase: PortwarpLoginPhase;
+  verificationUrl: string | null;
+  userCode: string | null;
+  error: string | null;
+}
+
+export interface PortwarpState {
+  status: PortwarpLifecycle;
+  address: string | null;
+  error: string | null;
+  tunnelName: string;
+  localPort: number | null;
+  publicPort: number | null;
+  startedAt: string | null;
+  addressDetectedAt: string | null;
+}
+
 export type LocaltonetLifecycle =
   | 'starting'
   | 'running'
@@ -109,6 +140,7 @@ export interface PersistentPanelState {
     startedAt: string | null;
     addressDetectedAt: string | null;
   };
+  portwarp: PortwarpState;
   localtonet: LocaltonetState;
   activeConfig: DeployConfiguration | null;
   verification: {
@@ -151,6 +183,7 @@ export interface SystemPreflight {
   serverDiskRequiredBytes: number;
   sharedDiskVolume: boolean | null;
   diskWarning: boolean;
+  portwarpBinary: SystemCheck;
   localtonetBinary: SystemCheck;
   playitBinary: SystemCheck;
   playitCliBinary: SystemCheck;

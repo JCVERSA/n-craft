@@ -1,6 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express, { type ErrorRequestHandler } from 'express';
 import type { ViteDevServer } from 'vite';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import { BedrockMetricsSampler } from './src/bedrock/processMetrics.ts';
 import { SystemInspector } from './src/preflight.ts';
 import { PlayitRunner } from './src/playit/playitRunner.ts';
 import { LocaltonetRunner } from './src/localtonet/localtonetRunner.ts';
+import { PortwarpRunner } from './src/portwarp/portwarpRunner.ts';
 import { resolveTunnelProvider } from './src/tunnelProvider.ts';
 import { createAuthRouter } from './src/routes/auth.routes.ts';
 import { createServerRouter } from './src/routes/server.routes.ts';
@@ -19,10 +21,28 @@ import { StateStore } from './src/state.ts';
 import { VersionCatalog } from './src/versionCatalog.ts';
 import { parseProxyTrust, requireHttpsInProduction } from './src/security.ts';
 
+const externallyConfiguredTunnelProvider = process.env.TUNNEL_PROVIDER?.trim();
+dotenv.config();
 const projectDirectory = process.cwd();
+if (!externallyConfiguredTunnelProvider && process.env.TUNNEL_PROVIDER?.trim().toLowerCase() === 'localtonet') {
+  // One-time migration of the old default only. A later explicit Localtonet
+  // choice is preserved by the migration marker in .env.
+  const migration = spawnSync(
+    process.execPath,
+    [path.join(projectDirectory, 'scripts', 'env-manager.mjs'), 'migrate-tunnel-provider-default'],
+    { encoding: 'utf8', timeout: 5_000, maxBuffer: 32 * 1024 },
+  );
+  if (migration.status === 0) {
+    process.env.TUNNEL_PROVIDER = migration.stdout.trim() || 'portwarp';
+  } else {
+    console.warn('[config] Could not migrate the old Localtonet default; Portwarp will be used for this panel start.');
+    process.env.TUNNEL_PROVIDER = 'portwarp';
+  }
+}
 const dataDirectory = path.resolve(projectDirectory, process.env.DATA_DIR?.trim() || 'data');
 const serverDirectory = path.resolve(projectDirectory, process.env.BEDROCK_SERVER_DIR?.trim() || path.join('bedrock', 'server'));
 const playitCommand = process.env.PLAYIT_BIN?.trim() || 'playitd';
+const portwarpCommand = process.env.PORTWARP_BIN?.trim() || 'pwrp';
 const tunnelProvider = resolveTunnelProvider();
 const port = Number(process.env.PORT || 3000);
 
@@ -45,6 +65,7 @@ const inspector = new SystemInspector(
   process.env.PLAYIT_CLI_BIN || 'playit',
   process.env.LOCALTONET_BIN || 'localtonet',
   tunnelProvider,
+  portwarpCommand,
 );
 const pipeline = new DeployPipeline(
   state,
@@ -61,6 +82,7 @@ const playitRunner = new PlayitRunner(playitCommand, process.env.PLAYIT_SECRET_K
   dataDirectory,
 });
 const localtonetRunner = new LocaltonetRunner(state, { dataDirectory });
+const portwarpRunner = new PortwarpRunner(state, { binaryCommand: portwarpCommand });
 
 const app = express();
 app.disable('x-powered-by');
@@ -84,7 +106,7 @@ app.get('/api/health', (_request, response) => {
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
 app.use('/api/auth', createAuthRouter(auth));
-app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, playitRunner, tunnelProvider }));
+app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, playitRunner, portwarpRunner, tunnelProvider }));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 
 let viteServer: ViteDevServer | null = null;
@@ -165,7 +187,9 @@ httpServer.listen(port, '0.0.0.0', () => {
   metricsSampler.start();
   scheduler.start();
   if (!auth.configured) console.warn('[Nebula Craft] PANEL_TOKEN absent : la connexion au panel est désactivée.');
-  if (tunnelProvider === 'localtonet') {
+  if (tunnelProvider === 'portwarp') {
+    portwarpRunner.startOnce();
+  } else if (tunnelProvider === 'localtonet') {
     localtonetRunner.startOnce();
   } else {
     playitRunner.startOnce();
@@ -188,6 +212,7 @@ const shutdown = async (signal: NodeJS.Signals) => {
     pipeline.shutdown().catch((error) => console.error(`[server] Bedrock shutdown: ${(error as Error).message}`)),
     playitRunner.shutdown().catch((error) => console.error(`[server] Playit shutdown: ${(error as Error).message}`)),
     localtonetRunner.shutdown().catch((error) => console.error(`[server] Localtonet shutdown: ${(error as Error).message}`)),
+    portwarpRunner.shutdown().catch((error) => console.error(`[server] Portwarp shutdown: ${(error as Error).message}`)),
   ]);
   await viteServer?.close().catch((error) => console.error(`[server] Vite close: ${(error as Error).message}`));
   await serverClosed;

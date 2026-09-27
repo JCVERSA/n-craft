@@ -49,6 +49,7 @@ const preflight: SystemPreflight = {
   serverDiskRequiredBytes: 0,
   sharedDiskVolume: true,
   diskWarning: false,
+  portwarpBinary: { ok: false, detail: 'missing' },
   playitBinary: { ok: false, detail: 'missing' },
   playitCliBinary: { ok: false, detail: 'missing' },
   localtonetBinary: { ok: false, detail: 'missing' },
