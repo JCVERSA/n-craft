@@ -750,7 +750,9 @@ export function LivePanelView() {
             </div>
 
             <div className="world-capsule">
-              <span className="world-capsule__icon"><Globe size={19} /></span>
+              <span className={`world-capsule__icon ${activeConfig ? 'world-capsule__icon--block' : ''}`} aria-hidden="true">
+                {activeConfig ? <img src="/assets/minecraft/grass-block.webp" alt="" width="22" height="22" /> : <Globe size={19} />}
+              </span>
               <span className="world-capsule__copy">
                 <small>MONDE ACTIF</small>
                 <strong>{activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
