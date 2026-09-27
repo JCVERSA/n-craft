@@ -1,0 +1,6 @@
+{
+  "name": "Nebula Craft — Minecraft Bedrock Server Control Panel",
+  "description": "Industrial-grade control panel for deploying and monitoring a Minecraft Bedrock Edition server with Playit public tunneling, real-time console, and automated deployment pipeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
