@@ -58,6 +58,10 @@ function timeLabel(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
+function sampleTimeLabel(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export function BedrockMetricsChart({ samples, now, serverStatus }: BedrockMetricsChartProps) {
   const reduceMotion = useReducedMotion();
   const visibleSamples = samples.filter((sample) => sample.timestamp >= now - BEDROCK_METRICS_WINDOW_MS && sample.timestamp <= now + 30_000);
@@ -117,13 +121,13 @@ export function BedrockMetricsChart({ samples, now, serverStatus }: BedrockMetri
           </div>
         </div>
 
-        <div className="resource-chart-legend" aria-label="Légende du graphique">
-          <span><i className="legend-dot legend-dot--cpu" />CPU (%)</span>
-          <span><i className="legend-dot legend-dot--memory" />RAM (Go)</span>
-          <span className="resource-chart-legend__note">Mesures du processus du serveur, pas de tout le conteneur</span>
+        <div className="resource-chart-legend" role="list" aria-label="Légende du graphique">
+          <span role="listitem"><i className="legend-line legend-line--cpu" aria-hidden="true" />CPU (%) · ligne pleine</span>
+          <span role="listitem"><i className="legend-line legend-line--memory" aria-hidden="true" />RAM (Go) · ligne tiretée</span>
+          <span className="resource-chart-legend__note" role="listitem">Mesures du processus Bedrock uniquement</span>
         </div>
 
-        <div className="resource-chart-plot" role="img" aria-label="Graphique sur cinq minutes de l’utilisation CPU et mémoire du processus Bedrock">
+        <div className="resource-chart-plot" role="img" aria-label="Graphique sur cinq minutes de l’utilisation CPU et mémoire du processus Bedrock" aria-describedby="resource-chart-summary">
           {visibleSamples.length === 0 ? (
             <div className="resource-chart-empty">
               <Activity size={25} strokeWidth={1.5} />
@@ -182,12 +186,46 @@ export function BedrockMetricsChart({ samples, now, serverStatus }: BedrockMetri
                 <circle cx={toPlotX(latest.timestamp, now)} cy={toPlotY(latest.cpuPercent, 100)} r="4" className="resource-chart-point resource-chart-point--cpu"><title>CPU {latest.cpuPercent.toFixed(1)} % · {timeLabel(latest.timestamp)}</title></circle>
               )}
               {latest?.memoryBytes !== null && latest?.memoryBytes !== undefined && (
-                <circle cx={toPlotX(latest.timestamp, now)} cy={toPlotY(latest.memoryBytes, memoryScaleBytes)} r="4" className="resource-chart-point resource-chart-point--memory"><title>RAM {formatGigabytes(latest.memoryBytes)} · {timeLabel(latest.timestamp)}</title></circle>
+                <rect
+                  x={toPlotX(latest.timestamp, now) - 3.5}
+                  y={toPlotY(latest.memoryBytes, memoryScaleBytes) - 3.5}
+                  width="7"
+                  height="7"
+                  transform={`rotate(45 ${toPlotX(latest.timestamp, now)} ${toPlotY(latest.memoryBytes, memoryScaleBytes)})`}
+                  className="resource-chart-point resource-chart-point--memory"
+                >
+                  <title>RAM {formatGigabytes(latest.memoryBytes)} · {timeLabel(latest.timestamp)}</title>
+                </rect>
               )}
             </svg>
           )}
         </div>
-        <p className="resource-chart-footnote">{helperText}. L’historique est conservé dans ce navigateur uniquement; il ne sert pas à vérifier l’accessibilité UDP.</p>
+        {visibleSamples.length > 0 && (
+          <details className="resource-chart-details">
+            <summary>
+              <span>Afficher le tableau des relevés</span>
+              <span>{visibleSamples.length} échantillons</span>
+            </summary>
+            <div className="resource-chart-table-scroll" role="region" aria-label="Relevés CPU et RAM de Bedrock" tabIndex={0}>
+              <table className="resource-chart-table">
+                <caption>Mesures reçues du processus Bedrock pendant les cinq dernières minutes</caption>
+                <thead>
+                  <tr><th scope="col">Heure</th><th scope="col">CPU</th><th scope="col">RAM</th></tr>
+                </thead>
+                <tbody>
+                  {visibleSamples.map((sample) => (
+                    <tr key={sample.timestamp}>
+                      <th scope="row"><time dateTime={new Date(sample.timestamp).toISOString()}>{sampleTimeLabel(sample.timestamp)}</time></th>
+                      <td>{sample.cpuPercent === null ? '—' : `${sample.cpuPercent.toFixed(1)} %`}</td>
+                      <td>{formatGigabytes(sample.memoryBytes)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+        <p id="resource-chart-summary" className="resource-chart-footnote">{helperText}. Historique local à ce navigateur; ces mesures ne garantissent pas la joignabilité du port UDP.</p>
       </div>
     </motion.section>
   );

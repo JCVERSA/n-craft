@@ -10,11 +10,9 @@ import {
   ChevronRight,
   Clock3,
   Copy,
-  Cpu,
   Database,
   ExternalLink,
   Globe,
-  HardDrive,
   Layers,
   Loader2,
   LockKeyhole,
@@ -191,6 +189,7 @@ export function LivePanelView() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState('overview');
   const [token, setToken] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -234,8 +233,27 @@ export function LivePanelView() {
 
   useEffect(() => {
     if (!authenticated) return;
-    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
+    let timer: number | undefined;
+    const stopClock = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const startClock = () => {
+      if (document.visibilityState !== 'visible' || timer !== undefined) return;
+      setClockNow(Date.now());
+      timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startClock();
+      else stopClock();
+    };
+    startClock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopClock();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [authenticated]);
 
   useEffect(() => {
@@ -255,10 +273,28 @@ export function LivePanelView() {
   }, [authenticated, status?.state.server.status, status?.state.server.metricsUpdatedAt, status?.state.server.cpuPercent, status?.state.server.memoryBytes]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setMetricHistory((current) => normalizeMetricHistory(current));
-    }, 10_000);
-    return () => window.clearInterval(timer);
+    let timer: number | undefined;
+    const trimHistory = () => setMetricHistory((current) => normalizeMetricHistory(current));
+    const stopTrimming = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const startTrimming = () => {
+      if (document.visibilityState !== 'visible' || timer !== undefined) return;
+      trimHistory();
+      timer = window.setInterval(trimHistory, 10_000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startTrimming();
+      else stopTrimming();
+    };
+    startTrimming();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopTrimming();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -279,28 +315,72 @@ export function LivePanelView() {
   }, []);
 
   useEffect(() => {
+    if (!authenticated || typeof IntersectionObserver === 'undefined') return;
+    const sectionIds = ['overview', 'deploy', 'diagnostics', 'console'];
+    const sections = sectionIds.map((id) => document.getElementById(id)).filter((section): section is HTMLElement => Boolean(section));
+    if (sections.length === 0) return;
+    const visibility = new Map<string, { ratio: number; top: number }>();
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        visibility.set(entry.target.id, {
+          ratio: entry.isIntersecting ? entry.intersectionRatio : 0,
+          top: entry.boundingClientRect.top,
+        });
+      });
+      const current = [...visibility.entries()]
+        .filter(([, value]) => value.ratio > 0)
+        .sort((a, b) => b[1].ratio - a[1].ratio || a[1].top - b[1].top)[0]?.[0];
+      if (current) setActiveSection(current);
+    }, { rootMargin: '-96px 0px -58% 0px', threshold: [0, 0.15, 0.35, 0.6, 1] });
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [authenticated]);
+
+  useEffect(() => {
     if (!authenticated) return;
     let cancelled = false;
-    void Promise.all([
-      apiRequest<{ versions: PublicVersion[] }>('/api/server/versions'),
-      apiRequest<StatusResponse>('/api/server/status'),
-    ]).then(([catalog, nextStatus]) => {
-      if (cancelled) return;
-      setVersions(catalog.versions);
-      setStatus(nextStatus);
-      if (nextStatus.state.activeConfig && !configTouched) {
-        setConfiguration(nextStatus.state.activeConfig);
-        setConfigTouched(false);
+    let initialFetchStarted = false;
+    let interval: number | undefined;
+    const stopPolling = () => {
+      if (interval === undefined) return;
+      window.clearInterval(interval);
+      interval = undefined;
+    };
+    const startPolling = () => {
+      if (document.visibilityState !== 'visible' || interval !== undefined) return;
+      if (!initialFetchStarted) {
+        initialFetchStarted = true;
+        void Promise.all([
+          apiRequest<{ versions: PublicVersion[] }>('/api/server/versions'),
+          apiRequest<StatusResponse>('/api/server/status'),
+        ]).then(([catalog, nextStatus]) => {
+          if (cancelled) return;
+          setVersions(catalog.versions);
+          setStatus(nextStatus);
+          if (nextStatus.state.activeConfig && !configTouched) {
+            setConfiguration(nextStatus.state.activeConfig);
+            setConfigTouched(false);
+          }
+        }).catch((error) => {
+          if (cancelled) return;
+          if (error instanceof ApiError && error.status === 401) setAuthenticated(false);
+          else setNotice((error as Error).message);
+        });
+      } else {
+        void refreshStatus();
       }
-    }).catch((error) => {
-      if (cancelled) return;
-      if (error instanceof ApiError && error.status === 401) setAuthenticated(false);
-      else setNotice((error as Error).message);
-    });
-    const interval = window.setInterval(() => { void refreshStatus(); }, 2500);
+      interval = window.setInterval(() => { void refreshStatus(); }, 2500);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startPolling();
+      else stopPolling();
+    };
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [authenticated, configTouched, refreshStatus]);
 
@@ -671,6 +751,7 @@ export function LivePanelView() {
 
   return (
     <main className="ncraft-shell">
+      <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <div className="ncraft-ambient ncraft-ambient--magma" aria-hidden="true" />
       <div className="ncraft-ambient ncraft-ambient--portal" aria-hidden="true" />
       <div className="ncraft-grid-glow" aria-hidden="true" />
@@ -688,10 +769,10 @@ export function LivePanelView() {
           </a>
 
           <nav className="ncraft-nav" aria-label="Navigation du panneau">
-            <a className="is-current" href="#overview"><Server size={15} /> Vue générale</a>
-            <a href="#deploy"><Package size={15} /> Déploiement</a>
-            <a href="#diagnostics"><ShieldCheck size={15} /> Diagnostics</a>
-            <a href="#console"><Terminal size={15} /> Console</a>
+            <a className={activeSection === 'overview' ? 'is-current' : undefined} href="#overview" aria-current={activeSection === 'overview' ? 'location' : undefined} onClick={() => setActiveSection('overview')}><Server size={15} /> Vue générale</a>
+            <a className={activeSection === 'deploy' ? 'is-current' : undefined} href="#deploy" aria-current={activeSection === 'deploy' ? 'location' : undefined} onClick={() => setActiveSection('deploy')}><Package size={15} /> Déploiement</a>
+            <a className={activeSection === 'diagnostics' ? 'is-current' : undefined} href="#diagnostics" aria-current={activeSection === 'diagnostics' ? 'location' : undefined} onClick={() => setActiveSection('diagnostics')}><ShieldCheck size={15} /> Diagnostics</a>
+            <a className={activeSection === 'console' ? 'is-current' : undefined} href="#console" aria-current={activeSection === 'console' ? 'location' : undefined} onClick={() => setActiveSection('console')}><Terminal size={15} /> Console</a>
           </nav>
 
           <div className="ncraft-header__actions">
@@ -712,7 +793,7 @@ export function LivePanelView() {
         </div>
       </header>
 
-      <div className="ncraft-main">
+      <div id="main-content" tabIndex={-1} className="ncraft-main">
         <AnimatePresence initial={false}>
           {(notice || formError) && (
             <motion.div
@@ -755,7 +836,7 @@ export function LivePanelView() {
               </span>
               <span className="world-capsule__copy">
                 <small>MONDE ACTIF</small>
-                <strong>{activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
+                <strong title={activeConfig?.levelName ?? 'Aucun monde déployé'}>{activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
               </span>
               <span className="world-capsule__version">
                 {activeConfig?.version ? `BDS ${activeConfig.version}` : 'À configurer'}
@@ -765,8 +846,6 @@ export function LivePanelView() {
             <div className="hero-metrics-grid">
               <MetricTile icon={Users} label="Joueurs" value={`${server?.playersOnline ?? '—'} / ${activeConfig?.maxPlayers ?? '—'}`} detail="connectés / maximum" accent="portal" />
               <MetricTile icon={Clock3} label="Disponibilité" value={formatDuration(uptimeSeconds)} detail={uptimeSeconds === null ? 'serveur hors ligne' : 'depuis le démarrage'} accent="soul" />
-              <MetricTile icon={Cpu} label="CPU Bedrock" value={server?.cpuPercent == null ? '—' : `${server.cpuPercent.toFixed(1)} %`} detail="processus serveur" accent="magma" />
-              <MetricTile icon={HardDrive} label="RAM Bedrock" value={formatBytes(server?.memoryBytes ?? null)} detail="mémoire résidente" accent="moss" />
             </div>
 
             <div className="nether-hero__actions">
@@ -812,7 +891,6 @@ export function LivePanelView() {
             description="Adresse publique du tunnel sélectionné"
             icon={Wifi}
             accent="soul"
-            delay={0.06}
             className="tunnel-card"
             action={<StatusPill status={tunnelStatus} />}
           >
@@ -926,7 +1004,7 @@ export function LivePanelView() {
 
         <section className="ncraft-telemetry-grid" aria-label="Mesures et configuration Bedrock">
           <BedrockMetricsChart samples={metricHistory} now={clockNow} serverStatus={server?.status} />
-          <NetherCard title="Fiche du monde" eyebrow="CONFIGURATION ACTIVE" icon={Database} accent="moss" delay={0.16}>
+          <NetherCard title="Fiche du monde" eyebrow="CONFIGURATION ACTIVE" icon={Database} accent="moss">
             {activeConfig ? (
               <dl className="world-details-list">
                 <WorldDetail label="Nom du serveur" value={activeConfig.serverName} />
@@ -1079,7 +1157,6 @@ export function LivePanelView() {
               description="Chaque étape vient du backend."
               icon={Layers}
               accent="portal"
-              delay={0.12}
               action={<StatusPill status={pipeline?.status === 'failed' ? 'failed' : isPipelineBusy ? 'starting' : pipeline?.step === 'running' ? 'running' : 'stopped'} label={pipeline?.status === 'failed' ? 'ÉCHEC' : isPipelineBusy ? 'EN COURS' : pipeline?.step === 'running' ? 'TERMINÉ' : 'PRÊT'} />}
             >
               <ol className="pipeline-list">
@@ -1107,7 +1184,6 @@ export function LivePanelView() {
               description={`Bedrock · ${status?.serverDirectory ?? 'répertoire en attente'}`}
               icon={ShieldCheck}
               accent="moss"
-              delay={0.18}
             >
               <div className="system-check-list">
                 <CheckRow label={`Linux x64 · Node ${system?.nodeVersion ?? '…'}`} ok={system ? system.platform === 'linux' && system.arch === 'x64' : null} />
@@ -1132,7 +1208,7 @@ export function LivePanelView() {
               {system?.warnings.map((warning) => <p key={warning} className="system-warning"><AlertTriangle size={14} />{warning}</p>)}
             </NetherCard>
 
-            <NetherCard title="Points de vérification" eyebrow="TRANSPARENCE" icon={AlertTriangle} accent="magma" delay={0.22}>
+            <NetherCard title="Points de vérification" eyebrow="TRANSPARENCE" icon={AlertTriangle} accent="magma">
               <ul className="verification-list">
                 <li>EULA : son format réel doit encore être confirmé avec le binaire téléchargé.</li>
                 <li>La persistance des permissions/XUID après un second déploiement n’est pas encore vérifiée; aucune décision n’est modifiée automatiquement.</li>
@@ -1148,7 +1224,6 @@ export function LivePanelView() {
           description="Flux temps réel · WebSocket protégé par la session du panneau"
           icon={Terminal}
           accent="moss"
-          delay={0.1}
           action={<StatusPill status={consoleConnected ? 'running' : 'starting'} label={consoleConnected ? 'CONNECTÉE' : 'RECONNEXION'} />}
           className="console-card"
         >
@@ -1189,10 +1264,10 @@ export function LivePanelView() {
       </div>
 
       <nav className="mobile-dock" aria-label="Navigation rapide">
-        <a href="#overview"><Server size={17} /><span>Accueil</span></a>
-        <a href="#deploy"><Package size={17} /><span>Déployer</span></a>
-        <a href="#diagnostics"><ShieldCheck size={17} /><span>État</span></a>
-        <a href="#console"><Terminal size={17} /><span>Console</span></a>
+        <a href="#overview" aria-current={activeSection === 'overview' ? 'location' : undefined} onClick={() => setActiveSection('overview')}><Server size={17} /><span>Accueil</span></a>
+        <a href="#deploy" aria-current={activeSection === 'deploy' ? 'location' : undefined} onClick={() => setActiveSection('deploy')}><Package size={17} /><span>Déployer</span></a>
+        <a href="#diagnostics" aria-current={activeSection === 'diagnostics' ? 'location' : undefined} onClick={() => setActiveSection('diagnostics')}><ShieldCheck size={17} /><span>État</span></a>
+        <a href="#console" aria-current={activeSection === 'console' ? 'location' : undefined} onClick={() => setActiveSection('console')}><Terminal size={17} /><span>Console</span></a>
       </nav>
     </main>
   );
@@ -1202,10 +1277,11 @@ function StatusPill({ status, label }: { status: string; label?: string }) {
   const positive = ['running', 'configured', 'authenticated', 'success'].includes(status);
   const negative = ['failed', 'exited', 'tunnel_misconfigured'].includes(status);
   const tone = positive ? 'good' : negative ? 'bad' : ['stopped', 'idle'].includes(status) ? 'neutral' : 'warning';
+  const text = label ?? statusLabel(status);
   return (
-    <span className={`status-pill status-pill--${tone}`}>
-      <span className="status-pill__dot" />
-      {label ?? statusLabel(status)}
+    <span className={`status-pill status-pill--${tone}`} aria-label={text} title={text}>
+      <span className="status-pill__dot" aria-hidden="true" />
+      {text}
     </span>
   );
 }

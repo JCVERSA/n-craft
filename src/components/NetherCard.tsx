@@ -12,7 +12,6 @@ interface NetherCardProps {
   icon: LucideIcon;
   accent?: Accent;
   className?: string;
-  delay?: number;
   action?: ReactNode;
   children: ReactNode;
 }
@@ -25,7 +24,6 @@ export function NetherCard({
   icon: Icon,
   accent = 'magma',
   className = '',
-  delay = 0,
   action,
   children,
 }: NetherCardProps) {
@@ -35,10 +33,10 @@ export function NetherCard({
     <motion.section
       id={id}
       className={`nether-card nether-card--${accent} ${className}`.trim()}
-      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.42, delay: reduceMotion ? 0 : delay, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={reduceMotion ? undefined : { y: -2 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
+      whileHover={reduceMotion ? undefined : { y: -1 }}
     >
       <header className="nether-card__header">
         <div className="nether-card__identity">

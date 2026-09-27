@@ -239,8 +239,8 @@
   --nether-inset: #100e12;
   --nether-line: rgba(229, 208, 242, 0.11);
   --nether-text: #f0eaf2;
-  --nether-muted: #a99ead;
-  --nether-dim: #776d7c;
+  --nether-muted: #b8adb8;
+  --nether-dim: #958a9a;
   --nether-magma: #ffb875;
   --nether-portal: #c5a0ff;
   --nether-soul: #69e5ea;
@@ -257,6 +257,7 @@ body {
   background: var(--nether-void);
   color: var(--nether-text);
   font-family: 'Space Grotesk', system-ui, sans-serif;
+  line-height: 1.5;
 }
 
 button,
@@ -291,6 +292,8 @@ select:focus-visible {
 
 .ncraft-shell * { box-sizing: border-box; }
 .ncraft-shell a { color: inherit; text-decoration: none; }
+.skip-link { position: absolute; top: 8px; left: 8px; z-index: 1000; display: inline-flex; align-items: center; min-height: 44px; padding: 9px 14px; transform: translateY(calc(-100% - 16px)); border: 1px solid rgba(208,255,218,.55); border-radius: 9px; color: #102718 !important; background: #b7edc1; font-size: 13px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.36); transition: transform .16s ease; }
+.skip-link:focus { transform: translateY(0); }
 
 .ncraft-ambient,
 .ncraft-grid-glow {
@@ -445,12 +448,12 @@ select:focus-visible {
 
 .ncraft-nav { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(234,214,245,.07); border-radius: 13px; background: rgba(18,15,20,.74); }
 .ncraft-nav a { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; color: var(--nether-muted); font-size: 12px; font-weight: 600; transition: color .18s ease, background .18s ease; }
-.ncraft-nav a:hover, .ncraft-nav a.is-current { color: var(--nether-text); background: rgba(255,255,255,.055); }
-.ncraft-nav a.is-current { box-shadow: inset 0 0 0 1px rgba(255,184,117,.15); }
+.ncraft-nav a:hover, .ncraft-nav a.is-current, .ncraft-nav a:focus-visible { color: var(--nether-text); background: rgba(255,255,255,.055); }
+.ncraft-nav a.is-current { box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
 .ncraft-nav a.is-current svg { color: var(--nether-magma); }
 .ncraft-header__actions { display: flex; align-items: center; justify-content: flex-end; gap: 11px; min-width: max-content; }
 
-.nether-eyebrow { margin: 0; color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.nether-eyebrow { margin: 0; color: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 
 .status-pill {
   display: inline-flex;
@@ -461,9 +464,9 @@ select:focus-visible {
   padding: 7px 10px;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 999px;
-  font: 9px 'JetBrains Mono', monospace;
+  font: 10px 'JetBrains Mono', monospace;
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
   white-space: nowrap;
   background: rgba(255,255,255,.035);
 }
@@ -512,11 +515,11 @@ select:focus-visible {
 .world-capsule__icon--block { background: rgba(155,230,176,.075); }
 .world-capsule__icon img { display: block; width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 2px 4px rgba(0,0,0,.48)); }
 .world-capsule__copy { display: grid; gap: 3px; min-width: 0; }
-.world-capsule__copy small { color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .12em; }
-.world-capsule__copy strong { overflow: hidden; max-width: 240px; color: var(--nether-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.world-capsule__version { margin-left: 10px; padding-left: 12px; border-left: 1px solid rgba(255,255,255,.1); color: var(--nether-portal); font: 10px 'JetBrains Mono', monospace; white-space: nowrap; }
+.world-capsule__copy small { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; letter-spacing: .1em; }
+.world-capsule__copy strong { overflow: hidden; max-width: 240px; color: var(--nether-text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.world-capsule__version { margin-left: 10px; padding-left: 12px; border-left: 1px solid rgba(255,255,255,.1); color: var(--nether-portal); font: 11px 'JetBrains Mono', monospace; white-space: nowrap; }
 
-.hero-metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 9px; margin-top: 24px; }
+.hero-metrics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; max-width: 680px; margin-top: 24px; }
 .metric-tile { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 12px 10px; border: 1px solid rgba(255,255,255,.065); border-radius: 12px; background: rgba(11,9,13,.5); }
 .metric-tile__icon { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: rgba(255,255,255,.045); }
 .metric-tile--portal .metric-tile__icon { color: var(--nether-portal); background: rgba(197,160,255,.1); }
@@ -524,27 +527,27 @@ select:focus-visible {
 .metric-tile--magma .metric-tile__icon { color: var(--nether-magma); background: rgba(255,184,117,.1); }
 .metric-tile--moss .metric-tile__icon { color: var(--nether-moss); background: rgba(155,230,176,.1); }
 .metric-tile__copy { display: grid; min-width: 0; gap: 3px; }
-.metric-tile__copy > span { color: var(--nether-dim); font-size: 10px; }
-.metric-tile__copy strong { overflow: hidden; color: var(--nether-text); font: 700 14px 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
-.metric-tile__copy small { overflow: hidden; color: #817785; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.metric-tile__copy > span { color: var(--nether-muted); font-size: 12px; }
+.metric-tile__copy strong { overflow: hidden; color: var(--nether-text); font: 700 15px 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.metric-tile__copy small { overflow: hidden; color: var(--nether-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 
 .nether-hero__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 18px; }
-.nether-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 10px 14px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; font-size: 12px; font-weight: 700; line-height: 1.15; text-align: center; transition: transform .16s ease, background .18s ease, border-color .18s ease, opacity .18s ease, box-shadow .18s ease; }
-.nether-btn:disabled { cursor: not-allowed; opacity: .42; transform: none; box-shadow: none; }
-.nether-btn--primary { color: #2a1508; border-color: rgba(255,213,160,.48); background: linear-gradient(135deg, #ffd296, #ff9c62); box-shadow: 0 7px 22px rgba(255,133,67,.14), inset 0 1px rgba(255,255,255,.5); }
-.nether-btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, #ffe0b2, #ffad77); box-shadow: 0 10px 26px rgba(255,133,67,.21), inset 0 1px rgba(255,255,255,.65); }
+.nether-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 10px 14px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1.2; text-align: center; touch-action: manipulation; transition: transform .16s ease, background .18s ease, border-color .18s ease, opacity .18s ease, box-shadow .18s ease; }
+.nether-btn:disabled { cursor: not-allowed; opacity: .48; transform: none; box-shadow: none; }
+.nether-btn--primary { color: #102718; border-color: rgba(208,255,218,.55); background: linear-gradient(135deg, #c8f5d0, #8fdfa2); box-shadow: 0 7px 22px rgba(105,229,135,.14), inset 0 1px rgba(255,255,255,.58); }
+.nether-btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, #d7f8dd, #a5eab4); box-shadow: 0 10px 26px rgba(105,229,135,.21), inset 0 1px rgba(255,255,255,.72); }
 .nether-btn--danger { color: #ffd9d8; border-color: rgba(255,143,146,.2); background: rgba(168,55,61,.18); }
 .nether-btn--danger:hover:not(:disabled) { border-color: rgba(255,143,146,.45); background: rgba(190,58,65,.28); }
 .nether-btn--quiet { color: var(--nether-text); border-color: rgba(255,255,255,.10); background: rgba(255,255,255,.045); }
 .nether-btn--quiet:hover:not(:disabled) { border-color: rgba(197,160,255,.28); background: rgba(197,160,255,.09); }
 .nether-btn--wide { width: 100%; }
-.nether-btn--tiny { min-height: 32px; padding: 7px 9px; font-size: 10px; }
+.nether-btn--tiny { min-height: 40px; padding: 8px 10px; font-size: 11px; }
 .nether-hero__actions .nether-btn--quiet { margin-left: auto; }
 
-.restart-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.075); color: var(--nether-muted); font-size: 10px; }
-.restart-strip__icon { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; color: var(--nether-soul); background: rgba(105,229,234,.08); }
+.restart-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.075); color: var(--nether-muted); font-size: 11px; }
+.restart-strip__icon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 8px; color: var(--nether-soul); background: rgba(105,229,234,.08); }
 .restart-strip__label { color: #c5b9c9; }
-.restart-strip strong { color: var(--nether-text); font: 600 10px 'JetBrains Mono', monospace; }
+.restart-strip strong { color: var(--nether-text); font: 600 11px 'JetBrains Mono', monospace; }
 .restart-strip__next { color: var(--nether-dim); }
 .restart-strip__notice { color: var(--nether-magma); }
 .restart-strip__error, .hero-error { color: var(--nether-danger); }
@@ -570,8 +573,8 @@ select:focus-visible {
 .nether-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 13px; padding: 18px 19px 15px; border-bottom: 1px solid rgba(255,255,255,.065); }
 .nether-card__identity { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
 .nether-card__icon { display: grid; width: 35px; height: 35px; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--card-accent) 25%, transparent); border-radius: 11px; color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 9%, transparent); }
-.nether-card__title { margin: 4px 0 0; color: var(--nether-text); font-size: 15px; font-weight: 700; letter-spacing: -.015em; }
-.nether-card__description { margin: 5px 0 0; color: var(--nether-muted); font-size: 11px; line-height: 1.45; }
+.nether-card__title { margin: 4px 0 0; color: var(--nether-text); font-size: 16px; font-weight: 700; letter-spacing: -.015em; }
+.nether-card__description { margin: 5px 0 0; color: var(--nether-muted); font-size: 12px; line-height: 1.5; }
 .nether-card__action { flex: 0 0 auto; }
 .nether-card__body { padding: 17px 19px 19px; }
 
@@ -583,15 +586,16 @@ select:focus-visible {
 .public-address-value { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
 .public-address-value code { overflow-wrap: anywhere; color: #e5fcfa; font: 600 clamp(12px, 1.2vw, 15px) 'JetBrains Mono', monospace; }
 .public-address-empty { margin: 10px 0 0; color: var(--nether-dim); font-size: 11px; line-height: 1.5; }
-.copy-button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(105,229,234,.22); border-radius: 9px; color: var(--nether-soul); background: rgba(105,229,234,.08); cursor: pointer; transition: background .18s ease, transform .18s ease; }
+.copy-button { display: inline-grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(105,229,234,.3); border-radius: 10px; color: var(--nether-soul); background: rgba(105,229,234,.08); cursor: pointer; touch-action: manipulation; transition: background .18s ease, transform .18s ease; }
 .copy-button:hover { background: rgba(105,229,234,.17); }
-.copy-button--small { width: 29px; height: 29px; }
-.tunnel-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--nether-muted); font-size: 10px; }
-.tunnel-meta-row code { color: #d4c9d9; font: 10px 'JetBrains Mono', monospace; text-align: right; }
+.copy-button:active { transform: scale(.96); }
+.copy-button--small { width: 44px; height: 44px; }
+.tunnel-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--nether-muted); font-size: 12px; }
+.tunnel-meta-row code { color: #d4c9d9; font: 11px 'JetBrains Mono', monospace; text-align: right; }
 .tunnel-detail-stack { display: flex; flex-direction: column; gap: 11px; }
 .tunnel-caveat { margin: auto 0 0; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.065); color: #a495a8; font-size: 10px; line-height: 1.55; }
 
-.nether-callout { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 11px; font-size: 11px; line-height: 1.55; }
+.nether-callout { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 11px; font-size: 12px; line-height: 1.55; }
 .nether-callout > svg { flex: 0 0 auto; margin-top: 1px; }
 .nether-callout--warning { color: #f6c889; border-color: rgba(255,184,117,.17); background: rgba(255,153,64,.065); }
 .nether-callout--warning > svg { color: var(--nether-magma); }
@@ -602,15 +606,15 @@ select:focus-visible {
 .nether-callout--portal { color: #e2d0ff; border-color: rgba(197,160,255,.22); background: rgba(128,76,184,.1); }
 .nether-callout--portal > svg { color: var(--nether-portal); }
 .callout-copy { display: grid; min-width: 0; gap: 6px; }
-.callout-copy strong { color: var(--nether-text); font-size: 11px; }
+.callout-copy strong { color: var(--nether-text); font-size: 12px; }
 .callout-copy span { color: inherit; }
-.callout-copy small { color: var(--nether-muted); font-size: 9px; }
-.inline-link { display: inline-flex; align-items: center; gap: 5px; width: max-content; max-width: 100%; color: var(--nether-soul) !important; font-size: 10px; font-weight: 700; }
+.callout-copy small { color: var(--nether-muted); font-size: 10px; }
+.inline-link { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; width: max-content; max-width: 100%; color: var(--nether-soul) !important; font-size: 11px; font-weight: 700; }
 .inline-link:hover { text-decoration: underline; }
 .device-code-row { display: flex; align-items: center; gap: 9px; }
 .device-code-row code { color: #fff0d4; font: 700 20px 'JetBrains Mono', monospace; letter-spacing: .14em; }
-.nether-inline-note { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
-.inline-error { margin: 0; color: var(--nether-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.nether-inline-note { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: var(--nether-muted); font-size: 11px; line-height: 1.55; }
+.inline-error { margin: 0; color: var(--nether-danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 
 .ncraft-telemetry-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .82fr); gap: 18px; align-items: stretch; }
 .resource-chart-card { --card-accent: var(--nether-portal); }
@@ -620,30 +624,46 @@ select:focus-visible {
 .resource-readout__icon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 9px; }
 .resource-readout--cpu .resource-readout__icon { color: var(--nether-magma); background: rgba(255,184,117,.1); }
 .resource-readout--memory .resource-readout__icon { color: var(--nether-portal); background: rgba(197,160,255,.11); }
-.resource-readout p { margin: 0; color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .1em; }
+.resource-readout p { margin: 0; color: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; letter-spacing: .08em; }
 .resource-readout strong { display: block; margin-top: 4px; color: var(--nether-text); font: 700 16px 'JetBrains Mono', monospace; }
-.resource-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 11px 17px; color: var(--nether-muted); font-size: 10px; }
-.resource-chart-legend > span:not(.resource-chart-legend__note) { display: inline-flex; align-items: center; gap: 6px; }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend-dot--cpu { background: var(--nether-magma); box-shadow: 0 0 10px rgba(255,184,117,.45); }
-.legend-dot--memory { background: var(--nether-portal); box-shadow: 0 0 10px rgba(197,160,255,.45); }
-.resource-chart-legend__note { color: var(--nether-dim); font-size: 9px; }
+.resource-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 11px 17px; color: var(--nether-muted); font-size: 11px; }
+.resource-chart-legend > span:not(.resource-chart-legend__note) { display: inline-flex; align-items: center; gap: 7px; }
+.legend-line { width: 18px; height: 0; flex: 0 0 auto; border-top: 2px solid; }
+.legend-line--cpu { border-color: var(--nether-magma); }
+.legend-line--memory { border-color: var(--nether-portal); border-top-style: dashed; }
+.resource-chart-legend__note { color: var(--nether-dim); font-size: 10px; }
 .resource-chart-plot { position: relative; width: 100%; min-height: 250px; overflow: hidden; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; background: linear-gradient(180deg, rgba(10,8,12,.68), rgba(15,12,17,.45)); }
 .resource-chart-svg { display: block; width: 100%; height: 270px; overflow: visible; }
 .resource-chart-gridline { stroke: rgba(209,192,220,.11); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .resource-chart-gridline--vertical { stroke-dasharray: 3 5; stroke: rgba(209,192,220,.07); }
-.resource-chart-axis-label { fill: #85798a; font: 10px 'JetBrains Mono', monospace; }
-.resource-chart-axis-caption { fill: #a99ead; font: 9px 'JetBrains Mono', monospace; }
+.resource-chart-axis-label { fill: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; }
+.resource-chart-axis-caption { fill: var(--nether-muted); font: 10px 'JetBrains Mono', monospace; }
 .resource-chart-line { fill: none; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .resource-chart-line--cpu { stroke: var(--nether-magma); filter: drop-shadow(0 0 4px rgba(255,184,117,.32)); }
-.resource-chart-line--memory { stroke: var(--nether-portal); filter: drop-shadow(0 0 4px rgba(197,160,255,.32)); }
+.resource-chart-line--memory { stroke: var(--nether-portal); stroke-dasharray: 6 4; filter: drop-shadow(0 0 4px rgba(197,160,255,.32)); }
 .resource-chart-point { stroke: #100d13; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .resource-chart-point--cpu { fill: var(--nether-magma); }
 .resource-chart-point--memory { fill: var(--nether-portal); }
 .resource-chart-empty { display: flex; min-height: 248px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--nether-portal); text-align: center; }
 .resource-chart-empty span { color: var(--nether-text); font-size: 12px; font-weight: 700; }
-.resource-chart-empty small { max-width: 360px; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
-.resource-chart-footnote { margin: 0; color: var(--nether-dim); font-size: 9px; line-height: 1.5; }
+.resource-chart-empty small { max-width: 360px; color: var(--nether-muted); font-size: 11px; line-height: 1.5; }
+.resource-chart-footnote { margin: 0; color: var(--nether-dim); font-size: 10px; line-height: 1.55; }
+.resource-chart-details { border-top: 1px solid rgba(255,255,255,.08); }
+.resource-chart-details summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 7px 2px; color: var(--nether-text); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.resource-chart-details summary::-webkit-details-marker { display: none; }
+.resource-chart-details summary:focus-visible { outline: 2px solid var(--nether-soul); outline-offset: 3px; border-radius: 6px; }
+.resource-chart-details summary::after { content: '+'; color: var(--nether-soul); font: 700 18px 'JetBrains Mono', monospace; }
+.resource-chart-details[open] summary::after { content: '−'; }
+.resource-chart-details summary > span:last-child { margin-left: auto; color: var(--nether-dim); font-size: 10px; font-weight: 500; }
+.resource-chart-table-scroll { max-height: 240px; overflow: auto; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(10,8,12,.58); }
+.resource-chart-table-scroll:focus-visible { outline: 2px solid var(--nether-soul); outline-offset: 3px; }
+.resource-chart-table { width: 100%; border-collapse: collapse; color: var(--nether-muted); font: 11px 'JetBrains Mono', monospace; text-align: right; }
+.resource-chart-table caption { padding: 10px 12px; color: var(--nether-text); font: 12px 'Space Grotesk', system-ui, sans-serif; text-align: left; }
+.resource-chart-table th, .resource-chart-table td { padding: 9px 12px; border-top: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+.resource-chart-table thead th { color: var(--nether-dim); font-size: 10px; font-weight: 600; }
+.resource-chart-table th:first-child, .resource-chart-table td:first-child { text-align: left; }
+.resource-chart-table tbody th { color: var(--nether-muted); font-weight: 500; }
+.resource-chart-table tbody td { color: var(--nether-text); font-variant-numeric: tabular-nums; }
 
 .world-details-list { display: grid; gap: 0; margin: 0; }
 .world-detail-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -675,25 +695,25 @@ select:focus-visible {
 .cartridge-slot__info small { color: var(--nether-dim); font-size: 9px; }
 
 .nether-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
-.nether-field { display: grid; min-width: 0; gap: 7px; color: #c7bdcb; font-size: 11px; font-weight: 600; }
+.nether-field { display: grid; min-width: 0; gap: 7px; color: #c7bdcb; font-size: 12px; font-weight: 600; }
 .nether-field > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.nether-field small { color: var(--nether-dim); font-size: 9px; font-weight: 400; }
-.nether-input { width: 100%; min-width: 0; min-height: 40px; padding: 9px 11px; border: 1px solid rgba(224,205,235,.12); border-radius: 9px; color: var(--nether-text); background: rgba(10,8,12,.8); font: 11px 'JetBrains Mono', monospace; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-.nether-input:hover:not(:disabled) { border-color: rgba(197,160,255,.28); }
-.nether-input:focus { border-color: rgba(105,229,234,.6); outline: 0; box-shadow: 0 0 0 3px rgba(105,229,234,.08); }
+.nether-field small { color: var(--nether-dim); font-size: 10px; font-weight: 400; }
+.nether-input { width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid rgba(224,205,235,.2); border-radius: 9px; color: var(--nether-text); background: rgba(10,8,12,.8); font: 12px 'JetBrains Mono', monospace; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.nether-input:hover:not(:disabled) { border-color: rgba(197,160,255,.48); }
+.nether-input:focus { border-color: var(--nether-soul); outline: 2px solid var(--nether-soul); outline-offset: 2px; box-shadow: 0 0 0 4px rgba(105,229,234,.12); }
 .nether-input:disabled { color: #918795; opacity: .68; cursor: not-allowed; background: rgba(27,23,30,.8); }
-.nether-input::placeholder { color: #6c626f; }
+.nether-input::placeholder { color: var(--nether-dim); opacity: 1; }
 .nether-input option { color: var(--nether-text); background: #19151c; }
 
 .admin-xuid-box { padding: 14px; border: 1px solid rgba(255,255,255,.075); border-radius: 13px; background: rgba(11,9,13,.48); }
 .admin-xuid-box__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .admin-xuid-box__header > div { display: grid; gap: 4px; }
-.admin-xuid-box__header strong { color: var(--nether-text); font-size: 11px; }
-.admin-xuid-box__header small { color: var(--nether-muted); font-size: 9px; }
+.admin-xuid-box__header strong { color: var(--nether-text); font-size: 12px; }
+.admin-xuid-box__header small { color: var(--nether-muted); font-size: 10px; }
 .admin-xuid-list { display: flex; flex-direction: column; gap: 8px; }
 .admin-xuid-row { display: flex; align-items: center; gap: 8px; }
-.admin-xuid-row__number { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; }
-.icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 34px; min-height: 34px; padding: 0 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 9px; color: var(--nether-muted); background: rgba(255,255,255,.035); cursor: pointer; transition: color .16s ease, background .16s ease, border-color .16s ease; }
+.admin-xuid-row__number { color: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 0 9px; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; color: var(--nether-muted); background: rgba(255,255,255,.035); cursor: pointer; touch-action: manipulation; transition: color .16s ease, background .16s ease, border-color .16s ease; }
 .icon-button:hover:not(:disabled) { color: var(--nether-text); border-color: rgba(197,160,255,.24); background: rgba(197,160,255,.08); }
 .icon-button:disabled { cursor: not-allowed; opacity: .45; }
 .icon-button--danger:hover:not(:disabled) { color: var(--nether-danger); border-color: rgba(255,143,146,.28); background: rgba(190,58,65,.1); }
@@ -701,54 +721,55 @@ select:focus-visible {
 .logout-button span { font-size: 10px; font-weight: 600; }
 
 .deploy-options-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
-.nether-check-card { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; border: 1px solid rgba(255,255,255,.075); border-radius: 11px; background: rgba(11,9,13,.48); cursor: pointer; }
+.nether-check-card { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(11,9,13,.48); cursor: pointer; }
 .nether-check-card input, .eula-card input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.nether-check-card__box { display: grid; width: 17px; height: 17px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.22); border-radius: 5px; color: transparent; background: rgba(0,0,0,.25); transition: background .15s, color .15s, border-color .15s; }
-.nether-check-card input:checked + .nether-check-card__box, .eula-card input:checked + .nether-check-card__box { color: #281509; border-color: var(--nether-magma); background: var(--nether-magma); }
+.nether-check-card__box { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 5px; color: transparent; background: rgba(0,0,0,.25); transition: background .15s, color .15s, border-color .15s; }
+.nether-check-card input:checked + .nether-check-card__box, .eula-card input:checked + .nether-check-card__box { color: #102718; border-color: var(--nether-moss); background: var(--nether-moss); }
+.nether-check-card input:focus-visible + .nether-check-card__box, .eula-card input:focus-visible + .nether-check-card__box { outline: 2px solid var(--nether-soul); outline-offset: 3px; }
 .nether-check-card input:disabled + .nether-check-card__box, .eula-card input:disabled + .nether-check-card__box { opacity: .5; }
 .nether-check-card > span:last-child { display: grid; min-width: 0; gap: 4px; }
-.nether-check-card strong { color: var(--nether-text); font-size: 10px; }
-.nether-check-card small { color: var(--nether-dim); font-size: 9px; }
+.nether-check-card strong { color: var(--nether-text); font-size: 11px; }
+.nether-check-card small { color: var(--nether-dim); font-size: 10px; }
 .nether-check-card:has(input:disabled) { cursor: not-allowed; opacity: .65; }
 .security-badges { display: flex; flex-wrap: wrap; align-content: center; gap: 7px; }
-.security-badges span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 7px; color: var(--nether-muted); background: rgba(255,255,255,.025); font: 8px 'JetBrains Mono', monospace; }
+.security-badges span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 7px; color: var(--nether-muted); background: rgba(255,255,255,.025); font: 9px 'JetBrains Mono', monospace; }
 .security-badges span svg { color: var(--nether-soul); }
-.eula-card { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid rgba(255,184,117,.14); border-radius: 11px; color: var(--nether-muted); background: rgba(255,153,64,.045); font-size: 10px; line-height: 1.6; cursor: pointer; }
+.eula-card { position: relative; display: flex; align-items: flex-start; gap: 10px; min-height: 48px; padding: 12px; border: 1px solid rgba(255,184,117,.18); border-radius: 11px; color: var(--nether-muted); background: rgba(255,153,64,.045); font-size: 11px; line-height: 1.6; cursor: pointer; }
 .eula-card .nether-check-card__box { margin-top: 1px; }
 .eula-card a { color: var(--nether-magma); font-weight: 700; text-decoration: underline; }
 .eula-card:has(input:disabled) { cursor: not-allowed; opacity: .62; }
 .deploy-submit { min-height: 48px; font-size: 12px; }
 
 .pipeline-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.pipeline-step { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.045); border-radius: 9px; color: #8b818e; background: rgba(9,7,10,.43); font-size: 10px; line-height: 1.3; }
-.pipeline-step__marker { display: grid; width: 23px; height: 23px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 7px; color: #827786; background: rgba(255,255,255,.03); font: 9px 'JetBrains Mono', monospace; }
+.pipeline-step { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.055); border-radius: 9px; color: var(--nether-dim); background: rgba(9,7,10,.43); font-size: 11px; line-height: 1.4; }
+.pipeline-step__marker { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.12); border-radius: 7px; color: var(--nether-dim); background: rgba(255,255,255,.03); font: 10px 'JetBrains Mono', monospace; }
 .pipeline-step.is-done { color: #c0dfc8; border-color: rgba(155,230,176,.09); }
 .pipeline-step.is-done .pipeline-step__marker { color: var(--nether-moss); border-color: rgba(155,230,176,.18); background: rgba(155,230,176,.08); }
 .pipeline-step.is-active { color: #ffe0bd; border-color: rgba(255,184,117,.21); background: rgba(255,153,64,.055); }
 .pipeline-step.is-active .pipeline-step__marker { color: var(--nether-magma); border-color: rgba(255,184,117,.3); background: rgba(255,153,64,.1); }
 .pipeline-step.is-failed { color: #ffc3c4; border-color: rgba(255,143,146,.2); background: rgba(190,58,65,.08); }
 .pipeline-step.is-failed .pipeline-step__marker { color: var(--nether-danger); border-color: rgba(255,143,146,.24); }
-.pipeline-step small { margin-left: auto; color: var(--nether-magma); font: 8px 'JetBrains Mono', monospace; }
-.pipeline-footnote { display: flex; align-items: flex-start; gap: 7px; margin: 13px 0 0; color: var(--nether-muted); font-size: 9px; line-height: 1.5; }
+.pipeline-step small { margin-left: auto; color: var(--nether-magma); font: 9px 'JetBrains Mono', monospace; }
+.pipeline-footnote { display: flex; align-items: flex-start; gap: 7px; margin: 13px 0 0; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
 .pipeline-footnote svg { flex: 0 0 auto; color: var(--nether-moss); }
 
 .system-check-list { display: grid; gap: 7px; }
 .system-check-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.055); border-radius: 9px; background: rgba(9,7,10,.4); }
 .system-check-row__icon { display: flex; flex: 0 0 auto; margin-top: 1px; }
-.system-check-row__copy { display: grid; min-width: 0; gap: 4px; color: #d7cfdc; font-size: 10px; line-height: 1.4; }
-.system-check-row__copy small { color: var(--nether-dim); font-size: 9px; overflow-wrap: anywhere; }
+.system-check-row__copy { display: grid; min-width: 0; gap: 4px; color: #d7cfdc; font-size: 11px; line-height: 1.45; }
+.system-check-row__copy small { color: var(--nether-dim); font-size: 10px; overflow-wrap: anywhere; }
 .system-check-row.is-ok .system-check-row__icon { color: var(--nether-moss); }
 .system-check-row.is-warning .system-check-row__icon { color: var(--nether-magma); }
 .system-check-row.is-pending .system-check-row__icon { color: var(--nether-dim); }
-.system-warning { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; color: #e8bf83; font-size: 9px; line-height: 1.5; }
+.system-warning { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; color: #e8bf83; font-size: 10px; line-height: 1.5; }
 .system-warning svg { flex: 0 0 auto; margin-top: 1px; }
-.verification-list { display: grid; gap: 9px; margin: 0; padding-left: 17px; color: #b5aabc; font-size: 10px; line-height: 1.55; }
+.verification-list { display: grid; gap: 9px; margin: 0; padding-left: 17px; color: #b5aabc; font-size: 11px; line-height: 1.55; }
 
 .console-card { scroll-margin-top: 100px; }
-.nether-terminal { position: relative; height: 300px; overflow: auto; padding: 15px; border: 1px solid rgba(105,229,234,.13); border-radius: 12px; background: radial-gradient(ellipse at 50% 0, rgba(105,229,234,.035), transparent 55%), #0b0c0e; box-shadow: inset 0 0 32px rgba(0,0,0,.55); font: 10px/1.65 'JetBrains Mono', monospace; }
+.nether-terminal { position: relative; height: 300px; overflow: auto; padding: 15px; border: 1px solid rgba(105,229,234,.18); border-radius: 12px; background: radial-gradient(ellipse at 50% 0, rgba(105,229,234,.035), transparent 55%), #0b0c0e; box-shadow: inset 0 0 32px rgba(0,0,0,.55); font: 11px/1.65 'JetBrains Mono', monospace; }
 .nether-terminal::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .3; background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(255,255,255,.018) 3px 4px); }
 .terminal-line { position: relative; z-index: 1; display: grid; grid-template-columns: max-content max-content minmax(0,1fr); gap: 8px; color: #c5bdc9; overflow-wrap: anywhere; }
-.terminal-line time { color: #736a79; white-space: nowrap; }
+.terminal-line time { color: var(--nether-dim); white-space: nowrap; }
 .terminal-line b { color: var(--nether-soul); font-weight: 600; white-space: nowrap; }
 .terminal-line--warn b { color: var(--nether-magma); }
 .terminal-line--error, .terminal-line--error b { color: var(--nether-danger); }
@@ -756,19 +777,20 @@ select:focus-visible {
 .terminal-line--exec b { color: var(--nether-portal); }
 .terminal-empty { position: relative; z-index: 1; margin: 0; color: var(--nether-dim); }
 .console-command-form { display: flex; gap: 9px; margin-top: 12px; }
-.console-command-input { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; padding: 0 12px; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: var(--nether-soul); background: rgba(10,8,12,.8); }
-.console-command-input input { width: 100%; min-width: 0; height: 42px; border: 0; outline: 0; color: var(--nether-text); background: transparent; font: 10px 'JetBrains Mono', monospace; }
-.console-command-input input::placeholder { color: #756b7a; }
+.console-command-input { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; padding: 0 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; color: var(--nether-soul); background: rgba(10,8,12,.8); }
+.console-command-input:focus-within { border-color: var(--nether-soul); outline: 2px solid var(--nether-soul); outline-offset: 2px; box-shadow: 0 0 0 4px rgba(105,229,234,.12); }
+.console-command-input input { width: 100%; min-width: 0; height: 44px; border: 0; outline: 0; color: var(--nether-text); background: transparent; font: 12px 'JetBrains Mono', monospace; }
+.console-command-input input::placeholder { color: var(--nether-dim); opacity: 1; }
 .console-command-input input:disabled { cursor: not-allowed; }
-.console-footnote { margin: 9px 0 0; color: var(--nether-dim); font-size: 9px; }
-.ncraft-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 5px 2px; color: var(--nether-dim); font-size: 9px; }
+.console-footnote { margin: 9px 0 0; color: var(--nether-dim); font-size: 10px; line-height: 1.5; }
+.ncraft-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 5px 2px; color: var(--nether-dim); font-size: 10px; }
 .ncraft-footer span { display: inline-flex; align-items: center; gap: 6px; }
 .ncraft-footer svg { color: var(--nether-portal); }
 
-.nether-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.09); border-radius: 11px; font-size: 11px; line-height: 1.5; }
+.nether-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; font-size: 12px; line-height: 1.5; }
 .nether-banner > svg { flex: 0 0 auto; margin-top: 1px; }
 .nether-banner > span { flex: 1; }
-.nether-banner > button { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; margin: -4px -5px 0 0; border: 0; border-radius: 7px; color: inherit; background: transparent; cursor: pointer; }
+.nether-banner > button { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; margin: -10px -8px 0 0; border: 0; border-radius: 9px; color: inherit; background: transparent; cursor: pointer; touch-action: manipulation; }
 .nether-banner--success { color: #c1edcf; border-color: rgba(155,230,176,.17); background: rgba(65,133,85,.09); }
 .nether-banner--danger { color: #ffc2c2; border-color: rgba(255,143,146,.18); background: rgba(165,49,56,.11); }
 
@@ -789,6 +811,10 @@ select:focus-visible {
   .ncraft-overview-grid, .ncraft-telemetry-grid, .ncraft-workspace-grid { grid-template-columns: minmax(0,1fr); }
   .ncraft-operations-stack { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
   .ncraft-operations-stack > :last-child { grid-column: 1 / -1; }
+  .ncraft-main { padding-bottom: 100px; }
+  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
+  .mobile-dock a { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
+  .mobile-dock a:hover, .mobile-dock a:focus-visible, .mobile-dock a[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
 
 @media (max-width: 700px) {
@@ -797,10 +823,10 @@ select:focus-visible {
   .ncraft-brand { gap: 9px; }
   .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
   .ncraft-brand__copy strong { font-size: 11px; }
-  .ncraft-brand__copy small { font-size: 7px; }
+  .ncraft-brand__copy small { font-size: 9px; }
   .ncraft-header__actions { gap: 7px; }
-  .ncraft-header__actions .status-pill { padding: 6px 8px; font-size: 8px; }
-  .logout-button { width: 34px; min-width: 34px; padding: 0; }
+  .ncraft-header__actions .status-pill { min-height: 36px; padding: 7px 8px; font-size: 9px; }
+  .logout-button { width: 44px; min-width: 44px; padding: 0; }
   .logout-button span { display: none; }
   .ncraft-main { width: min(100% - 22px,1460px); gap: 15px; padding-top: 13px; padding-bottom: 105px; }
   .nether-hero { padding: 19px 16px; border-radius: 17px; }
@@ -808,13 +834,13 @@ select:focus-visible {
   .nether-hero__intro h1 { font-size: clamp(29px, 8vw, 42px); }
   .world-capsule { width: 100%; gap: 9px; padding: 9px; }
   .world-capsule__copy strong { max-width: 38vw; }
-  .world-capsule__version { margin-left: auto; padding-left: 8px; font-size: 8px; }
+  .world-capsule__version { margin-left: auto; padding-left: 8px; font-size: 9px; }
   .hero-metrics-grid { gap: 7px; margin-top: 17px; }
   .metric-tile { gap: 7px; padding: 10px 8px; }
   .metric-tile__icon { width: 26px; height: 26px; }
-  .metric-tile__copy > span { font-size: 9px; }
-  .metric-tile__copy strong { font-size: 12px; }
-  .metric-tile__copy small { font-size: 8px; }
+  .metric-tile__copy > span { font-size: 11px; }
+  .metric-tile__copy strong { font-size: 14px; }
+  .metric-tile__copy small { font-size: 10px; }
   .nether-hero__actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .nether-hero__actions .nether-btn--quiet { grid-column: 1 / -1; margin: 0; }
   .restart-strip { gap: 7px; }
@@ -824,45 +850,45 @@ select:focus-visible {
   .nether-card__body { padding: 14px; }
   .nether-card__icon { width: 32px; height: 32px; }
   .nether-card__title { font-size: 13px; }
-  .nether-card__description { font-size: 10px; }
-  .nether-card__action .status-pill { padding: 6px 7px; font-size: 7px; }
+  .nether-card__description { font-size: 12px; }
+  .nether-card__action .status-pill { min-height: 36px; padding: 7px 8px; font-size: 9px; }
   .resource-chart-readouts { gap: 7px; }
   .resource-readout { gap: 7px; padding: 9px 8px; }
   .resource-readout__icon { width: 27px; height: 27px; }
   .resource-readout strong { font-size: 13px; }
-  .resource-chart-legend { gap: 9px 12px; font-size: 9px; }
+  .resource-chart-legend { gap: 9px 12px; font-size: 11px; }
   .resource-chart-legend__note { flex-basis: 100%; }
   .resource-chart-plot { min-height: 225px; }
   .resource-chart-svg { height: 230px; }
-  .resource-chart-axis-label { font-size: 9px; }
+  .resource-chart-axis-label { font-size: 10px; }
   .ncraft-section-heading { align-items: flex-start; flex-direction: column; gap: 7px; margin: 8px 1px -5px; }
   .ncraft-section-heading h2 { font-size: 19px; }
-  .section-heading-note { font-size: 9px; }
+  .section-heading-note { font-size: 10px; }
   .ncraft-operations-stack { display: flex; }
   .cartridge-slot { grid-template-columns: 45px minmax(0,1fr); gap: 9px; padding: 10px; }
   .cartridge-slot__art { width: 44px; height: 50px; }
   .cartridge-slot__info { grid-column: 2; padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,.08); border-left: 0; }
   .nether-form-grid, .deploy-options-grid { grid-template-columns: minmax(0,1fr); }
   .security-badges { min-height: 38px; }
-  .nether-btn { min-height: 39px; padding: 9px 11px; font-size: 11px; }
-  .terminal-line { grid-template-columns: max-content max-content minmax(0,1fr); gap: 5px; font-size: 9px; }
+  .nether-btn { min-height: 44px; padding: 10px 11px; font-size: 12px; }
+  .nether-btn--tiny { min-height: 44px; }
+  .nether-input { min-height: 48px; font-size: 16px; }
+  .console-command-input input { height: 48px; font-size: 16px; }
+  .terminal-line { grid-template-columns: max-content max-content minmax(0,1fr); gap: 5px; font-size: 10px; }
   .nether-terminal { height: 280px; padding: 11px; }
   .console-command-form { gap: 7px; }
   .console-command-form .nether-btn { padding: 9px 10px; }
   .ncraft-footer { flex-direction: column; }
-  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
-  .mobile-dock a { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 8px; font-weight: 600; transition: color .15s, background .15s; }
-  .mobile-dock a:hover, .mobile-dock a:focus-visible { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
 
 @media (max-width: 420px) {
-  .status-pill { gap: 6px; font-size: 7px; }
+  .status-pill { gap: 6px; font-size: 9px; }
   .ncraft-header__actions .status-pill { max-width: 126px; overflow: hidden; text-overflow: ellipsis; }
-  .nether-hero__topline .nether-eyebrow { font-size: 8px; }
+  .nether-hero__topline .nether-eyebrow { font-size: 9px; }
   .nether-card__identity { gap: 8px; }
   .nether-card__header { align-items: center; }
   .nether-card__action { max-width: 45%; }
-  .restart-strip strong { font-size: 9px; }
+  .restart-strip strong { font-size: 10px; }
   .public-address-value code { font-size: 11px; }
 }
 
