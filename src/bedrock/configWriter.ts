@@ -1,4 +1,4 @@
-import { lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { DeployConfiguration } from '../types/backend.ts';
@@ -153,6 +153,114 @@ export async function writeBedrockConfiguration(
       rm(path.join(serverDirectory, 'whitelist.json'), { force: true }),
     ]);
   }
+}
+
+/** Apply operator-requested changes while preserving every unrelated property and permission. */
+export async function updateBedrockConfiguration(
+  serverDirectory: string,
+  previous: DeployConfiguration,
+  next: DeployConfiguration,
+): Promise<void> {
+  const propertyUpdates = new Map<string, string>();
+  if (previous.serverName !== next.serverName) propertyUpdates.set('server-name', next.serverName);
+  if (previous.levelName !== next.levelName) propertyUpdates.set('level-name', next.levelName);
+  if (previous.gamemode !== next.gamemode) propertyUpdates.set('gamemode', next.gamemode);
+  if (previous.difficulty !== next.difficulty) propertyUpdates.set('difficulty', next.difficulty);
+  if (previous.maxPlayers !== next.maxPlayers) propertyUpdates.set('max-players', String(next.maxPlayers));
+  if (previous.seed !== next.seed) propertyUpdates.set('level-seed', next.seed);
+  if (previous.viewDistance !== next.viewDistance) propertyUpdates.set('view-distance', String(next.viewDistance));
+  if (previous.allowCheats !== next.allowCheats) propertyUpdates.set('allow-cheats', String(next.allowCheats));
+
+  const propertiesPath = path.join(serverDirectory, 'server.properties');
+  let propertiesToWrite: string | null = null;
+  if (propertyUpdates.size > 0) {
+    const propertiesInfo = await lstat(propertiesPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!propertiesInfo?.isFile() || propertiesInfo.isSymbolicLink()) {
+      throw new Error('Le fichier server.properties est absent ou non sécurisé ; réglages non enregistrés.');
+    }
+    const currentProperties = await readFile(propertiesPath, 'utf8');
+    propertiesToWrite = applyPropertyUpdates(currentProperties, propertyUpdates);
+    if (propertiesToWrite === currentProperties) propertiesToWrite = null;
+  }
+
+  const previousAdmins = previous.adminXuids ?? [];
+  const adminListChanged = previousAdmins.length !== next.adminXuids.length
+    || previousAdmins.some((xuid, index) => xuid !== next.adminXuids[index]);
+  const permissionsPath = path.join(serverDirectory, 'permissions.json');
+  let permissionsToWrite: string | null = null;
+  if (adminListChanged) {
+    const permissionsInfo = await lstat(permissionsPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (permissionsInfo && (!permissionsInfo.isFile() || permissionsInfo.isSymbolicLink())) {
+      throw new Error('Le fichier permissions.json n’est pas sûr ; réglages non enregistrés.');
+    }
+
+    let entries: unknown[] = [];
+    if (permissionsInfo) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await readFile(permissionsPath, 'utf8')) as unknown;
+      } catch {
+        throw new Error('permissions.json est illisible ; aucun réglage n’a été enregistré.');
+      }
+      if (!Array.isArray(parsed)) throw new Error('permissions.json n’est pas une liste valide ; aucun réglage n’a été enregistré.');
+      entries = parsed;
+    }
+
+    const previousSet = new Set(previousAdmins);
+    const nextSet = new Set(next.adminXuids);
+    const preservedEntries = entries.filter((entry) => {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return true;
+      const xuid = (entry as { xuid?: unknown }).xuid;
+      return typeof xuid !== 'string' || (!previousSet.has(xuid) && !nextSet.has(xuid));
+    });
+    const existingByXuid = new Map<string, Record<string, unknown>>();
+    for (const entry of entries) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      if (typeof record.xuid === 'string') existingByXuid.set(record.xuid, record);
+    }
+    const updatedAdmins = next.adminXuids.map((xuid) => ({
+      ...(existingByXuid.get(xuid) ?? {}),
+      permission: 'operator',
+      xuid,
+    }));
+    permissionsToWrite = `${JSON.stringify([...preservedEntries, ...updatedAdmins], null, 2)}\n`;
+  }
+
+  if (propertiesToWrite !== null) await writeConfigurationFile(propertiesPath, propertiesToWrite, false);
+  if (permissionsToWrite !== null) await writeConfigurationFile(permissionsPath, permissionsToWrite, false);
+}
+
+function applyPropertyUpdates(content: string, updates: ReadonlyMap<string, string>): string {
+  const lines = content.length === 0 ? [] : content.split(/\r?\n/);
+  if (content.endsWith('\n')) lines.pop();
+  const written = new Set<string>();
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const separator = line.indexOf('=');
+    const key = separator < 0 ? '' : line.slice(0, separator).trim();
+    const replacement = updates.get(key);
+    if (replacement === undefined) {
+      result.push(line);
+      continue;
+    }
+    if (written.has(key)) continue;
+    result.push(`${key}=${replacement}`);
+    written.add(key);
+  }
+
+  for (const [key, value] of updates) {
+    if (written.has(key)) continue;
+    result.push(`${key}=${value}`);
+  }
+  return `${result.join('\n')}\n`;
 }
 
 async function writeConfigurationFile(filePath: string, content: string, onlyIfMissing: boolean): Promise<void> {

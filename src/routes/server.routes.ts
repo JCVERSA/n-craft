@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { PanelAuthService } from '../auth.ts';
-import { DeployInProgressError, DeployPipeline, ServerNotInstalledError } from '../bedrock/deployPipeline.ts';
+import { DeployInProgressError, DeployPipeline, ServerNotInstalledError, ServerRunningError } from '../bedrock/deployPipeline.ts';
 import { ConfigurationError, validateDeployConfiguration } from '../bedrock/configWriter.ts';
 import { BedrockConsole } from '../bedrock/console.ts';
 import type { BedrockRestartScheduler } from '../bedrock/scheduler.ts';
@@ -58,6 +58,27 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     response.json({ lines: dependencies.bedrockConsole.getRecentLines() });
   });
 
+  router.post('/configuration', requireSameOrigin, async (request, response) => {
+    try {
+      const currentConfig = dependencies.state.getSnapshot().activeConfig;
+      const allowedVersions = new Set(dependencies.catalog.allowedVersionIds());
+      if (currentConfig?.version) allowedVersions.add(currentConfig.version);
+      const config = validateDeployConfiguration(request.body?.config, allowedVersions);
+      await dependencies.pipeline.saveConfiguration(config);
+      response.json({ saved: true, state: dependencies.state.getSnapshot() });
+    } catch (error) {
+      if (error instanceof DeployInProgressError || error instanceof ServerNotInstalledError || error instanceof ServerRunningError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ConfigurationError) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: (error as Error).message || 'Échec de l’enregistrement des réglages.' });
+    }
+  });
+
   router.post('/playit/setup', requireSameOrigin, (_request, response) => {
     if (dependencies.tunnelProvider !== 'playit') {
       response.status(409).json({ error: 'Playit n’est pas le fournisseur de tunnel actif.' });
@@ -92,6 +113,11 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
 
   router.post('/deploy', requireSameOrigin, (request, response) => {
     try {
+      const server = dependencies.state.getSnapshot().server;
+      if (dependencies.bedrockConsole.isRunning || server.status === 'running') {
+        response.status(409).json({ error: 'Arrête Bedrock avant de modifier la configuration ou la version.' });
+        return;
+      }
       const config = validateDeployConfiguration(request.body?.config, dependencies.catalog.allowedVersionIds());
       dependencies.pipeline.start(config);
       response.status(202).json({

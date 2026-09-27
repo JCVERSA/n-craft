@@ -202,6 +202,33 @@ function isValidForm(configuration: DeployConfiguration): boolean {
   );
 }
 
+function getWorldSettingsConfirmation(current: DeployConfiguration, next: DeployConfiguration): string | null {
+  const warnings: string[] = [];
+  if (current.levelName !== next.levelName) {
+    warnings.push(`Bedrock utilisera le dossier worlds/${next.levelName}. S’il n’existe pas, un nouveau monde sera créé; l’ancien restera intact.`);
+  }
+  if (current.seed !== next.seed) {
+    warnings.push('La seed ne sert qu’à générer un monde neuf; elle ne modifie pas les chunks déjà créés.');
+  }
+  if (warnings.length === 0) return null;
+  warnings.push('Aucun monde existant ne sera supprimé ni déplacé.');
+  return warnings.join('\n\n');
+}
+
+function hasConfigurationSettingsChanged(current: DeployConfiguration, next: DeployConfiguration): boolean {
+  return current.serverName !== next.serverName
+    || current.levelName !== next.levelName
+    || current.gamemode !== next.gamemode
+    || current.difficulty !== next.difficulty
+    || current.maxPlayers !== next.maxPlayers
+    || current.seed !== next.seed
+    || current.viewDistance !== next.viewDistance
+    || current.allowCheats !== next.allowCheats
+    || current.eulaAccepted !== next.eulaAccepted
+    || current.adminXuids.length !== next.adminXuids.length
+    || current.adminXuids.some((xuid, index) => xuid !== next.adminXuids[index]);
+}
+
 export function LivePanelView() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -219,7 +246,7 @@ export function LivePanelView() {
   const [configTouched, setConfigTouched] = useState(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
-  const [busyAction, setBusyAction] = useState<'deploy' | 'start' | 'stop' | 'playit' | 'portwarp' | 'logout' | null>(null);
+  const [busyAction, setBusyAction] = useState<'deploy' | 'save-config' | 'start' | 'stop' | 'playit' | 'portwarp' | 'logout' | null>(null);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleConnected, setConsoleConnected] = useState(false);
   const [command, setCommand] = useState('');
@@ -227,7 +254,7 @@ export function LivePanelView() {
   const socketRef = useRef<WebSocket | null>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
 
-  const isPipelineBusy = Boolean(status?.deployBusy || status?.state.pipeline.status === 'running' || busyAction === 'deploy' || busyAction === 'start');
+  const isPipelineBusy = Boolean(status?.deployBusy || status?.state.pipeline.status === 'running' || busyAction === 'deploy' || busyAction === 'save-config' || busyAction === 'start');
   const currentStepIndex = useMemo(
     () => pipelineSteps.findIndex((step) => step.id === status?.state.pipeline.step),
     [status?.state.pipeline.step],
@@ -519,6 +546,15 @@ export function LivePanelView() {
     event.preventDefault();
     setFormError('');
     setNotice('');
+    const currentConfig = status?.state.activeConfig;
+    if (status?.state.server.status === 'running') {
+      setFormError('Arrête Bedrock avant de modifier la configuration ou la version.');
+      return;
+    }
+    if (currentConfig && configuration.version === currentConfig.version) {
+      setFormError('Aucune nouvelle version sélectionnée. Enregistre les réglages sans redéployer Bedrock.');
+      return;
+    }
     if (!isValidForm(configuration)) {
       setFormError('Complète les champs requis, fournis 1 à 3 XUID numériques uniques et confirme l’EULA.');
       return;
@@ -532,12 +568,14 @@ export function LivePanelView() {
       return;
     }
 
+    const worldWarning = currentConfig ? getWorldSettingsConfirmation(currentConfig, configuration) : null;
     const confirmationMessage = [
       `Mettre à jour Bedrock vers ${configuration.version} dans ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} ?`,
       isExistingDeployment
-        ? 'Déploiement non destructif : le monde, les sauvegardes, les packs, server.properties et permissions.json existants seront conservés. Seule la version du serveur sera modifiée.'
+        ? 'Mise à jour non destructive : les mondes, sauvegardes, packs, permissions et fichiers inconnus sont conservés. Les réglages modifiés seront appliqués.'
         : 'Première installation : le dossier existant n’est pas supprimé. Le monde et les fichiers déjà présents seront conservés autant que possible.',
-      'Le serveur restera en ligne pendant le téléchargement et l’extraction, puis sera arrêté proprement et redémarré automatiquement. Le tunnel ne sera pas interrompu.',
+      'Bedrock est arrêté pour cette opération. Après le déploiement, il démarrera automatiquement; le tunnel restera actif.',
+      worldWarning ?? '',
       status?.system.memoryWarning ? 'Le conteneur est sous le budget mémoire recommandé ; un arrêt OOM est possible.' : '',
       status?.system.diskWarning ? `Espace disque détecté : DATA_DIR ${formatBytes(status.system.dataDiskFreeBytes)} libres / ${formatBytes(status.system.dataDiskRequiredBytes)} estimés${status.system.sharedDiskVolume === false ? ` ; BEDROCK_SERVER_DIR ${formatBytes(status.system.serverDiskFreeBytes)} libres / ${formatBytes(status.system.serverDiskRequiredBytes)} estimés` : status.system.sharedDiskVolume === null ? ' ; volume de BEDROCK_SERVER_DIR incertain' : ' ; volume partagé, archive + extraction incluses'}. Le déploiement reste autorisé, mais peut échouer si le volume est plein.` : '',
       'Confirmer le déploiement non destructif ?',
@@ -551,6 +589,47 @@ export function LivePanelView() {
         body: JSON.stringify({ config: configuration }),
       });
       setNotice('Déploiement accepté. Suis chaque étape et son résultat dans la progression ci-dessous.');
+      await refreshStatus();
+    } catch (error) {
+      setFormError((error as Error).message);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    setFormError('');
+    setNotice('');
+    const currentConfig = status?.state.activeConfig;
+    if (!currentConfig) {
+      setFormError('Aucune configuration Bedrock existante à modifier.');
+      return;
+    }
+    if (isPipelineBusy || status?.state.server.status === 'running') {
+      setFormError('Arrête Bedrock avant de modifier sa configuration. Le tunnel restera actif.');
+      return;
+    }
+    if (configuration.version !== currentConfig.version) {
+      setFormError('Pour changer la version Bedrock, utilise l’action de mise à jour.');
+      return;
+    }
+    if (!hasConfigurationSettingsChanged(currentConfig, configuration)) return;
+    if (!isValidForm(configuration)) {
+      setFormError('Vérifie les champs requis, les XUID uniques et la confirmation de l’EULA.');
+      return;
+    }
+    const worldWarning = getWorldSettingsConfirmation(currentConfig, configuration);
+    if (worldWarning && !window.confirm(`${worldWarning}\n\nEnregistrer les réglages ? Bedrock restera arrêté.`)) return;
+
+    setBusyAction('save-config');
+    try {
+      await apiRequest('/api/server/configuration', {
+        method: 'POST',
+        body: JSON.stringify({ config: configuration }),
+      });
+      setConfiguration(configuration);
+      setConfigTouched(false);
+      setNotice('Réglages enregistrés. Bedrock reste arrêté; tu peux le démarrer quand tu veux. Le tunnel reste actif.');
       await refreshStatus();
     } catch (error) {
       setFormError((error as Error).message);
@@ -756,19 +835,49 @@ export function LivePanelView() {
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
   const activeConfig = status?.state.activeConfig;
+  const selectedVersion = versions.find((version) => version.version === configuration.version);
   const isExistingDeployment = Boolean(activeConfig);
+  const configurationLocked = isPipelineBusy || !server
+    || server.status === 'running'
+    || server.status === 'starting'
+    || server.status === 'stopping'
+    || (server.status === 'failed' && server.pid !== null);
+  const hasVersionChange = Boolean(activeConfig && configuration.version !== activeConfig.version);
+  const hasSettingsChanges = Boolean(activeConfig && hasConfigurationSettingsChanged(activeConfig, configuration));
+  const configurationActionDisabled = configurationLocked
+    || !isValidForm(configuration)
+    || (isExistingDeployment
+      ? hasVersionChange
+        ? !selectedVersion || system?.deployReady === false
+        : !hasSettingsChanges
+      : !selectedVersion || system?.deployReady === false);
+  const configurationActionLabel = busyAction === 'save-config'
+    ? 'Enregistrement…'
+    : isPipelineBusy
+      ? busyAction === 'deploy' ? `Déploiement : ${statusLabel(pipeline?.step ?? 'preflight')}` : 'Opération en cours…'
+      : !server
+        ? 'Vérification du serveur…'
+        : server.status === 'running' || (server.status === 'failed' && server.pid !== null)
+          ? 'Arrête Bedrock pour modifier'
+          : server.status === 'starting' || server.status === 'stopping'
+            ? 'Bedrock en transition…'
+            : !isExistingDeployment
+              ? 'Installer & démarrer'
+              : hasVersionChange
+                ? 'Mettre à jour & démarrer'
+                : hasSettingsChanges ? 'Enregistrer les réglages' : 'Aucun changement';
   const uptimeSeconds = server?.status === 'running' && server.startedAt
     ? Math.floor((clockNow - Date.parse(server.startedAt)) / 1000)
     : null;
   const providerName = tunnelProvider === 'portwarp' ? 'Portwarp' : tunnelProvider === 'localtonet' ? 'Localtonet' : 'Playit';
-  const selectedVersion = versions.find((version) => version.version === configuration.version);
   const versionEntry = activeConfig?.version
     ? versions.find((version) => version.version === activeConfig.version)
     : undefined;
   const currentServerStatus = server?.status ?? 'stopped';
   const tunnelStatus = activeTunnel?.status ?? 'starting';
-  const startDisabled = isPipelineBusy || !activeConfig || !system?.bedrockBinary.ok || server?.status === 'running' || busyAction === 'stop';
-  const stopDisabled = isPipelineBusy || busyAction === 'stop' || server?.status !== 'running';
+  const bedrockMayBeRunning = server?.status === 'running' || (server?.status === 'failed' && server.pid !== null);
+  const startDisabled = isPipelineBusy || !activeConfig || !system?.bedrockBinary.ok || bedrockMayBeRunning || busyAction === 'stop';
+  const stopDisabled = isPipelineBusy || busyAction === 'stop' || !bedrockMayBeRunning;
 
   return (
     <main className="ncraft-shell">
@@ -1051,7 +1160,7 @@ export function LivePanelView() {
             id="deploy"
             title="Cartouche de mise à jour"
             eyebrow="DÉPLOIEMENT BEDROCK"
-            description="Sélectionne une version réelle du catalogue, puis déploie sans effacer le monde."
+            description="Bedrock arrêté : personnalise les réglages ou choisis une version. Le monde n’est jamais supprimé."
             icon={Package}
             accent="magma"
             className="deploy-card"
@@ -1062,9 +1171,21 @@ export function LivePanelView() {
                   <ShieldCheck size={18} />
                   <div className="callout-copy">
                     <strong>Mise à jour non destructive</strong>
-                    <span>Le monde, les packs, les permissions et les réglages existants sont préservés. Seule la version Bedrock choisie change.</span>
+                    <span>Le monde, les packs, les permissions et les fichiers non modifiés sont conservés. Les réglages peuvent être enregistrés lorsque Bedrock est arrêté.</span>
                   </div>
                 </div>
+              )}
+              {isExistingDeployment && bedrockMayBeRunning && (
+                <div className="nether-callout nether-callout--warning">
+                  <LockKeyhole size={18} />
+                  <div className="callout-copy">
+                    <strong>Bedrock doit être arrêté</strong>
+                    <span>Arrête Bedrock pour modifier les réglages ou la version. Le tunnel restera actif.</span>
+                  </div>
+                </div>
+              )}
+              {isExistingDeployment && !configurationLocked && (
+                <p className="nether-inline-note"><ShieldCheck size={15} />Enregistrer les réglages ne télécharge pas Bedrock et ne démarre pas le serveur. Il restera arrêté jusqu’à ce que tu cliques sur « Démarrer Bedrock ».</p>
               )}
 
               <div className="cartridge-slot">
@@ -1081,6 +1202,7 @@ export function LivePanelView() {
                     onChange={(value) => changeField('version', value)}
                     labelledBy="bedrock-version-label"
                     describedBy="bedrock-version-status"
+                    disabled={configurationLocked}
                     required
                     invalid={!selectedVersion}
                   />
@@ -1100,11 +1222,11 @@ export function LivePanelView() {
               <div className="nether-form-grid">
                 <label className="nether-field">
                   <span>Nom du serveur</span>
-                  <input value={configuration.serverName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('serverName', event.target.value)} className="nether-input" required />
+                  <input value={configuration.serverName} maxLength={64} disabled={configurationLocked} onChange={(event) => changeField('serverName', event.target.value)} className="nether-input" required />
                 </label>
                 <label className="nether-field">
                   <span>Nom du monde</span>
-                  <input value={configuration.levelName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('levelName', event.target.value)} className="nether-input" required />
+                  <input value={configuration.levelName} maxLength={64} disabled={configurationLocked} onChange={(event) => changeField('levelName', event.target.value)} className="nether-input" required />
                 </label>
                 <div className="nether-field deploy-segment-field">
                   <span id="deploy-gamemode-label">Mode de jeu</span>
@@ -1113,7 +1235,7 @@ export function LivePanelView() {
                     value={configuration.gamemode}
                     onChange={(value) => changeField('gamemode', value)}
                     labelledBy="deploy-gamemode-label"
-                    disabled={isExistingDeployment}
+                    disabled={configurationLocked}
                   />
                 </div>
                 <div className="nether-field deploy-segment-field">
@@ -1123,27 +1245,27 @@ export function LivePanelView() {
                     value={configuration.difficulty}
                     onChange={(value) => changeField('difficulty', value)}
                     labelledBy="deploy-difficulty-label"
-                    disabled={isExistingDeployment}
+                    disabled={configurationLocked}
                   />
                 </div>
                 <label className="nether-field">
                   <span>Joueurs maximum</span>
-                  <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={isExistingDeployment} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
+                  <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={configurationLocked} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
                 </label>
                 <label className="nether-field">
                   <span>Seed <small>optionnelle · vide = aléatoire</small></span>
-                  <input value={configuration.seed} maxLength={80} disabled={isExistingDeployment} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
+                  <input value={configuration.seed} maxLength={80} disabled={configurationLocked} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
                 </label>
                 <label className="nether-field">
                   <span>Distance de vue <small>chunks</small></span>
-                  <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={isExistingDeployment} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="nether-input" />
+                  <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={configurationLocked} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="nether-input" />
                 </label>
               </div>
 
               <div className="admin-xuid-box">
                 <div className="admin-xuid-box__header">
                   <div><strong>Administrateurs Bedrock</strong><small>1 à 3 XUID numériques uniques · aucun gamertag</small></div>
-                  <motion.button type="button" onClick={addAdminField} disabled={isExistingDeployment || configuration.adminXuids.length >= 3} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--tiny nether-btn--quiet">
+                  <motion.button type="button" onClick={addAdminField} disabled={configurationLocked || configuration.adminXuids.length >= 3} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--tiny nether-btn--quiet">
                     <Users size={14} /> Ajouter
                   </motion.button>
                 </div>
@@ -1151,8 +1273,8 @@ export function LivePanelView() {
                   {configuration.adminXuids.map((xuid, index) => (
                     <div key={index} className="admin-xuid-row">
                       <span className="admin-xuid-row__number">{String(index + 1).padStart(2, '0')}</span>
-                      <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={isExistingDeployment} onChange={(event) => setAdminXuid(index, event.target.value)} className="nether-input" placeholder="Ex. 2535412894129841" required />
-                      {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={isExistingDeployment} className="icon-button icon-button--danger" aria-label={`Retirer le XUID ${index + 1}`}><X size={16} /></button>}
+                      <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={configurationLocked} onChange={(event) => setAdminXuid(index, event.target.value)} className="nether-input" placeholder="Ex. 2535412894129841" required />
+                      {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={configurationLocked} className="icon-button icon-button--danger" aria-label={`Retirer le XUID ${index + 1}`}><X size={16} /></button>}
                     </div>
                   ))}
                 </div>
@@ -1166,7 +1288,7 @@ export function LivePanelView() {
                   onChange={(checked) => changeField('allowCheats', checked)}
                   label="Autoriser les commandes"
                   description="Cheats et commandes de jeu"
-                  disabled={isExistingDeployment}
+                  disabled={configurationLocked}
                 />
                 <div className="security-badges">
                   <span><LockKeyhole size={13} /> Auth Bedrock</span>
@@ -1179,19 +1301,20 @@ export function LivePanelView() {
                 className="eula-card"
                 checked={configuration.eulaAccepted}
                 onChange={(checked) => changeField('eulaAccepted', checked)}
-                disabled={isExistingDeployment}
+                disabled={configurationLocked}
               >
                 J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">EULA Minecraft</a>. Si le binaire affiche un prompt connu, le backend y répondra automatiquement; aucun fichier EULA non vérifié ne sera inventé.
               </SpringCheck>
 
               <motion.button
-                type="submit"
-                disabled={isPipelineBusy || !isValidForm(configuration) || !selectedVersion || system?.deployReady === false}
+                type={isExistingDeployment && !hasVersionChange ? 'button' : 'submit'}
+                onClick={isExistingDeployment && !hasVersionChange ? () => void handleSaveConfiguration() : undefined}
+                disabled={configurationActionDisabled}
                 whileTap={reduceMotion ? undefined : { scale: 0.99 }}
                 className="nether-btn nether-btn--primary nether-btn--wide deploy-submit"
               >
                 {isPipelineBusy ? <Loader2 className="spin-soft" size={18} /> : <ArrowRight size={18} />}
-                {isPipelineBusy ? `Déploiement : ${statusLabel(pipeline?.step ?? 'preflight')}` : isExistingDeployment ? 'Mettre à jour & redémarrer' : 'Installer & démarrer'}
+                {configurationActionLabel}
               </motion.button>
             </form>
           </NetherCard>

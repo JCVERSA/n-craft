@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ConfigurationError, validateDeployConfiguration, writeBedrockConfiguration } from '../src/bedrock/configWriter.ts';
+import { ConfigurationError, updateBedrockConfiguration, validateDeployConfiguration, writeBedrockConfiguration } from '../src/bedrock/configWriter.ts';
 
 const allowedVersions = new Set(['1.19.50.02']);
 const validInput = {
@@ -62,6 +62,47 @@ test('generates locked Bedrock settings and removes any archive allowlist', asyn
     assert.deepEqual(permissions, [{ permission: 'operator', xuid: '2535412894129841' }]);
     await assert.rejects(readFile(path.join(directory, 'allowlist.json')));
     await assert.rejects(readFile(path.join(directory, 'whitelist.json')));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('updates only changed Bedrock properties and keeps unrelated server settings and permissions', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-config-update-'));
+  try {
+    const previous = validateDeployConfiguration(validInput, allowedVersions);
+    const next = validateDeployConfiguration({
+      ...validInput,
+      serverName: 'Updated server',
+      difficulty: 'hard',
+      maxPlayers: 12,
+      adminXuids: ['9999999999999999'],
+    }, allowedVersions);
+    await writeBedrockConfiguration(directory, previous);
+    const propertiesPath = path.join(directory, 'server.properties');
+    const permissionsPath = path.join(directory, 'permissions.json');
+    await writeFile(propertiesPath, `${await readFile(propertiesPath, 'utf8')}# custom setting\ntexturepack-required=true\n`, 'utf8');
+    await writeFile(permissionsPath, `${JSON.stringify([
+      { permission: 'operator', xuid: previous.adminXuids[0] },
+      { permission: 'member', xuid: '2222222222222222', note: 'keep' },
+    ])}\n`, 'utf8');
+
+    await updateBedrockConfiguration(directory, previous, next);
+
+    const properties = await readFile(propertiesPath, 'utf8');
+    const permissions = JSON.parse(await readFile(permissionsPath, 'utf8')) as unknown;
+    assert.match(properties, /^server-name=Updated server$/m);
+    assert.match(properties, /^difficulty=hard$/m);
+    assert.match(properties, /^max-players=12$/m);
+    assert.match(properties, /^server-port=19132$/m);
+    assert.match(properties, /^online-mode=false$/m);
+    assert.match(properties, /^allow-list=false$/m);
+    assert.match(properties, /^# custom setting$/m);
+    assert.match(properties, /^texturepack-required=true$/m);
+    assert.deepEqual(permissions, [
+      { permission: 'member', xuid: '2222222222222222', note: 'keep' },
+      { permission: 'operator', xuid: '9999999999999999' },
+    ]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

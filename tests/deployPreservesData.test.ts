@@ -203,3 +203,95 @@ test('Deploy merges the release and restarts while preserving worlds, packs, per
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   }
 });
+
+test('a stopped server applies edited settings during Deploy while preserving the old world', async (context) => {
+  if (process.platform !== 'linux') {
+    context.skip('The Bedrock child-process fixture is a Linux executable script.');
+    return;
+  }
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-settings-'));
+  const dataDirectory = path.join(directory, 'data');
+  const serverDirectory = path.join(directory, 'bedrock', 'server');
+  const worldPath = path.join(serverDirectory, 'worlds', 'PreservedWorld', 'level.dat');
+  const propertiesPath = path.join(serverDirectory, 'server.properties');
+  const permissionsPath = path.join(serverDirectory, 'permissions.json');
+  const bedrockConsole = new BedrockConsole(dataDirectory);
+
+  try {
+    await mkdir(path.dirname(worldPath), { recursive: true });
+    await writeFile(worldPath, 'world snapshot must survive', 'utf8');
+    await writeFile(propertiesPath, [
+      'server-name=Existing server name',
+      'level-name=PreservedWorld',
+      'gamemode=survival',
+      'difficulty=normal',
+      'max-players=8',
+      'level-seed=kept-seed',
+      'view-distance=8',
+      'allow-cheats=false',
+      'server-port=19132',
+      'online-mode=false',
+      'allow-list=false',
+      'custom-property=keep',
+      '',
+    ].join('\n'), 'utf8');
+    await writeFile(permissionsPath, JSON.stringify([
+      { permission: 'operator', xuid: oldConfiguration.adminXuids[0] },
+      { permission: 'member', xuid: '2222222222222222' },
+    ]), 'utf8');
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    await state.setActiveConfig(oldConfiguration);
+    const inspector = { inspect: async () => preflight } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    const pipeline = new DeployPipeline(
+      state,
+      bedrockConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      (version) => version === requestedConfiguration.version ? testVersion(version) : undefined,
+      {
+        download: async (_url, destination) => {
+          await writeFile(destination, Buffer.from('fixture zip'));
+          return { bytes: 10, finalUrl: 'https://fixture.invalid/release.zip' };
+        },
+        extract: async (_archive, destination) => {
+          const newBinary = [
+            '#!/bin/sh',
+            'printf "Server started\\n"',
+            'while IFS= read -r line; do [ "$line" = "stop" ] && exit 0; done',
+            '',
+          ].join('\n');
+          await writeFile(path.join(destination, 'bedrock_server'), newBinary, { encoding: 'utf8', mode: 0o600 });
+        },
+      },
+    );
+
+    const started = waitForUpdatedProcess(state, null);
+    pipeline.start(requestedConfiguration);
+    await started;
+    const deadline = Date.now() + 5000;
+    while (pipeline.isRunning && Date.now() < deadline) await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const properties = await readFile(propertiesPath, 'utf8');
+    const permissions = JSON.parse(await readFile(permissionsPath, 'utf8')) as unknown;
+    assert.match(properties, /^server-name=Must not replace existing settings$/m);
+    assert.match(properties, /^level-name=DifferentWorld$/m);
+    assert.match(properties, /^max-players=20$/m);
+    assert.match(properties, /^server-port=19132$/m);
+    assert.match(properties, /^custom-property=keep$/m);
+    assert.deepEqual(permissions, [
+      { permission: 'member', xuid: '2222222222222222' },
+      { permission: 'operator', xuid: '9999999999999999' },
+    ]);
+    assert.equal(await readFile(worldPath, 'utf8'), 'world snapshot must survive');
+    assert.deepEqual(state.getSnapshot().activeConfig, requestedConfiguration);
+    assert.equal(state.getSnapshot().server.status, 'running');
+    await pipeline.stop();
+  } finally {
+    await bedrockConsole.stop(1000).catch(() => undefined);
+    await bedrockConsole.close();
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});

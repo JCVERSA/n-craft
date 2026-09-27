@@ -4,7 +4,7 @@ import path from 'node:path';
 import { BedrockConsole } from './console.ts';
 import { downloadBedrockArchive } from './download.ts';
 import { extractZipSafely } from './extractArchive.ts';
-import { writeBedrockConfiguration } from './configWriter.ts';
+import { ConfigurationError, updateBedrockConfiguration, writeBedrockConfiguration } from './configWriter.ts';
 import { getMaxArchiveBytes } from './limits.ts';
 import { mergeBedrockRelease } from './installRelease.ts';
 import { SystemInspector } from '../preflight.ts';
@@ -22,6 +22,13 @@ export class ServerNotInstalledError extends Error {
   constructor() {
     super('Aucun serveur Bedrock prêt à démarrer. Effectue d’abord un Deploy depuis le dashboard.');
     this.name = 'ServerNotInstalledError';
+  }
+}
+
+export class ServerRunningError extends Error {
+  constructor() {
+    super('Arrête Bedrock avant de modifier sa configuration. Le tunnel restera actif.');
+    this.name = 'ServerRunningError';
   }
 }
 
@@ -166,6 +173,50 @@ export class DeployPipeline {
     }
   }
 
+  /** Save changed settings only while Bedrock is stopped; never downloads or starts it. */
+  async saveConfiguration(configuration: DeployConfiguration): Promise<void> {
+    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    const snapshot = this.state.getSnapshot();
+    const currentConfig = snapshot.activeConfig;
+    if (!currentConfig) throw new ServerNotInstalledError();
+    if (this.bedrockConsole.isRunning || snapshot.server.status === 'running') throw new ServerRunningError();
+    if (configuration.version !== currentConfig.version) {
+      throw new ConfigurationError('Un changement de version nécessite l’action « Mettre à jour & démarrer ».');
+    }
+
+    this.active = true;
+    const runPromise = this.writeStoppedConfiguration(currentConfig, configuration);
+    this.activeRun = runPromise;
+    try {
+      await runPromise;
+    } finally {
+      this.finishRun(runPromise);
+    }
+  }
+
+  private async writeStoppedConfiguration(
+    currentConfig: DeployConfiguration,
+    configuration: DeployConfiguration,
+  ): Promise<void> {
+    await assertNoSymlinkInPath(path.dirname(this.serverDirectory));
+    const directoryInfo = await lstat(this.serverDirectory).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!directoryInfo?.isDirectory() || directoryInfo.isSymbolicLink()) throw new ServerNotInstalledError();
+
+    const binaryInfo = await lstat(path.join(this.serverDirectory, 'bedrock_server')).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!binaryInfo?.isFile() || binaryInfo.isSymbolicLink()) throw new ServerNotInstalledError();
+    if (this.bedrockConsole.isRunning || this.state.getSnapshot().server.status === 'running') throw new ServerRunningError();
+
+    await writeBedrockConfiguration(this.serverDirectory, currentConfig, { preserveExisting: true });
+    await updateBedrockConfiguration(this.serverDirectory, currentConfig, configuration);
+    await this.state.setActiveConfig(configuration);
+  }
+
   private async performStop(): Promise<void> {
     await this.state.updateServer({ status: 'stopping', error: null });
     try {
@@ -267,9 +318,11 @@ export class DeployPipeline {
       preserveExisting = Boolean(currentDirectory?.isDirectory());
       const currentConfig = this.state.getSnapshot().activeConfig;
       if (preserveExisting && currentConfig) {
-        // On updates only the game version changes. Keep the settings represented by
-        // the existing files, as well as all player/world data.
-        deploymentConfig = { ...currentConfig, version: configuration.version };
+        // A running server can only be updated through the existing non-destructive
+        // version path. When it was stopped, apply the operator's saved settings too.
+        deploymentConfig = wasRunningAtStart
+          ? { ...currentConfig, version: configuration.version }
+          : configuration;
       }
 
       const version = this.findVersion(configuration.version);
@@ -335,6 +388,9 @@ export class DeployPipeline {
       await this.setStep('writing_config');
       throwIfAborted(signal);
       await writeBedrockConfiguration(this.serverDirectory, deploymentConfig, { preserveExisting });
+      if (preserveExisting && currentConfig && !wasRunningAtStart) {
+        await updateBedrockConfiguration(this.serverDirectory, currentConfig, deploymentConfig);
+      }
 
       // The EULA response is performed only if the real binary emits a matching
       // interactive prompt. No undocumented eula.txt format is guessed here.
