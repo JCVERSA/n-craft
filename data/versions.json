@@ -1,0 +1,10 @@
+{
+  "versions": [
+    {
+      "version": "1.19.50.02",
+      "label": "1.19.50.02 — version de test",
+      "downloadUrl": "https://minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.50.02.zip",
+      "releaseDate": "2022-11-29"
+    }
+  ]
+}
