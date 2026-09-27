@@ -683,7 +683,8 @@ select:focus-visible {
 .section-heading-note svg { color: var(--nether-moss); }
 .ncraft-workspace-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .78fr); gap: 18px; align-items: start; }
 .ncraft-operations-stack { display: flex; flex-direction: column; gap: 16px; }
-.deploy-card { scroll-margin-top: 100px; }
+.deploy-card { scroll-margin-top: 100px; overflow: visible; }
+.deploy-card:focus-within { z-index: 20; }
 .deploy-form { display: flex; flex-direction: column; gap: 16px; }
 
 .cartridge-slot { display: grid; grid-template-columns: 54px minmax(180px,1.1fr) minmax(135px,.8fr); align-items: center; gap: 13px; padding: 13px; border: 1px solid rgba(255,184,117,.16); border-radius: 14px; background: radial-gradient(ellipse at 100% 0, rgba(255,149,82,.08), transparent 45%), rgba(11,9,13,.56); }
@@ -693,6 +694,7 @@ select:focus-visible {
 .cartridge-slot__info { display: grid; min-width: 0; gap: 5px; padding-left: 13px; border-left: 1px solid rgba(255,255,255,.08); }
 .cartridge-slot__info strong { overflow: hidden; color: #ffdbb2; font: 600 11px 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
 .cartridge-slot__info small { color: var(--nether-dim); font-size: 9px; }
+.cartridge-slot__info .cartridge-slot__version-error { color: var(--nether-danger); }
 
 .nether-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
 .nether-field { display: grid; min-width: 0; gap: 7px; color: #c7bdcb; font-size: 12px; font-weight: 600; }
@@ -721,21 +723,11 @@ select:focus-visible {
 .logout-button span { font-size: 10px; font-weight: 600; }
 
 .deploy-options-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
-.nether-check-card { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: rgba(11,9,13,.48); cursor: pointer; }
-.nether-check-card input, .eula-card input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.nether-check-card__box { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 5px; color: transparent; background: rgba(0,0,0,.25); transition: background .15s, color .15s, border-color .15s; }
-.nether-check-card input:checked + .nether-check-card__box, .eula-card input:checked + .nether-check-card__box { color: #102718; border-color: var(--nether-moss); background: var(--nether-moss); }
-.nether-check-card input:focus-visible + .nether-check-card__box, .eula-card input:focus-visible + .nether-check-card__box { outline: 2px solid var(--nether-soul); outline-offset: 3px; }
-.nether-check-card input:disabled + .nether-check-card__box, .eula-card input:disabled + .nether-check-card__box { opacity: .5; }
-.nether-check-card > span:last-child { display: grid; min-width: 0; gap: 4px; }
-.nether-check-card strong { color: var(--nether-text); font-size: 11px; }
-.nether-check-card small { color: var(--nether-dim); font-size: 10px; }
-.nether-check-card:has(input:disabled) { cursor: not-allowed; opacity: .65; }
 .security-badges { display: flex; flex-wrap: wrap; align-content: center; gap: 7px; }
 .security-badges span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 7px; color: var(--nether-muted); background: rgba(255,255,255,.025); font: 9px 'JetBrains Mono', monospace; }
 .security-badges span svg { color: var(--nether-soul); }
 .eula-card { position: relative; display: flex; align-items: flex-start; gap: 10px; min-height: 48px; padding: 12px; border: 1px solid rgba(255,184,117,.18); border-radius: 11px; color: var(--nether-muted); background: rgba(255,153,64,.045); font-size: 11px; line-height: 1.6; cursor: pointer; }
-.eula-card .nether-check-card__box { margin-top: 1px; }
+.eula-card .spring-check__box { margin-top: 1px; }
 .eula-card a { color: var(--nether-magma); font-weight: 700; text-decoration: underline; }
 .eula-card:has(input:disabled) { cursor: not-allowed; opacity: .62; }
 .deploy-submit { min-height: 48px; font-size: 12px; }

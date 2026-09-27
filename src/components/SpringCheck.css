@@ -1,0 +1,46 @@
+.spring-check__native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.spring-check__box {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 6px;
+  color: transparent;
+  background: rgba(0,0,0,.28);
+  transform-origin: center;
+  transition: border-color .16s ease, color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.spring-check__box svg { transform: scale(.55); opacity: 0; }
+.spring-check__native:checked + .spring-check__box {
+  color: #102718;
+  border-color: var(--nether-moss);
+  background: var(--nether-moss);
+  animation: spring-check-pop .28s cubic-bezier(.23,1,.32,1) both;
+}
+.spring-check__native:checked + .spring-check__box svg { transform: scale(1); opacity: 1; transition: transform .18s ease, opacity .12s ease; }
+.spring-check__native:focus-visible + .spring-check__box { outline: 2px solid var(--nether-soul); outline-offset: 3px; }
+.spring-check__native:disabled + .spring-check__box { opacity: .5; }
+.spring-check:has(.spring-check__native:disabled) { cursor: not-allowed; opacity: .68; }
+.spring-check__label { min-width: 0; }
+
+@keyframes spring-check-pop {
+  0% { transform: scale(.86); }
+  68% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spring-check__box,
+  .spring-check__box svg { transition-duration: .01ms; }
+  .spring-check__native:checked + .spring-check__box { animation: none; }
+}

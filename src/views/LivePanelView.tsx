@@ -29,7 +29,11 @@ import {
   X,
 } from 'lucide-react';
 import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
+import { GlideSelect, type GlideSelectOption } from '../components/GlideSelect.tsx';
 import { NetherCard } from '../components/NetherCard.tsx';
+import { RubberSegment, type SegmentOption } from '../components/RubberSegment.tsx';
+import { SpringCheck } from '../components/SpringCheck.tsx';
+import { SquishSwitch } from '../components/SquishSwitch.tsx';
 import {
   appendMetricSample,
   loadMetricHistory,
@@ -106,6 +110,19 @@ const defaultConfiguration: DeployConfiguration = {
   allowCheats: false,
   eulaAccepted: false,
 };
+
+const gameModeOptions: SegmentOption<DeployConfiguration['gamemode']>[] = [
+  { value: 'survival', label: 'Survie' },
+  { value: 'creative', label: 'Créatif' },
+  { value: 'adventure', label: 'Aventure' },
+];
+
+const difficultyOptions: SegmentOption<DeployConfiguration['difficulty']>[] = [
+  { value: 'peaceful', label: 'Paisible' },
+  { value: 'easy', label: 'Facile' },
+  { value: 'normal', label: 'Normale' },
+  { value: 'hard', label: 'Difficile' },
+];
 
 const pipelineSteps: Array<{ id: PipelineStep; label: string }> = [
   { id: 'preflight', label: 'Vérification système' },
@@ -504,6 +521,10 @@ export function LivePanelView() {
     setNotice('');
     if (!isValidForm(configuration)) {
       setFormError('Complète les champs requis, fournis 1 à 3 XUID numériques uniques et confirme l’EULA.');
+      return;
+    }
+    if (!versions.some((version) => version.version === configuration.version)) {
+      setFormError('Choisis une version Bedrock disponible dans le catalogue vérifié.');
       return;
     }
     if (status?.system.deployReady === false) {
@@ -1048,17 +1069,30 @@ export function LivePanelView() {
 
               <div className="cartridge-slot">
                 <div className="cartridge-slot__art"><Package size={26} /></div>
-                <label className="nether-field cartridge-slot__picker" htmlFor="bedrock-version">
-                  <span>Version du serveur <b>requise</b></span>
-                  <select id="bedrock-version" value={configuration.version} onChange={(event) => changeField('version', event.target.value)} className="nether-input" required>
-                    <option value="">Choisir une version…</option>
-                    {versions.map((version) => <option key={version.version} value={version.version}>{version.label} · {version.releaseDate}</option>)}
-                  </select>
-                </label>
-                <div className="cartridge-slot__info">
+                <div className="nether-field cartridge-slot__picker">
+                  <span id="bedrock-version-label">Version du serveur <b>requise</b></span>
+                  <GlideSelect
+                    options={versions.map((version): GlideSelectOption => ({
+                      value: version.version,
+                      label: version.label,
+                      tag: version.releaseDate,
+                    }))}
+                    value={configuration.version}
+                    onChange={(value) => changeField('version', value)}
+                    labelledBy="bedrock-version-label"
+                    describedBy="bedrock-version-status"
+                    required
+                    invalid={!selectedVersion}
+                  />
+                </div>
+                <div id="bedrock-version-status" className="cartridge-slot__info">
                   <span className="nether-eyebrow">SÉLECTION</span>
                   <strong>{selectedVersion?.label ?? (configuration.version || 'Aucune version')}</strong>
-                  <small>{selectedVersion ? `Sortie · ${selectedVersion.releaseDate}` : 'Catalogue vérifié du panneau'}</small>
+                  <small className={!selectedVersion && versions.length > 0 ? 'cartridge-slot__version-error' : undefined}>
+                    {selectedVersion
+                      ? `Sortie · ${selectedVersion.releaseDate}`
+                      : versions.length > 0 ? 'Version indisponible · choisis une version du catalogue' : 'Catalogue vérifié du panneau'}
+                  </small>
                 </div>
               </div>
               {versions.length === 0 && <p className="inline-error">Aucun ZIP vérifié disponible dans data/versions.json.</p>}
@@ -1072,18 +1106,26 @@ export function LivePanelView() {
                   <span>Nom du monde</span>
                   <input value={configuration.levelName} maxLength={64} disabled={isExistingDeployment} onChange={(event) => changeField('levelName', event.target.value)} className="nether-input" required />
                 </label>
-                <label className="nether-field">
-                  <span>Mode de jeu</span>
-                  <select value={configuration.gamemode} disabled={isExistingDeployment} onChange={(event) => changeField('gamemode', event.target.value as DeployConfiguration['gamemode'])} className="nether-input">
-                    <option value="survival">Survie</option><option value="creative">Créatif</option><option value="adventure">Aventure</option>
-                  </select>
-                </label>
-                <label className="nether-field">
-                  <span>Difficulté</span>
-                  <select value={configuration.difficulty} disabled={isExistingDeployment} onChange={(event) => changeField('difficulty', event.target.value as DeployConfiguration['difficulty'])} className="nether-input">
-                    <option value="peaceful">Paisible</option><option value="easy">Facile</option><option value="normal">Normale</option><option value="hard">Difficile</option>
-                  </select>
-                </label>
+                <div className="nether-field deploy-segment-field">
+                  <span id="deploy-gamemode-label">Mode de jeu</span>
+                  <RubberSegment
+                    options={gameModeOptions}
+                    value={configuration.gamemode}
+                    onChange={(value) => changeField('gamemode', value)}
+                    labelledBy="deploy-gamemode-label"
+                    disabled={isExistingDeployment}
+                  />
+                </div>
+                <div className="nether-field deploy-segment-field">
+                  <span id="deploy-difficulty-label">Difficulté</span>
+                  <RubberSegment
+                    options={difficultyOptions}
+                    value={configuration.difficulty}
+                    onChange={(value) => changeField('difficulty', value)}
+                    labelledBy="deploy-difficulty-label"
+                    disabled={isExistingDeployment}
+                  />
+                </div>
                 <label className="nether-field">
                   <span>Joueurs maximum</span>
                   <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={isExistingDeployment} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
@@ -1119,11 +1161,13 @@ export function LivePanelView() {
               </div>
 
               <div className="deploy-options-grid">
-                <label className="nether-check-card">
-                  <input type="checkbox" checked={configuration.allowCheats} disabled={isExistingDeployment} onChange={(event) => changeField('allowCheats', event.target.checked)} />
-                  <span className="nether-check-card__box"><Check size={13} /></span>
-                  <span><strong>Autoriser les commandes</strong><small>Cheats et commandes de jeu</small></span>
-                </label>
+                <SquishSwitch
+                  checked={configuration.allowCheats}
+                  onChange={(checked) => changeField('allowCheats', checked)}
+                  label="Autoriser les commandes"
+                  description="Cheats et commandes de jeu"
+                  disabled={isExistingDeployment}
+                />
                 <div className="security-badges">
                   <span><LockKeyhole size={13} /> Auth Bedrock</span>
                   <span><Wifi size={13} /> UDP 19132</span>
@@ -1131,15 +1175,18 @@ export function LivePanelView() {
                 </div>
               </div>
 
-              <label className="eula-card">
-                <input type="checkbox" checked={configuration.eulaAccepted} disabled={isExistingDeployment} onChange={(event) => changeField('eulaAccepted', event.target.checked)} />
-                <span className="nether-check-card__box"><Check size={13} /></span>
-                <span>J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">EULA Minecraft</a>. Si le binaire affiche un prompt connu, le backend y répondra automatiquement; aucun fichier EULA non vérifié ne sera inventé.</span>
-              </label>
+              <SpringCheck
+                className="eula-card"
+                checked={configuration.eulaAccepted}
+                onChange={(checked) => changeField('eulaAccepted', checked)}
+                disabled={isExistingDeployment}
+              >
+                J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">EULA Minecraft</a>. Si le binaire affiche un prompt connu, le backend y répondra automatiquement; aucun fichier EULA non vérifié ne sera inventé.
+              </SpringCheck>
 
               <motion.button
                 type="submit"
-                disabled={isPipelineBusy || !isValidForm(configuration) || versions.length === 0 || system?.deployReady === false}
+                disabled={isPipelineBusy || !isValidForm(configuration) || !selectedVersion || system?.deployReady === false}
                 whileTap={reduceMotion ? undefined : { scale: 0.99 }}
                 className="nether-btn nether-btn--primary nether-btn--wide deploy-submit"
               >
