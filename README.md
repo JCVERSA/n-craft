@@ -4,7 +4,7 @@ Panneau privé pour **une seule instance Bedrock Dedicated Server** dans le cont
 
 ## Installation dans le conteneur existant
 
-Sur un conteneur Debian/Ubuntu amd64 avec accès root, l’installateur vérifie les prérequis, installe Node.js 22 si nécessaire, récupère/actualise le clone Git et construit le panneau. Portwarp est le fournisseur par défaut : `pwrp` v0.3.7 est téléchargé depuis le domaine officiel et accepté uniquement si son SHA-256 correspond à la somme officielle épinglée. Playit reste une option de secours avec ses binaires officiels v1.0.10 vérifiés ; Localtonet est conservé comme alternative inactive par défaut. Aucun script Portwarp n’est exécuté à l’aveugle en root. Pour lancer l’installateur depuis GitHub :
+Sur un conteneur Debian/Ubuntu amd64 avec accès root, l’installateur vérifie les prérequis, installe les paquets système manquants utilisés par N-Craft (dont `dpkg-deb` et `ldd`) ainsi que Node.js 22 si nécessaire, récupère/actualise le clone Git, installe toutes les dépendances verrouillées avec `npm ci` et construit le panneau. La vérification OpenPGP des métadonnées Ubuntu est fournie par la dépendance Node installée automatiquement ; `gpgv` n’est pas requis. Portwarp est le fournisseur par défaut : `pwrp` v0.3.7 est téléchargé depuis le domaine officiel et accepté uniquement si son SHA-256 correspond à la somme officielle épinglée. Playit reste une option de secours avec ses binaires officiels v1.0.10 vérifiés ; Localtonet est conservé comme alternative inactive par défaut. Aucun script Portwarp n’est exécuté à l’aveugle en root. Pour lancer l’installateur depuis GitHub :
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JCVERSA/n-craft/arena/01a0e06a-n-craft/scripts/install.sh -o /tmp/ncraft-install.sh
@@ -29,7 +29,7 @@ ncraft setup
 ncraft start
 ```
 
-Prérequis runtime : Linux x86_64, glibc 2.29+, `libcurl.so.4`, Node.js 20.19+ ou 22.12+ (Node 22 recommandé), et npm. L’installateur peut installer Node 22 et `libcurl4` avec apt lorsqu’il est lancé en root. Sur un conteneur non-root, installe ces dépendances au préalable. L’architecture ARM n’est pas prise en charge par le binaire Bedrock de ce projet.
+Prérequis runtime : Linux x86_64, glibc 2.29+, `libcurl.so.4`, `dpkg-deb`, `ldd`, Node.js 20.19+ ou 22.12+ (Node 22 recommandé), et npm. `scripts/install.sh`, lorsqu’il est lancé en root avec apt, installe Node 22, `libcurl4` et les outils système de base si nécessaire, puis lance `ncraft setup`. `ncraft setup` installe aussi `dpkg` et `libc-bin` si `dpkg-deb` ou `ldd` manque, dès qu’il a les privilèges root et apt. Sur un conteneur non-root, Node/npm et les paquets système doivent être disponibles ; en leur absence, le setup affiche le prérequis exact et s’arrête sans toucher aux mondes. `OpenPGP.js` est installé par `npm ci` ; aucun paquet `gpgv` séparé n’est nécessaire. L’architecture ARM n’est pas prise en charge par le binaire Bedrock de ce projet.
 
 Certaines anciennes versions BDS exigent OpenSSL 1.1, désormais en fin de vie. N-Craft inspecte le binaire avant de démarrer ou d’arrêter un serveur existant ; si ces bibliothèques manquent, il ne les prépare que pour cette version, dans `DATA_DIR/runtime/`, après validation de la signature Ubuntu `InRelease`, du hash de l’index et du paquet focal. Il n’installe pas de paquet global, ne crée pas de lien vers OpenSSL 3 et n’écrase pas un runtime local incomplet. Le contrôle et le téléchargement se font avant l’arrêt du serveur actuellement en ligne.
 
@@ -47,7 +47,7 @@ ncraft restart     redémarre le panneau
 ncraft status      état du panneau, health HTTP, mémoire et variables masquées
 ncraft logs        suit les journaux du panneau
 ncraft update      met à jour arena/01a0e06a-n-craft, npm ci et build sans Deploy
-ncraft doctor      diagnostic Node, tunnel sélectionné, build, .env, libcurl et mémoire
+ncraft doctor      diagnostic Node, OpenPGP, outils système, tunnel sélectionné, build, .env, libcurl et mémoire
 ncraft env         menu interactif .env ; les secrets sont masqués
 ncraft env list    affiche la configuration sans révéler les secrets
 ncraft env get CLE lit une valeur ; --reveal est nécessaire pour un secret

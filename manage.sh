@@ -46,6 +46,27 @@ is_executable_setting() {
   fi
 }
 
+has_openpgp_module() {
+  (cd "$APP_DIR" && node --input-type=module -e 'await import("openpgp")') >/dev/null 2>&1
+}
+
+ensure_system_command() {
+  local binary="$1" package="$2" hint="$3"
+  command -v "$binary" >/dev/null 2>&1 && return 0
+  if [[ "$EUID" -ne 0 ]] || ! command -v apt-get >/dev/null 2>&1; then
+    fail "$hint"
+    return 1
+  fi
+  step "Installation automatique du prérequis $binary ($package)"
+  if ! DEBIAN_FRONTEND=noninteractive apt-get update ||
+    ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$package"; then
+    fail "Impossible d’installer $package automatiquement ; aucune donnée Bedrock n’a été modifiée."
+    return 1
+  fi
+  command -v "$binary" >/dev/null 2>&1 || { fail "$binary reste introuvable après l’installation de $package."; return 1; }
+  ok "$binary installé et prêt."
+}
+
 raw_data_dir="${DATA_DIR:-$(read_env DATA_DIR)}"
 if [[ -z "$raw_data_dir" ]]; then raw_data_dir=data; fi
 if [[ "$raw_data_dir" = /* ]]; then DATA_DIR="$raw_data_dir"; else DATA_DIR="$APP_DIR/$raw_data_dir"; fi
@@ -240,6 +261,8 @@ cmd_setup() {
     return 1
   fi
   command -v npm >/dev/null 2>&1 || { fail 'npm est introuvable.'; return 1; }
+  ensure_system_command dpkg-deb dpkg 'dpkg-deb est requis pour extraire, dans DATA_DIR uniquement, le paquet OpenSSL local vérifié.' || return 1
+  ensure_system_command ldd libc-bin 'ldd est requis pour vérifier les dépendances ELF de Bedrock.' || return 1
   node "$ENV_HELPER" init || return 1
   node "$ENV_HELPER" migrate-tunnel-provider-default >/dev/null || warn 'Migration du fournisseur .env impossible ; vérifie les permissions de .env.'
   if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; export PATH; fi
@@ -254,6 +277,13 @@ cmd_setup() {
   fi
   step 'Installation reproductible des dépendances (npm ci)'
   (cd "$APP_DIR" && npm ci --no-audit --no-fund) || { fail 'npm ci a échoué ; aucune donnée Bedrock n’a été supprimée.'; return 1; }
+  step 'Vérification du vérificateur de signature Ubuntu (OpenPGP.js)'
+  if has_openpgp_module; then
+    ok 'OpenPGP.js est installé ; gpgv système n’est pas requis.'
+  else
+    fail 'OpenPGP.js est absent après npm ci ; vérifie le réseau npm et relance ncraft setup.'
+    return 1
+  fi
   step 'Build du panneau'
   (cd "$APP_DIR" && npm run build) || { fail 'Build échoué ; aucune donnée Bedrock n’a été supprimée.'; return 1; }
   [[ -f "$APP_DIR/build/server.js" && -f "$APP_DIR/dist/index.html" ]] || { fail 'Fichiers de build attendus absents.'; return 1; }
@@ -405,6 +435,14 @@ cmd_doctor() {
   if node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit((a===20&&b>=19)||(a===22&&b>=12)||a>22?0:1)' 2>/dev/null; then ok "Node.js $node_version"; else warn "Node.js $node_version ; 20.19+ ou 22.12+ requis."; failed=1; fi
   command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || { warn 'npm absent.'; failed=1; }
   command -v git >/dev/null 2>&1 && ok "git $(git --version | awk '{print $3}')" || warn 'git absent.'
+  if has_openpgp_module; then
+    ok 'OpenPGP.js présent pour vérifier les signatures Ubuntu ; gpgv système n’est pas requis.'
+  else
+    warn 'OpenPGP.js absent ; lance ncraft setup pour installer toutes les dépendances.'
+    failed=1
+  fi
+  command -v dpkg-deb >/dev/null 2>&1 && ok 'dpkg-deb présent.' || { warn 'dpkg-deb absent ; lance ncraft setup en root pour installer dpkg automatiquement.'; failed=1; }
+  command -v ldd >/dev/null 2>&1 && ok 'ldd présent.' || { warn 'ldd absent ; lance ncraft setup en root pour installer libc-bin automatiquement.'; failed=1; }
   tunnel_provider="${TUNNEL_PROVIDER:-$(read_env TUNNEL_PROVIDER)}"; tunnel_provider="${tunnel_provider:-portwarp}"
   tunnel_provider="${tunnel_provider,,}"
   case "$tunnel_provider" in portwarp|localtonet|playit) ;; *) tunnel_provider=portwarp ;; esac
@@ -447,6 +485,8 @@ cmd_update() {
   local dirty was_running=0 old_rev new_rev code
   dirty="$(git -C "$APP_DIR" status --porcelain --untracked-files=normal)"
   [[ -z "$dirty" ]] || { fail 'Modifications locales détectées ; update annulé sans toucher aux fichiers.'; return 1; }
+  ensure_system_command dpkg-deb dpkg 'dpkg-deb est requis pour extraire, dans DATA_DIR uniquement, le paquet OpenSSL local vérifié.' || return 1
+  ensure_system_command ldd libc-bin 'ldd est requis pour vérifier les dépendances ELF de Bedrock.' || return 1
   get_panel_pid && was_running=1
   if (( was_running )); then
     cmd_stop || return 1
@@ -471,8 +511,8 @@ cmd_update() {
   fi
   if [[ -n "${HOME:-}" && -d "$HOME/.local/bin" ]]; then PATH="$HOME/.local/bin:$PATH"; export PATH; fi
   step "Dépendances et build ($old_rev → $new_rev)"
-  if ! (cd "$APP_DIR" && npm ci --no-audit --no-fund && npm run build); then
-    warn 'Update/build échoué. Les données Bedrock et .env sont conservés.'
+  if ! (cd "$APP_DIR" && npm ci --no-audit --no-fund && node --input-type=module -e 'await import("openpgp")' && npm run build); then
+    warn 'Installation des dépendances OpenPGP/npm ou build échoué. Les données Bedrock et .env sont conservés.'
     (( was_running )) && cmd_start || true
     return 1
   fi
@@ -486,14 +526,14 @@ Nebula Craft — gestion de l’installation et du panneau
 
 Usage : ncraft <commande>
 
-  setup                 Vérifie/installe pwrp, prépare .env et construit le panneau
+  setup                 Vérifie les prérequis, installe pwrp et npm ci + build (apt si root)
   start                 Démarre le panneau en arrière-plan dans le conteneur
   stop                  Arrêt gracieux du panneau et de ses enfants
   restart               Redémarre le panneau
   status                État du processus, santé HTTP, mémoire et configuration masquée
   logs                  Suit les logs du panneau
   update                Pull --ff-only + npm ci + build, sans toucher au monde Bedrock
-  doctor                Vérifie runtime, fichiers, le tunnel actif, libcurl et mémoire
+  doctor                Vérifie runtime, OpenPGP, outils système, fichiers, tunnel, libcurl et mémoire
   env                   Menu interactif de configuration .env
   env list              Liste .env en masquant les secrets
   env get CLE [--reveal] Lit une valeur (secrets masqués par défaut)
