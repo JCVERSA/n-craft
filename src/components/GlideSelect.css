@@ -98,6 +98,12 @@
   z-index: 20;
   width: var(--gs-menu-w);
   min-width: 100%;
+  max-height: min(360px, calc(100vh - 24px));
+  max-height: min(360px, calc(100dvh - 24px));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   padding: 4px;
   border-radius: var(--gs-radius);
   background: var(--gs-surface);
@@ -140,7 +146,7 @@
   position: relative;
   display: grid;
   gap: 1px;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .glide-select__pill {

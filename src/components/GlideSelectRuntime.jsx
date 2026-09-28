@@ -10,7 +10,6 @@ const SIZES = {
   md: { chip: 32, row: 30, font: 13 },
   lg: { chip: 44, row: 40, font: 14 }
 };
-const PAD = 4;
 const GAP = 1;
 const MENU_GAP = 6;
 const DEFAULT_OPTIONS = ['One', 'Two', 'Three'];
@@ -65,6 +64,7 @@ export default function GlideSelect({
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
+  const listRef = useRef(null);
   const pillRef = useRef(null);
   const instant = useRef(false);
   const closeTimer = useRef(undefined);
@@ -80,14 +80,18 @@ export default function GlideSelect({
     const root = rootRef.current;
     if (!el || !root) return;
     const r = root.getBoundingClientRect();
-    const need = el.offsetHeight + MENU_GAP;
-    setSide(
-      placement === 'bottom' && r.bottom + need > window.innerHeight
-        ? 'top'
-        : placement === 'top' && r.top - need < 0
-          ? 'bottom'
-          : placement
-    );
+    const viewportPadding = 12;
+    const roomBelow = Math.max(0, window.innerHeight - r.bottom - MENU_GAP - viewportPadding);
+    const roomAbove = Math.max(0, r.top - MENU_GAP - viewportPadding);
+    const desiredHeight = Math.min(el.scrollHeight, 360, Math.max(48, window.innerHeight - viewportPadding * 2));
+    const preferredSpace = placement === 'top' ? roomAbove : roomBelow;
+    const alternateSpace = placement === 'top' ? roomBelow : roomAbove;
+    const nextSide = preferredSpace < desiredHeight && alternateSpace > preferredSpace
+      ? placement === 'top' ? 'bottom' : 'top'
+      : placement;
+    const availableSpace = nextSide === 'top' ? roomAbove : roomBelow;
+    el.style.maxHeight = `${Math.max(48, Math.min(desiredHeight, availableSpace))}px`;
+    setSide(nextSide);
     el.style.transitionDuration = instant.current ? '0ms' : '';
     el.dataset.state = 'closed';
     void el.offsetHeight;
@@ -116,6 +120,11 @@ export default function GlideSelect({
     p.style.opacity = '1';
     instant.current = false;
   }, [active, phase, step]);
+
+  useLayoutEffect(() => {
+    if (phase !== 'open' || active === null) return;
+    listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, phase]);
 
   const open = viaKey => {
     if (disabled) return;
@@ -195,27 +204,45 @@ export default function GlideSelect({
   useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   const rowAt = y => {
-    const s = scrub.current;
-    if (!s) return null;
-    const i = Math.floor((y - s.top - PAD) / step);
-    return i >= 0 && i < items.length ? i : null;
+    const list = listRef.current;
+    if (!scrub.current || !list) return null;
+    const listTop = list.getBoundingClientRect().top;
+    const i = Math.floor((y - listTop) / step);
+    if (i < 0 || i >= items.length) return null;
+    const option = list.querySelector(`[data-index="${i}"]`);
+    const bounds = option?.getBoundingClientRect();
+    return bounds && y >= bounds.top && y <= bounds.bottom ? i : null;
   };
   const onListDown = e => {
     if (scrub.current) return;
+    if (e.pointerType === 'touch') {
+      scrub.current = { id: e.pointerId, touch: true, startX: e.clientX, startY: e.clientY, moved: false };
+      return;
+    }
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {}
-    scrub.current = { id: e.pointerId, top: e.currentTarget.getBoundingClientRect().top };
+    scrub.current = { id: e.pointerId };
     instant.current = true;
     setActive(rowAt(e.clientY));
   };
   const onListMove = e => {
     if (!scrub.current || scrub.current.id !== e.pointerId) return;
+    if (scrub.current.touch) {
+      if (Math.hypot(e.clientX - scrub.current.startX, e.clientY - scrub.current.startY) > 8) scrub.current.moved = true;
+      return;
+    }
     const i = rowAt(e.clientY);
     if (i !== active) setActive(i);
   };
   const onListUp = e => {
     if (!scrub.current || scrub.current.id !== e.pointerId) return;
+    if (scrub.current.touch) {
+      const i = e.type === 'pointerup' && !scrub.current.moved ? rowAt(e.clientY) : null;
+      scrub.current = null;
+      if (i !== null) pick(i, false);
+      return;
+    }
     const i = e.type === 'pointerup' ? rowAt(e.clientY) : null;
     scrub.current = null;
     if (i !== null) pick(i, false);
@@ -289,6 +316,7 @@ export default function GlideSelect({
       {phase !== 'closed' ? (
         <div ref={menuRef} className="glide-select__menu" data-state="open" data-side={side} data-align={align}>
           <div
+            ref={listRef}
             id={`${id}-list`}
             role="listbox"
             aria-label={labelledBy ? undefined : ariaLabel}
