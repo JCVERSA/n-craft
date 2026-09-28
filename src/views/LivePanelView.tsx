@@ -17,6 +17,7 @@ import {
   EyeOff,
   FileUp,
   Globe,
+  Info,
   Layers,
   Loader2,
   LockKeyhole,
@@ -36,6 +37,9 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
+import { AboutModal } from '../components/AboutModal.tsx';
+import { useDialogs } from '../components/DialogProvider.tsx';
+import { NetherAmbientBackground } from '../components/NetherAmbientBackground.tsx';
 import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
 import { GlideSelect, type GlideSelectOption } from '../components/GlideSelect.tsx';
 import { NetherCard } from '../components/NetherCard.tsx';
@@ -261,6 +265,8 @@ function hasConfigurationSettingsChanged(current: DeployConfiguration, next: Dep
 }
 
 export function LivePanelView() {
+  const dialogs = useDialogs();
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -704,9 +710,7 @@ export function LivePanelView() {
       : `Créer un nouveau monde « ${newWorldName.trim()} » dédié à BDS ${configuration.version}.`;
     const versionOperation = !currentConfig || currentConfig.version !== configuration.version;
     const confirmationMessage = [
-      versionOperation
-        ? `Déployer BDS ${configuration.version} dans ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} ?`
-        : `Démarrer le monde avec BDS ${configuration.version} ?`,
+      `Destination serveur : ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'}.`,
       worldDescription,
       versionOperation
         ? isExistingDeployment
@@ -716,9 +720,16 @@ export function LivePanelView() {
       'Bedrock doit être arrêté. Après cette opération, il démarrera automatiquement; le tunnel restera actif.',
       status?.system.memoryWarning ? 'Le conteneur est sous le budget mémoire recommandé ; un arrêt OOM est possible.' : '',
       status?.system.diskWarning && versionOperation ? `Espace disque détecté : DATA_DIR ${formatBytes(status.system.dataDiskFreeBytes)} libres / ${formatBytes(status.system.dataDiskRequiredBytes)} estimés${status.system.sharedDiskVolume === false ? ` ; BEDROCK_SERVER_DIR ${formatBytes(status.system.serverDiskFreeBytes)} libres / ${formatBytes(status.system.serverDiskRequiredBytes)} estimés` : status.system.sharedDiskVolume === null ? ' ; volume de BEDROCK_SERVER_DIR incertain' : ' ; volume partagé, archive + extraction incluses'}. Le déploiement reste autorisé, mais peut échouer si le volume est plein.` : '',
-      'Confirmer cette opération ?',
     ].filter(Boolean).join('\n\n');
-    if (!window.confirm(confirmationMessage)) return;
+    const confirmed = await dialogs.confirm({
+      title: versionOperation ? `Déployer BDS ${configuration.version} ?` : `Démarrer le monde avec BDS ${configuration.version} ?`,
+      message: confirmationMessage,
+      eyebrow: 'OPÉRATION BEDROCK · VÉRIFICATION',
+      tone: 'warning',
+      confirmLabel: versionOperation ? 'Déployer & démarrer' : 'Démarrer le monde',
+      cancelLabel: 'Annuler',
+    });
+    if (!confirmed) return;
 
     setBusyAction('deploy');
     try {
@@ -765,7 +776,17 @@ export function LivePanelView() {
       return;
     }
     const worldWarning = getWorldSettingsConfirmation(currentConfig, configuration);
-    if (worldWarning && !window.confirm(`${worldWarning}\n\nEnregistrer les réglages ? Bedrock restera arrêté.`)) return;
+    if (worldWarning) {
+      const confirmed = await dialogs.confirm({
+        title: 'Appliquer ces réglages ?',
+        message: `${worldWarning}\n\nBedrock restera arrêté; le tunnel ne sera pas coupé.`,
+        eyebrow: 'MODIFICATION DU MONDE',
+        tone: 'warning',
+        confirmLabel: 'Enregistrer les réglages',
+        cancelLabel: 'Revenir aux réglages',
+      });
+      if (!confirmed) return;
+    }
 
     setBusyAction('save-config');
     try {
@@ -871,8 +892,19 @@ export function LivePanelView() {
   };
 
   const handleDeleteWorld = async (world: ManagedWorld) => {
-    if (!window.confirm(`Suppression définitive du monde « ${world.name} » et de ses chunks ? Cette action est irréversible.`)) return;
-    const typedName = window.prompt(`Pour confirmer, saisis exactement le nom du monde : ${world.name}`);
+    const typedName = await dialogs.prompt({
+      title: `Supprimer « ${world.name} » ?`,
+      message: 'La suppression définitive de ce monde effacera ses chunks. Cette action est irréversible. Pour éviter une suppression accidentelle, saisis son nom exact ci-dessous.',
+      eyebrow: 'ACTION IRRÉVERSIBLE · MONDE BEDROCK',
+      tone: 'danger',
+      inputLabel: 'Nom exact du monde',
+      placeholder: world.name,
+      expectedValue: world.name,
+      helperText: `Saisis exactement « ${world.name} » pour activer la suppression.`,
+      confirmLabel: 'Supprimer définitivement',
+      cancelLabel: 'Conserver le monde',
+    });
+    if (typedName === null) return;
     if (typedName !== world.name) {
       setWorldManagerError('Suppression annulée : le nom saisi ne correspond pas exactement.');
       return;
@@ -978,9 +1010,15 @@ export function LivePanelView() {
   };
 
   const handleChatbotLink = async () => {
-    if (!window.confirm(
-      'N-Craft va démarrer une connexion Bedrock avec un compte Microsoft dédié. Si un code appareil est demandé, tu l’approuveras toi-même sur le site Microsoft officiel. Le compte ne doit pas être opérateur et occupera un emplacement joueur. Continuer ?',
-    )) return;
+    const confirmed = await dialogs.confirm({
+      title: 'Lier le compte Bedrock dédié ?',
+      message: 'N-Craft va démarrer une connexion Bedrock avec un compte Microsoft dédié. Si un code appareil est demandé, tu l’approuveras toi-même sur le site Microsoft officiel. Le compte ne doit pas être opérateur et occupera un emplacement joueur. Aucun mot de passe ne sera demandé à N-Craft.',
+      eyebrow: 'AUTORISATION MICROSOFT · ACTION EXPLICITE',
+      tone: 'warning',
+      confirmLabel: 'Continuer vers Microsoft',
+      cancelLabel: 'Pas maintenant',
+    });
+    if (!confirmed) return;
     setChatbotBusy(true);
     setChatbotFeedback('');
     try {
@@ -1016,8 +1054,18 @@ export function LivePanelView() {
   };
 
   const handleChatbotUnlink = async () => {
-    if (!window.confirm('Délier le compte dédié et supprimer définitivement son cache OAuth privé de DATA_DIR ?')) return;
-    const confirmation = window.prompt('Pour confirmer la suppression du profil, saisis exactement : SUPPRIMER');
+    const confirmation = await dialogs.prompt({
+      title: 'Délier le compte dédié ?',
+      message: 'Le profil Bedrock sera délié et son cache OAuth privé supprimé définitivement de DATA_DIR. Cette action ne peut pas être annulée.',
+      eyebrow: 'ACTION IRRÉVERSIBLE · COMPTE BEDROCK',
+      tone: 'danger',
+      inputLabel: 'Saisis SUPPRIMER pour confirmer',
+      placeholder: 'SUPPRIMER',
+      expectedValue: 'SUPPRIMER',
+      helperText: 'Le mot doit correspondre exactement, en majuscules.',
+      confirmLabel: 'Délier et supprimer',
+      cancelLabel: 'Annuler',
+    });
     if (confirmation !== 'SUPPRIMER') {
       setChatbotFeedback('Suppression annulée.');
       return;
@@ -1054,7 +1102,15 @@ export function LivePanelView() {
   };
 
   const handleStop = async () => {
-    if (!window.confirm(`Arrêter uniquement bedrock_server ? Le tunnel ${tunnelProvider} restera en fonctionnement.`)) return;
+    const confirmed = await dialogs.confirm({
+      title: 'Arrêter le serveur Bedrock ?',
+      message: `Seul bedrock_server sera arrêté. Le tunnel ${tunnelProvider} restera en fonctionnement et le monde sera conservé.`,
+      eyebrow: 'ARRÊT GRACIEUX · BEDROCK',
+      tone: 'warning',
+      confirmLabel: 'Arrêter Bedrock',
+      cancelLabel: 'Garder le serveur en ligne',
+    });
+    if (!confirmed) return;
     setBusyAction('stop');
     setNotice('');
     try {
@@ -1111,6 +1167,7 @@ export function LivePanelView() {
   if (authLoading) {
     return (
       <main className="ncraft-shell ncraft-auth-shell">
+        <NetherAmbientBackground />
         <div className="ncraft-auth-orbit" aria-hidden="true" />
         <motion.div
           className="ncraft-loading-card"
@@ -1128,6 +1185,7 @@ export function LivePanelView() {
   if (!authenticated) {
     return (
       <main className="ncraft-shell ncraft-auth-shell">
+        <NetherAmbientBackground />
         <div className="ncraft-auth-orbit" aria-hidden="true" />
         <motion.div
           className="ncraft-login-layout"
@@ -1346,6 +1404,7 @@ export function LivePanelView() {
       <div className="ncraft-ambient ncraft-ambient--magma" aria-hidden="true" />
       <div className="ncraft-ambient ncraft-ambient--portal" aria-hidden="true" />
       <div className="ncraft-grid-glow" aria-hidden="true" />
+      <NetherAmbientBackground />
 
       <header className="ncraft-header">
         <div className="ncraft-header__inner">
@@ -1391,6 +1450,17 @@ export function LivePanelView() {
 
           <div className="ncraft-header__actions">
             <StatusPill status={currentServerStatus} />
+            <motion.button
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+              className="icon-button about-trigger"
+              aria-label="À propos de Nebula Craft"
+              title="À propos de Nebula Craft"
+            >
+              <Info size={17} aria-hidden="true" />
+              <span>À propos</span>
+            </motion.button>
             <motion.button
               type="button"
               onClick={() => void handleLogout()}
@@ -2265,6 +2335,10 @@ export function LivePanelView() {
           );
         })}
       </nav>
+
+      <AnimatePresence initial={false}>
+        {aboutOpen && <AboutModal key="about" onClose={() => setAboutOpen(false)} />}
+      </AnimatePresence>
     </main>
   );
 }

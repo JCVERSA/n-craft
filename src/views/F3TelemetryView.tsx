@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { useServer } from '../context/ServerContext.tsx';
+import { useDialogs } from '../components/DialogProvider.tsx';
 import { ASSETS } from '../types/server.ts';
 import { playClickSound, playErrorSound, playXpSound } from '../utils/audio.ts';
 
@@ -18,6 +19,7 @@ export function F3TelemetryView() {
     clearLogs,
   } = useServer();
 
+  const dialogs = useDialogs();
   const [terminalInput, setTerminalInput] = useState('');
   const [newXuid, setNewXuid] = useState('');
   const [frameCounter, setFrameCounter] = useState(189204);
@@ -29,10 +31,15 @@ export function F3TelemetryView() {
     setTerminalInput('');
   };
 
-  const handleAppendOperator = () => {
+  const handleAppendOperator = async () => {
     if (!newXuid.trim()) return;
     if (!/^\d{16}$/.test(newXuid.trim())) {
-      alert('Bedrock Error: Operator registration requires a valid 16-digit numeric Xbox XUID.');
+      await dialogs.alert({
+        title: 'XUID invalide',
+        message: 'L’identifiant Xbox (XUID) doit contenir exactement 16 chiffres.',
+        eyebrow: 'VALIDATION · OPÉRATEUR',
+        tone: 'warning',
+      });
       return;
     }
     addOperator('Agent_' + newXuid.slice(-4), newXuid.trim(), 4);
@@ -47,6 +54,18 @@ export function F3TelemetryView() {
       setIsPollingF3(false);
       playXpSound();
     }, 400);
+  };
+
+  const handleEmergencyStop = async () => {
+    const confirmed = await dialogs.confirm({
+      title: 'Arrêter immédiatement Bedrock ?',
+      message: 'Cette action d’urgence déconnectera tous les joueurs du serveur.',
+      eyebrow: 'ARRÊT D’URGENCE · BEDROCK',
+      tone: 'danger',
+      confirmLabel: 'Arrêter le serveur',
+      cancelLabel: 'Annuler',
+    });
+    if (confirmed) stopServer();
   };
 
   return (
@@ -86,11 +105,7 @@ export function F3TelemetryView() {
 
           <button
             type="button"
-            onClick={() => {
-              if (confirm('EMERGENCY SIGKILL BDS: Force terminate Bedrock Dedicated Server daemon immediately?')) {
-                stopServer();
-              }
-            }}
+            onClick={() => { void handleEmergencyStop(); }}
             className="mc-bevel bg-[#93000a] text-[#ffdad6] px-2 py-0.5 font-bold hover:bg-[#ff5555] hover:text-black flex items-center gap-1"
           >
             <span className="material-symbols-outlined text-sm">dangerous</span>

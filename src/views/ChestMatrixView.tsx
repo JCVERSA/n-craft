@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useServer } from '../context/ServerContext.tsx';
+import { useDialogs } from '../components/DialogProvider.tsx';
 import { ASSETS } from '../types/server.ts';
 import { playClickSound, playAnvilSound } from '../utils/audio.ts';
 
@@ -22,6 +23,7 @@ export function ChestMatrixView() {
     executeCommand,
   } = useServer();
 
+  const dialogs = useDialogs();
   const [drawerInput, setDrawerInput] = useState('');
   const [newXuid, setNewXuid] = useState('');
   const [activeSlot, setActiveSlot] = useState<number | null>(6);
@@ -32,10 +34,15 @@ export function ChestMatrixView() {
     setDrawerInput('');
   };
 
-  const handleAddOp = () => {
+  const handleAddOp = async () => {
     if (!newXuid.trim()) return;
     if (!/^\d{16}$/.test(newXuid.trim())) {
-      alert('Bedrock Error: Numeric 16-digit Xbox XUID required.');
+      await dialogs.alert({
+        title: 'XUID invalide',
+        message: 'L’identifiant Xbox (XUID) doit contenir exactement 16 chiffres.',
+        eyebrow: 'VALIDATION · OPÉRATEUR',
+        tone: 'warning',
+      });
       return;
     }
     addOperator('Enscribed_OP', newXuid.trim(), 4);

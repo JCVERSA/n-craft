@@ -1086,6 +1086,8 @@ select:focus-visible {
 /* Private access screen: decorative local artwork only; no mock server data. */
 .ncraft-auth-shell { position: relative; overflow: visible; padding: clamp(18px, 4vw, 42px); }
 .ncraft-login-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: min(100%, 1080px);
   grid-template-columns: minmax(0,1fr) minmax(380px,460px);
@@ -1237,4 +1239,235 @@ select:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .ncraft-nav button:active, .mobile-dock button:active { transform: none !important; }
+}
+
+/* Noto matrix motif, rebuilt as a restrained Nether-palette ambient layer. */
+.ncraft-rune-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 10%, #000 72%, transparent 100%);
+}
+.ncraft-rune-field__grid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  grid-auto-rows: clamp(34px, 4.7vh, 46px);
+  align-content: start;
+  justify-content: center;
+  padding: 5px 8px;
+}
+.ncraft-rune-field__glyph {
+  display: grid;
+  place-items: center;
+  color: rgba(197,160,255,.16);
+  font: clamp(11px, .9vw, 14px)/1 'Space Mono', monospace;
+  opacity: .28;
+  text-shadow: 0 0 8px currentColor;
+  transition: color .6s ease, opacity .6s ease;
+}
+.ncraft-rune-field__glyph--magma { color: rgba(255,184,117,.18); }
+.ncraft-rune-field__glyph--moss { color: rgba(155,230,176,.15); }
+.ncraft-rune-field__grid > span:nth-child(19n + 2),
+.ncraft-rune-field__grid > span:nth-child(37n + 10),
+.ncraft-rune-field__grid > span:nth-child(53n + 5) {
+  animation: ncraft-rune-glow 16s ease-in-out infinite var(--rune-delay, 0s);
+}
+@keyframes ncraft-rune-glow {
+  0%, 100% { opacity: .2; }
+  50% { opacity: .62; }
+}
+.ncraft-rune-field--static .ncraft-rune-field__grid > span { animation: none !important; }
+
+/* Accessible, shared product dialogs. */
+.ncraft-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(12px, 3vw, 32px);
+  background: rgba(5,4,7,.78);
+  backdrop-filter: blur(14px) saturate(.82);
+  -webkit-backdrop-filter: blur(14px) saturate(.82);
+}
+.ncraft-modal {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: min(100%, 540px);
+  max-height: min(90svh, 820px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,184,117,.22);
+  border-radius: 20px;
+  outline: none;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(197,160,255,.105), transparent 38%),
+    linear-gradient(150deg, rgba(31,26,34,.985), rgba(12,10,14,.99));
+  box-shadow: 0 32px 100px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.025), inset 0 1px rgba(255,255,255,.07);
+}
+.ncraft-modal--compact { width: min(100%, 440px); }
+.ncraft-modal--wide { width: min(100%, 680px); }
+.ncraft-modal--warning { border-color: rgba(255,184,117,.30); }
+.ncraft-modal--danger { border-color: rgba(255,143,146,.34); }
+.ncraft-modal--magma { border-color: rgba(255,184,117,.28); }
+.ncraft-modal__orbit {
+  position: absolute;
+  z-index: -1;
+  top: -116px;
+  right: -93px;
+  width: 230px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(197,160,255,.13);
+  border-radius: 50%;
+  box-shadow: 0 0 64px rgba(197,160,255,.05), inset 0 0 42px rgba(255,184,117,.035);
+  pointer-events: none;
+}
+.ncraft-modal__orbit--inner { top: -78px; right: -55px; width: 155px; border-color: rgba(255,184,117,.12); }
+.ncraft-modal__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 82px;
+  padding: 17px 20px;
+  border-bottom: 1px solid rgba(234,214,245,.09);
+  background: linear-gradient(90deg, rgba(255,184,117,.035), transparent 64%);
+}
+.ncraft-modal__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(197,160,255,.20);
+  border-radius: 13px;
+  color: var(--nether-portal);
+  background: rgba(197,160,255,.085);
+  box-shadow: inset 0 1px rgba(255,255,255,.07);
+}
+.ncraft-modal__icon--magma,
+.ncraft-modal__icon--warning { color: var(--nether-magma); border-color: rgba(255,184,117,.24); background: rgba(255,184,117,.09); }
+.ncraft-modal__icon--danger { color: var(--nether-danger); border-color: rgba(255,143,146,.25); background: rgba(190,58,65,.12); }
+.ncraft-modal__heading { display: grid; min-width: 0; gap: 4px; flex: 1; }
+.ncraft-modal__eyebrow { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.ncraft-modal__heading h2 { margin: 0; color: var(--nether-text); font-size: clamp(16px, 2.2vw, 19px); font-weight: 700; line-height: 1.25; }
+.ncraft-modal__close {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 11px;
+  color: var(--nether-muted);
+  background: rgba(255,255,255,.035);
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.ncraft-modal__close:hover { transform: rotate(4deg); border-color: rgba(255,184,117,.25); color: var(--nether-text); background: rgba(255,184,117,.08); }
+.ncraft-modal__body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; scrollbar-gutter: stable; }
+.ncraft-dialog { display: grid; gap: 20px; }
+.ncraft-dialog__message { display: grid; gap: 11px; color: #d4cbd7; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.ncraft-dialog__message p { margin: 0; white-space: pre-line; }
+.ncraft-dialog__message p + p { padding-top: 11px; border-top: 1px solid rgba(255,255,255,.06); }
+.ncraft-dialog__field { display: grid; gap: 8px; }
+.ncraft-dialog__field label { color: var(--nether-text); font-size: 12px; font-weight: 700; }
+.ncraft-dialog__field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid rgba(197,160,255,.22);
+  border-radius: 11px;
+  color: var(--nether-text);
+  background: rgba(8,7,10,.72);
+  font: 13px 'JetBrains Mono', monospace;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.ncraft-dialog__field input::placeholder { color: #877d8c; }
+.ncraft-dialog__field input:focus { border-color: rgba(105,229,234,.55); background: rgba(8,7,10,.9); box-shadow: 0 0 0 3px rgba(105,229,234,.09); outline: none; }
+.ncraft-dialog__field input[aria-invalid="true"] { border-color: rgba(255,143,146,.58); box-shadow: 0 0 0 3px rgba(255,143,146,.08); }
+.ncraft-dialog__hint { color: var(--nether-dim); font-size: 11px; line-height: 1.5; }
+.ncraft-dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding-top: 3px; }
+.ncraft-dialog__actions .nether-btn { min-width: 128px; min-height: 44px; }
+.ncraft-dialog__actions .nether-btn:disabled { cursor: not-allowed; opacity: .42; box-shadow: none; }
+
+/* Noto's About card motif, rebuilt without skew/hover-only content. */
+.ncraft-about { display: grid; gap: 12px; }
+.ncraft-about-card {
+  position: relative;
+  overflow: hidden;
+  padding: 0 18px 17px;
+  border: 1px solid rgba(234,214,245,.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 95% 0, rgba(197,160,255,.08), transparent 42%),
+    linear-gradient(150deg, rgba(35,29,38,.9), rgba(13,11,15,.88));
+  box-shadow: 0 18px 44px rgba(0,0,0,.26), inset 0 1px rgba(255,255,255,.045);
+}
+.ncraft-about-card__chrome { display: flex; height: 42px; align-items: center; gap: 7px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.ncraft-about-card__dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+.ncraft-about-card__dot--magma { color: #ff9d84; background: #ff9d84; }
+.ncraft-about-card__dot--portal { color: #e1bd81; background: #e1bd81; }
+.ncraft-about-card__dot--moss { color: #9be6b0; background: #9be6b0; }
+.ncraft-about-card__chrome-label { margin-left: auto; color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .13em; }
+.ncraft-about-card__intro { display: grid; grid-template-columns: 52px minmax(0,1fr); align-items: start; gap: 14px; padding: 20px 0 17px; }
+.ncraft-about-card__mark { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid rgba(255,184,117,.25); border-radius: 15px; color: #2a1b13; background: linear-gradient(145deg,#ffd095,#ff8757 58%,#b773dc); box-shadow: 0 9px 24px rgba(255,122,44,.15), inset 0 1px rgba(255,255,255,.5); }
+.ncraft-about-card__intro .nether-eyebrow { margin: 2px 0 5px; font-size: 9px; }
+.ncraft-about-card__intro h3 { margin: 0; color: var(--nether-text); font-size: 25px; letter-spacing: -.035em; line-height: 1.15; }
+.ncraft-about-card__intro p:last-child { max-width: 58ch; margin: 8px 0 0; color: var(--nether-muted); font-size: 12px; line-height: 1.65; }
+.ncraft-about-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.ncraft-about-fact { display: grid; min-width: 0; gap: 7px; padding: 11px 12px; border: 1px solid rgba(255,255,255,.065); border-radius: 11px; background: rgba(8,7,10,.42); }
+.ncraft-about-fact span { display: flex; align-items: center; gap: 7px; color: var(--nether-dim); font-size: 10px; }
+.ncraft-about-fact span svg { color: var(--nether-portal); }
+.ncraft-about-fact strong { color: var(--nether-text); font: 11px 'JetBrains Mono', monospace; overflow-wrap: anywhere; }
+.ncraft-about-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 11px; }
+.ncraft-about-links a { display: flex; min-width: 0; min-height: 58px; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(197,160,255,.13); border-radius: 11px; color: var(--nether-portal); background: rgba(197,160,255,.045); transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.ncraft-about-links a:hover { transform: translateY(-1px); border-color: rgba(197,160,255,.3); background: rgba(197,160,255,.09); }
+.ncraft-about-links a > svg:last-child { flex: 0 0 auto; margin-left: auto; color: var(--nether-dim); }
+.ncraft-about-links a > span { display: grid; min-width: 0; gap: 2px; }
+.ncraft-about-links strong { color: var(--nether-text); font-size: 11px; }
+.ncraft-about-links small { color: var(--nether-dim); font-size: 9px; line-height: 1.35; }
+.ncraft-about-credit { margin: 13px 0 0; color: var(--nether-dim); font-size: 10px; line-height: 1.55; }
+.ncraft-about-footnote { margin: 0; color: #8e8492; font-size: 10px; line-height: 1.5; text-align: center; }
+.about-trigger span { display: none; }
+
+@media (min-width: 1320px) {
+  .about-trigger span { display: inline; }
+}
+@media (max-width: 700px) {
+  .ncraft-modal-backdrop { align-items: center; padding: 10px; }
+  .ncraft-modal { max-height: min(92svh, 820px); border-radius: 16px; }
+  .ncraft-modal__header { min-height: 72px; gap: 10px; padding: 14px; }
+  .ncraft-modal__icon, .ncraft-modal__close { width: 40px; height: 40px; }
+  .ncraft-modal__body { padding: 15px; }
+  .ncraft-dialog { gap: 16px; }
+  .ncraft-dialog__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .ncraft-dialog--alert .ncraft-dialog__actions { grid-template-columns: 1fr; }
+  .ncraft-dialog__actions .nether-btn { min-width: 0; width: 100%; padding-inline: 8px; }
+  .ncraft-about-card { padding-inline: 13px; }
+  .ncraft-about-card__intro { grid-template-columns: 43px minmax(0,1fr); gap: 11px; }
+  .ncraft-about-card__mark { width: 43px; height: 43px; border-radius: 12px; }
+  .ncraft-about-card__intro h3 { font-size: 22px; }
+  .ncraft-about-links { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .ncraft-modal-backdrop { padding: 7px; }
+  .ncraft-modal__header { padding: 12px; }
+  .ncraft-modal__eyebrow { font-size: 8px; }
+  .ncraft-modal__body { padding: 13px; }
+  .ncraft-about-facts { grid-template-columns: 1fr; }
+  .ncraft-about-fact { padding: 9px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ncraft-rune-field__grid > span,
+  .ncraft-about-links a,
+  .ncraft-modal__close { animation: none !important; transition: none !important; }
 }

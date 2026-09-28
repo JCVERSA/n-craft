@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { useDialogs } from './DialogProvider.tsx';
 import { useServer } from '../context/ServerContext.tsx';
 
 interface HotbarAction {
@@ -97,6 +98,7 @@ const ACTIONS: HotbarAction[] = [
 ];
 
 export function HotbarDock() {
+  const dialogs = useDialogs();
   const {
     executeCommand,
     hotReloadDeploy,
@@ -106,7 +108,7 @@ export function HotbarDock() {
     addLog,
   } = useServer();
 
-  const handleSlotClick = (action: HotbarAction) => {
+  const handleSlotClick = async (action: HotbarAction) => {
     if (action.command) {
       executeCommand(action.command);
     } else if (action.actionKey === 'deploy') {
@@ -128,9 +130,15 @@ export function HotbarDock() {
         'success'
       );
     } else if (action.actionKey === 'stop') {
-      if (confirm('EMERGENCY: Stop the Dedicated Bedrock server? All players will be disconnected.')) {
-        stopServer();
-      }
+      const confirmed = await dialogs.confirm({
+        title: 'Arrêter le serveur Bedrock ?',
+        message: 'Tous les joueurs seront déconnectés et l’instance Bedrock sera arrêtée immédiatement.',
+        eyebrow: 'ARRÊT D’URGENCE · BEDROCK',
+        tone: 'danger',
+        confirmLabel: 'Arrêter le serveur',
+        cancelLabel: 'Annuler',
+      });
+      if (confirmed) stopServer();
     }
   };
 
@@ -160,7 +168,7 @@ export function HotbarDock() {
               whileTap={{ scale: 0.92, y: 1 }}
               whileHover={{ y: -2 }}
               transition={{ type: 'spring', stiffness: 500, damping: 28 }}
-              onClick={() => handleSlotClick(item)}
+              onClick={() => { void handleSlotClick(item); }}
               className={`mc-slot w-10 h-10 sm:w-11 sm:h-11 flex flex-col items-center justify-center relative cursor-pointer ${
                 item.actionKey === 'deploy' ? 'bg-[#524700]' : ''
               } ${item.actionKey === 'stop' ? 'bg-[#93000a]' : ''}`}

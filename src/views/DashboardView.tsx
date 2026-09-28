@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useServer } from '../context/ServerContext.tsx';
+import { useDialogs } from '../components/DialogProvider.tsx';
 import { TerminalLogs } from '../components/TerminalLogs.tsx';
 import { GameMode, Difficulty, ASSETS } from '../types/server.ts';
 
 export function DashboardView() {
+  const dialogs = useDialogs();
   const {
     serverStatus,
     telemetry,
@@ -45,6 +47,18 @@ export function DashboardView() {
   const handleAdjustPlayers = (delta: number) => {
     const next = Math.max(2, Math.min(100, properties.maxPlayers + delta));
     updateProperties({ maxPlayers: next });
+  };
+
+  const handleStopServer = async () => {
+    const confirmed = await dialogs.confirm({
+      title: 'Arrêter le serveur Bedrock ?',
+      message: 'Tous les joueurs seront déconnectés et l’instance Bedrock sera arrêtée immédiatement.',
+      eyebrow: 'ARRÊT D’URGENCE · BEDROCK',
+      tone: 'danger',
+      confirmLabel: 'Arrêter le serveur',
+      cancelLabel: 'Annuler',
+    });
+    if (confirmed) stopServer();
   };
 
   return (
@@ -222,11 +236,7 @@ export function DashboardView() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (confirm('Stop the Dedicated Bedrock server? All players will be disconnected.')) {
-                  stopServer();
-                }
-              }}
+              onClick={() => { void handleStopServer(); }}
               className="mc-bevel bg-[#93000a] px-3 py-2 font-jb text-xs text-[#ffdad6] hover:bg-[#ff5555] hover:text-black flex items-center gap-1.5"
             >
               <span className="material-symbols-outlined text-[16px]">power_settings_new</span>
