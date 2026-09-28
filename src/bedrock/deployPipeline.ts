@@ -7,6 +7,7 @@ import { extractZipSafely } from './extractArchive.ts';
 import { ConfigurationError, updateBedrockConfiguration, writeBedrockConfiguration } from './configWriter.ts';
 import { getMaxArchiveBytes } from './limits.ts';
 import { mergeBedrockRelease } from './installRelease.ts';
+import { BedrockRuntimeDependencies, type BedrockRuntimeSupport } from './runtimeDependencies.ts';
 import { SystemInspector } from '../preflight.ts';
 import { StateStore } from '../state.ts';
 import type { DeployConfiguration, PipelineStep, VersionEntry } from '../types/backend.ts';
@@ -99,6 +100,7 @@ export class DeployPipeline {
       extract: typeof extractZipSafely;
     } = { download: downloadBedrockArchive, extract: extractZipSafely },
     private readonly worldManager?: WorldManager,
+    private readonly runtimeDependencies: BedrockRuntimeSupport = new BedrockRuntimeDependencies(dataDirectory),
   ) {
     this.serverDirectory = path.resolve(serverDirectory);
     this.stopTimeoutMs = this.readTimeout('BDS_STOP_TIMEOUT_MS', 10_000);
@@ -356,6 +358,7 @@ export class DeployPipeline {
       if (!binaryStats?.isFile() || binaryStats.isSymbolicLink()) {
         throw new Error('L’archive n’a pas fourni un fichier bedrock_server sûr à la racine.');
       }
+      await this.runtimeDependencies.ensureForBinary(stagedBinaryPath, stagingDirectory, signal);
       if (unexpectedReadyExit) throw new Error(`${unexpectedReadyExit} Le serveur s’est arrêté avant la mise à jour.`);
 
       // Keep the current version live during download/extraction. Stop gracefully
@@ -416,6 +419,7 @@ export class DeployPipeline {
       await this.bedrockConsole.start({
         binaryPath,
         workingDirectory: this.serverDirectory,
+        libraryDirectories: this.runtimeDependencies.libraryDirectories(),
         timeoutMs: this.startTimeoutMs,
         signal,
         onEulaPrompt: () => {
@@ -490,8 +494,47 @@ export class DeployPipeline {
     }
   }
 
+  private async prepareExistingBinary(signal: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
+    const preflight = await this.inspector.inspect(true);
+    throwIfAborted(signal);
+    if (!preflight.deployReady) {
+      const failures = [preflight.glibc, preflight.libcurl]
+        .filter((check) => !check.ok)
+        .map((check) => check.detail);
+      if (preflight.platform !== 'linux' || preflight.arch !== 'x64') {
+        failures.push(`Plateforme ${preflight.platform}/${preflight.arch} non prise en charge ; BDS Linux x64 est requis.`);
+      }
+      throw new Error(`Vérification système bloquante : ${failures.join(' ')}`);
+    }
+    if (!preflight.bedrockBinary.ok) throw new ServerNotInstalledError();
+
+    await assertNoSymlinkInPath(path.dirname(this.serverDirectory));
+    const directoryInfo = await lstat(this.serverDirectory).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    const binaryPath = path.join(this.serverDirectory, 'bedrock_server');
+    const binaryInfo = await lstat(binaryPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!directoryInfo?.isDirectory() || directoryInfo.isSymbolicLink()) {
+      throw new Error('Le dossier du serveur est absent ou est un lien symbolique ; démarrage refusé.');
+    }
+    if (!binaryInfo?.isFile() || binaryInfo.isSymbolicLink() || (binaryInfo.mode & 0o111) === 0) {
+      throw new ServerNotInstalledError();
+    }
+
+    await this.runtimeDependencies.ensureForBinary(binaryPath, this.serverDirectory, signal);
+    return binaryPath;
+  }
+
   private async runExistingRestart(signal: AbortSignal): Promise<void> {
     try {
+      throwIfAborted(signal);
+      await this.setStep('preflight');
+      const binaryPath = await this.prepareExistingBinary(signal);
       throwIfAborted(signal);
       await this.setStep('stopping');
       await this.state.updateServer({ status: 'stopping', error: null });
@@ -507,7 +550,7 @@ export class DeployPipeline {
         metricsUpdatedAt: null,
       });
       throwIfAborted(signal);
-      await this.runExistingStart(signal);
+      await this.runExistingStart(signal, undefined, binaryPath);
     } catch (error) {
       const message = (error as Error).message || 'Échec du redémarrage planifié de Bedrock.';
       const failedStep = this.state.getSnapshot().pipeline.step;
@@ -528,7 +571,11 @@ export class DeployPipeline {
     }
   }
 
-  private async runExistingStart(signal: AbortSignal, requestedConfiguration?: DeployConfiguration): Promise<void> {
+  private async runExistingStart(
+    signal: AbortSignal,
+    requestedConfiguration?: DeployConfiguration,
+    preparedBinaryPath?: string,
+  ): Promise<void> {
     let attemptedStart = false;
     const currentConfig = this.state.getSnapshot().activeConfig;
     try {
@@ -540,28 +587,21 @@ export class DeployPipeline {
       const configuration = requestedConfiguration ?? currentConfig;
 
       throwIfAborted(signal);
-      await this.setStep('preflight');
-      const preflight = await this.inspector.inspect(true);
-      throwIfAborted(signal);
-      if (!preflight.deployReady) {
-        const failures = [preflight.glibc, preflight.libcurl]
-          .filter((check) => !check.ok)
-          .map((check) => check.detail);
-        if (preflight.platform !== 'linux' || preflight.arch !== 'x64') {
-          failures.push(`Plateforme ${preflight.platform}/${preflight.arch} non prise en charge ; BDS Linux x64 est requis.`);
+      let binaryPath: string;
+      if (preparedBinaryPath) {
+        binaryPath = preparedBinaryPath;
+        await assertNoSymlinkInPath(path.dirname(this.serverDirectory));
+        const directoryInfo = await lstat(this.serverDirectory).catch(() => null);
+        const binaryInfo = await lstat(binaryPath).catch(() => null);
+        if (!directoryInfo?.isDirectory() || directoryInfo.isSymbolicLink()) {
+          throw new Error('Le dossier du serveur est absent ou est un lien symbolique ; démarrage refusé.');
         }
-        throw new Error(`Vérification système bloquante : ${failures.join(' ')}`);
-      }
-      if (!preflight.bedrockBinary.ok) throw new ServerNotInstalledError();
-
-      const directoryInfo = await lstat(this.serverDirectory);
-      const binaryPath = path.join(this.serverDirectory, 'bedrock_server');
-      const binaryInfo = await lstat(binaryPath);
-      if (!directoryInfo.isDirectory() || directoryInfo.isSymbolicLink()) {
-        throw new Error('Le dossier du serveur est absent ou est un lien symbolique ; démarrage refusé.');
-      }
-      if (!binaryInfo.isFile() || binaryInfo.isSymbolicLink() || (binaryInfo.mode & 0o111) === 0) {
-        throw new ServerNotInstalledError();
+        if (!binaryInfo?.isFile() || binaryInfo.isSymbolicLink() || (binaryInfo.mode & 0o111) === 0) {
+          throw new ServerNotInstalledError();
+        }
+      } else {
+        await this.setStep('preflight');
+        binaryPath = await this.prepareExistingBinary(signal);
       }
 
       if (requestedConfiguration) {
@@ -582,6 +622,7 @@ export class DeployPipeline {
       await this.bedrockConsole.start({
         binaryPath,
         workingDirectory: this.serverDirectory,
+        libraryDirectories: this.runtimeDependencies.libraryDirectories(),
         timeoutMs: this.startTimeoutMs,
         signal,
         onEulaPrompt: () => {

@@ -206,6 +206,7 @@ export interface SystemPreflight {
   glibcVersion: string | null;
   glibc: SystemCheck;
   libcurl: SystemCheck;
+  legacyOpenSsl: SystemCheck;
   memoryLimitBytes: number | null;
   memoryRequirementBytes: number;
   memoryWarning: boolean;

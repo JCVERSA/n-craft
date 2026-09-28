@@ -1,4 +1,4 @@
-import { copyFile, lstat, mkdir, readdir, rename, rm, chmod } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, chmod } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -10,12 +10,12 @@ const PRESERVED_ROOT_FILES = new Set([
   'whitelist.json',
 ]);
 
+const GLOBAL_PACK_ROOT_DIRECTORIES = new Set(['behavior_packs', 'resource_packs']);
+
 const PRESERVED_ROOT_DIRECTORIES = new Set([
-  'behavior_packs',
   'config',
   'development_behavior_packs',
   'development_resource_packs',
-  'resource_packs',
   'structures',
   'world_templates',
   'worlds',
@@ -50,6 +50,63 @@ async function copyFileAtomically(source: string, destination: string, signal?: 
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
     throw error;
+  }
+}
+
+async function readPackHeaderUuid(packDirectory: string): Promise<string | null> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packDirectory, 'manifest.json'), 'utf8')) as {
+      header?: { uuid?: unknown };
+    };
+    const uuid = manifest.header?.uuid;
+    return typeof uuid === 'string' && /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(uuid)
+      ? uuid.toLowerCase()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function mergeGlobalPackRoot(sourceDirectory: string, targetDirectory: string, signal?: AbortSignal): Promise<void> {
+  const entries = await readdir(sourceDirectory, { withFileTypes: true });
+  for (const entry of entries) {
+    throwIfAborted(signal);
+    if (entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())) {
+      throw new Error(`Type de fichier inattendu dans les packs officiels Bedrock : ${entry.name}`);
+    }
+
+    const sourcePath = path.join(sourceDirectory, entry.name);
+    const targetPath = path.join(targetDirectory, entry.name);
+    const targetType = await existingPathType(targetPath);
+    if (entry.isDirectory()) {
+      if (targetType === 'symlink' || targetType === 'file' || targetType === 'other') {
+        throw new Error(`Pack Bedrock préexistant non sûr : ${targetPath}.`);
+      }
+      if (targetType === 'missing') {
+        await mkdir(targetPath, { recursive: false, mode: 0o700 });
+        await mergeDirectory(sourcePath, targetPath, true, signal);
+        continue;
+      }
+
+      // Only refresh an existing global pack when its manifest UUID matches the
+      // official copy. A custom pack reusing an official directory name is kept.
+      const [sourceUuid, targetUuid] = await Promise.all([
+        readPackHeaderUuid(sourcePath),
+        readPackHeaderUuid(targetPath),
+      ]);
+      if (sourceUuid && targetUuid && sourceUuid === targetUuid) {
+        await mergeDirectory(sourcePath, targetPath, true, signal);
+      }
+      continue;
+    }
+
+    if (targetType === 'symlink' || targetType === 'directory' || targetType === 'other') {
+      throw new Error(`Fichier de pack Bedrock préexistant non sûr : ${targetPath}.`);
+    }
+    if (targetType === 'missing') {
+      await mkdir(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+      await copyFileAtomically(sourcePath, targetPath, signal);
+    }
   }
 }
 
@@ -104,7 +161,11 @@ async function mergeDirectory(
         throw new Error(`Mise à jour interrompue : ${targetPath} n’est pas un dossier sûr.`);
       }
       if (targetType === 'missing') await mkdir(targetPath, { recursive: false, mode: 0o700 });
-      await mergeDirectory(sourcePath, targetPath, preserveExisting, signal, false);
+      if (preserveExisting && isRoot && GLOBAL_PACK_ROOT_DIRECTORIES.has(entry.name)) {
+        await mergeGlobalPackRoot(sourcePath, targetPath, signal);
+      } else {
+        await mergeDirectory(sourcePath, targetPath, preserveExisting, signal, false);
+      }
       continue;
     }
 
@@ -120,8 +181,10 @@ async function mergeDirectory(
 
 /**
  * Installs a staged official release by merging files, never by deleting the
- * existing server directory. Existing worlds, packs, server settings, permissions
- * and allowlists are deliberately left untouched on updates.
+ * existing server directory. Existing worlds, custom pack directories, server
+ * settings, permissions, allowlists, and files absent from the release are kept;
+ * files shipped by the official release (including global vanilla packs) refresh
+ * matching paths so stale runtime assets are not carried into a new BDS build.
  */
 export async function mergeBedrockRelease(
   stagingDirectory: string,

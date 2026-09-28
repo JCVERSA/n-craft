@@ -8,6 +8,7 @@ import { DeployPipeline } from '../src/bedrock/deployPipeline.ts';
 import { StateStore } from '../src/state.ts';
 import type { SystemPreflight } from '../src/types/backend.ts';
 import type { DeployConfiguration } from '../src/types/backend.ts';
+import type { BedrockRuntimeSupport } from '../src/bedrock/runtimeDependencies.ts';
 
 const configuration: DeployConfiguration = {
   version: '1.19.50.02',
@@ -31,6 +32,7 @@ const preflight: SystemPreflight = {
   glibcVersion: '2.36',
   glibc: { ok: true, detail: 'ok' },
   libcurl: { ok: true, detail: 'ok' },
+  legacyOpenSsl: { ok: false, detail: 'not installed in test fixture' },
   memoryLimitBytes: 2 * 1024 ** 3,
   memoryRequirementBytes: 4 * 1024 ** 3,
   memoryWarning: true,
@@ -48,6 +50,11 @@ const preflight: SystemPreflight = {
   bedrockBinary: { ok: true, detail: 'ready' },
   deployReady: true,
   warnings: ['low-memory warning is informational'],
+};
+
+const fixtureRuntimeDependencies: BedrockRuntimeSupport = {
+  ensureForBinary: async () => undefined,
+  libraryDirectories: () => [],
 };
 
 async function waitForServerStatus(state: StateStore, status: string): Promise<void> {
@@ -87,7 +94,17 @@ test('startExisting launches the deployed binary without deleting its world or c
     await state.initialize();
     await state.setActiveConfig(configuration);
     const inspector = { inspect: async () => preflight } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
-    const pipeline = new DeployPipeline(state, bedrockConsole, inspector, dataDirectory, serverDirectory, () => undefined);
+    const pipeline = new DeployPipeline(
+      state,
+      bedrockConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => undefined,
+      undefined,
+      undefined,
+      fixtureRuntimeDependencies,
+    );
 
     const started = waitForServerStatus(state, 'running');
     pipeline.startExisting();

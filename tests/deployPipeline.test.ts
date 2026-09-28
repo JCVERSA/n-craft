@@ -31,6 +31,7 @@ function preflight(deployReady: boolean): SystemPreflight {
     glibcVersion: '2.36',
     glibc: { ok: true, detail: 'test' },
     libcurl: { ok: deployReady, detail: deployReady ? 'test' : 'missing for test' },
+    legacyOpenSsl: { ok: false, detail: 'not installed in test fixture' },
     memoryLimitBytes: 2 * 1024 ** 3,
     memoryRequirementBytes: 4 * 1024 ** 3,
     memoryWarning: true,
@@ -153,6 +154,133 @@ test('an unavailable release leaves the running server and existing data untouch
     assert.equal(stopCalls, 0, 'the running Bedrock server is not stopped when the release is unavailable');
     assert.equal(state.getSnapshot().server.status, 'running');
     assert.equal(state.getSnapshot().pipeline.status, 'failed');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('runtime dependency failure is detected before a running server is stopped or files are replaced', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-runtime-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    const sentinelPath = path.join(serverDirectory, 'preserve-me.txt');
+    await writeFile(sentinelPath, 'old server data', 'utf8');
+
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    await state.setActiveConfig(configuration);
+    await state.updateServer({ status: 'running', pid: 4321, startedAt: new Date().toISOString(), error: null });
+    const inspector = { inspect: async () => preflight(true) } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    let startCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isRunning: true,
+      pid: 4321,
+      stop: async () => { stopCalls += 1; },
+      start: async () => { startCalls += 1; },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const runtimeDependencies = {
+      ensureForBinary: async () => {
+        assert.equal(fakeConsole.isRunning, true, 'dependency checks happen while the old server is still online');
+        throw new Error('verified OpenSSL 1.1 runtime unavailable');
+      },
+      libraryDirectories: () => [],
+    };
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => ({
+        version: configuration.version,
+        clientVersion: '1.19.50',
+        channel: 'stable',
+        label: configuration.version,
+        downloadUrl: 'https://fixture.invalid/bedrock.zip',
+        releaseDate: null,
+      }),
+      {
+        download: async (_url, destination) => {
+          await writeFile(destination, 'fixture archive', 'utf8');
+          return { bytes: 15, finalUrl: 'https://fixture.invalid/bedrock.zip' };
+        },
+        extract: async (_archive, destination) => {
+          await writeFile(path.join(destination, 'bedrock_server'), '#!/bin/sh\\nexit 0\\n', { mode: 0o700 });
+        },
+      },
+      undefined,
+      runtimeDependencies,
+    );
+    const pipelineFailed = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.status !== 'failed') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+
+    pipeline.start(configuration);
+    await pipelineFailed;
+    await new Promise<void>((resolve) => {
+      const waitForPipeline = () => pipeline.isRunning ? setImmediate(waitForPipeline) : resolve();
+      waitForPipeline();
+    });
+
+    assert.equal(await readFile(sentinelPath, 'utf8'), 'old server data');
+    assert.equal(stopCalls, 0);
+    assert.equal(startCalls, 0);
+    assert.equal(state.getSnapshot().server.status, 'running');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('scheduled restart validates OpenSSL before stopping the live Bedrock process', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-scheduled-runtime-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    await writeFile(path.join(serverDirectory, 'bedrock_server'), '#!/bin/sh\\nexit 0\\n', { mode: 0o700 });
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    await state.setActiveConfig(configuration);
+    await state.updateServer({ status: 'running', pid: 4321, startedAt: new Date().toISOString(), error: null });
+    const readyPreflight = { ...preflight(true), bedrockBinary: { ok: true, detail: 'present' } };
+    const inspector = { inspect: async () => readyPreflight } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    let startCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isReady: true,
+      isRunning: true,
+      pid: 4321,
+      stop: async () => { stopCalls += 1; },
+      start: async () => { startCalls += 1; },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const runtimeDependencies = {
+      ensureForBinary: async () => { throw new Error('verified OpenSSL 1.1 runtime unavailable'); },
+      libraryDirectories: () => [],
+    };
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => undefined,
+      undefined,
+      undefined,
+      runtimeDependencies,
+    );
+
+    await assert.rejects(pipeline.restartExisting(), /verified OpenSSL 1\.1 runtime unavailable/);
+    assert.equal(stopCalls, 0);
+    assert.equal(startCalls, 0);
+    assert.equal(state.getSnapshot().server.status, 'running');
   } finally {
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   }

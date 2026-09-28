@@ -17,5 +17,6 @@ data/playit/
 data/state.json.*.tmp
 data/state.json.corrupt-*
 data/server.log*
+data/runtime/
 data/*.zip
 bedrock/server/

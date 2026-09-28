@@ -2010,6 +2010,7 @@ export function LivePanelView() {
                 <CheckRow label={`Linux x64 · Node ${system?.nodeVersion ?? '…'}`} ok={system ? system.platform === 'linux' && system.arch === 'x64' : null} />
                 <CheckRow label={`glibc ${system?.glibcVersion ?? 'non détectée'} · minimum visé 2.29`} ok={system ? system.glibc.ok : null} detail={system?.glibc.detail} />
                 <CheckRow label="libcurl.so.4" ok={system ? system.libcurl.ok : null} detail={system?.libcurl.detail} />
+                <CheckRow label="OpenSSL 1.1 · compatibilité à la demande" ok={system ? (system.legacyOpenSsl.ok ? true : null) : null} detail={system?.legacyOpenSsl.detail} />
                 <CheckRow label={`Mémoire : ${formatBytes(system?.memoryLimitBytes ?? null)} · cible 4 Go`} ok={system ? !system.memoryWarning : null} detail={system?.memoryWarning ? 'Avertissement : un arrêt OOM est possible; le test reste autorisé.' : undefined} />
                 <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres`} ok={system ? !system.diskWarning : null} detail={system ? `${formatBytes(system.dataDiskRequiredBytes)} estimés${system.sharedDiskVolume ? ' · volume partagé' : ''}` : undefined} />
                 {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres`} ok={!system.diskWarning} detail={`${formatBytes(system.serverDiskRequiredBytes)} estimés`} />}

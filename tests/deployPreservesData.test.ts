@@ -7,6 +7,7 @@ import { BedrockConsole } from '../src/bedrock/console.ts';
 import { DeployPipeline } from '../src/bedrock/deployPipeline.ts';
 import { StateStore } from '../src/state.ts';
 import type { DeployConfiguration, SystemPreflight, VersionEntry } from '../src/types/backend.ts';
+import type { BedrockRuntimeSupport } from '../src/bedrock/runtimeDependencies.ts';
 
 const oldConfiguration: DeployConfiguration = {
   version: '1.19.50.02',
@@ -39,6 +40,7 @@ const preflight: SystemPreflight = {
   glibcVersion: '2.36',
   glibc: { ok: true, detail: 'ok' },
   libcurl: { ok: true, detail: 'ok' },
+  legacyOpenSsl: { ok: false, detail: 'not installed in test fixture' },
   memoryLimitBytes: 2 * 1024 ** 3,
   memoryRequirementBytes: 4 * 1024 ** 3,
   memoryWarning: true,
@@ -56,6 +58,11 @@ const preflight: SystemPreflight = {
   bedrockBinary: { ok: true, detail: 'already deployed' },
   deployReady: true,
   warnings: [],
+};
+
+const fixtureRuntimeDependencies: BedrockRuntimeSupport = {
+  ensureForBinary: async () => undefined,
+  libraryDirectories: () => [],
 };
 
 async function waitForUpdatedProcess(state: StateStore, previousPid: number | null): Promise<void> {
@@ -101,6 +108,8 @@ test('Deploy merges the release and restarts while preserving worlds, packs, per
   const serverDirectory = path.join(directory, 'bedrock', 'server');
   const worldPath = path.join(serverDirectory, 'worlds', 'PreservedWorld', 'level.dat');
   const packPath = path.join(serverDirectory, 'resource_packs', 'CustomPack', 'manifest.json');
+  const vanillaBehaviorPackPath = path.join(serverDirectory, 'behavior_packs', 'vanilla_1.17.20', 'manifest.json');
+  const vanillaResourcePackPath = path.join(serverDirectory, 'resource_packs', 'vanilla_1.17.20', 'manifest.json');
   const propertiesPath = path.join(serverDirectory, 'server.properties');
   const permissionsPath = path.join(serverDirectory, 'permissions.json');
   const allowlistPath = path.join(serverDirectory, 'allowlist.json');
@@ -112,6 +121,10 @@ test('Deploy merges the release and restarts while preserving worlds, packs, per
     await mkdir(path.dirname(packPath), { recursive: true });
     await writeFile(worldPath, 'world snapshot must survive', 'utf8');
     await writeFile(packPath, '{"name":"custom pack"}\n', 'utf8');
+    await mkdir(path.dirname(vanillaBehaviorPackPath), { recursive: true });
+    await mkdir(path.dirname(vanillaResourcePackPath), { recursive: true });
+    await writeFile(vanillaBehaviorPackPath, '{"header":{"uuid":"11111111-1111-4111-8111-111111111111"},"source":"old"}\n', 'utf8');
+    await writeFile(vanillaResourcePackPath, '{"header":{"uuid":"22222222-2222-4222-8222-222222222222"},"source":"old"}\n', 'utf8');
     await writeFile(propertiesPath, 'server-name=Existing server name\nlevel-name=PreservedWorld\nmax-players=8\n', 'utf8');
     await writeFile(permissionsPath, '[{"permission":"operator","xuid":"1234567890123456"}]\n', 'utf8');
     await writeFile(allowlistPath, '[{"name":"Existing player","ignoresPlayerLimit":false}]\n', 'utf8');
@@ -170,10 +183,17 @@ test('Deploy merges the release and restarts while preserving worlds, packs, per
           await writeFile(path.join(destination, 'allowlist.json'), '[]\n', 'utf8');
           await mkdir(path.join(destination, 'worlds', 'ArchiveWorld'), { recursive: true });
           await writeFile(path.join(destination, 'worlds', 'ArchiveWorld', 'level.dat'), 'archive world', 'utf8');
+          await mkdir(path.join(destination, 'behavior_packs', 'vanilla_1.17.20'), { recursive: true });
+          await writeFile(path.join(destination, 'behavior_packs', 'vanilla_1.17.20', 'manifest.json'), '{"header":{"uuid":"11111111-1111-4111-8111-111111111111"},"source":"current"}\n', 'utf8');
+          await writeFile(path.join(destination, 'behavior_packs', 'vanilla_1.17.20', 'vanilla.json'), '{"release":true}\n', 'utf8');
+          await mkdir(path.join(destination, 'resource_packs', 'vanilla_1.17.20'), { recursive: true });
+          await writeFile(path.join(destination, 'resource_packs', 'vanilla_1.17.20', 'manifest.json'), '{"header":{"uuid":"22222222-2222-4222-8222-222222222222"},"source":"current"}\n', 'utf8');
           await mkdir(path.join(destination, 'resource_packs', 'ArchivePack'), { recursive: true });
           await writeFile(path.join(destination, 'resource_packs', 'ArchivePack', 'manifest.json'), '{}', 'utf8');
         },
       },
+      undefined,
+      fixtureRuntimeDependencies,
     );
 
     const started = waitForUpdatedProcess(state, previousPid);
@@ -184,6 +204,10 @@ test('Deploy merges the release and restarts while preserving worlds, packs, per
 
     assert.equal(await readFile(worldPath, 'utf8'), 'world snapshot must survive');
     assert.equal(await readFile(packPath, 'utf8'), '{"name":"custom pack"}\n');
+    assert.match(await readFile(vanillaBehaviorPackPath, 'utf8'), /\"source\":\"current\"/);
+    assert.match(await readFile(vanillaResourcePackPath, 'utf8'), /\"source\":\"current\"/);
+    assert.equal(await readFile(path.join(serverDirectory, 'behavior_packs', 'vanilla_1.17.20', 'vanilla.json'), 'utf8'), '{"release":true}\n');
+    assert.equal(await readFile(path.join(serverDirectory, 'resource_packs', 'ArchivePack', 'manifest.json'), 'utf8'), '{}');
     assert.equal(await readFile(propertiesPath, 'utf8'), 'server-name=Existing server name\nlevel-name=PreservedWorld\nmax-players=8\n');
     assert.equal(await readFile(permissionsPath, 'utf8'), '[{"permission":"operator","xuid":"1234567890123456"}]\n');
     assert.equal(await readFile(allowlistPath, 'utf8'), '[{"name":"Existing player","ignoresPlayerLimit":false}]\n');
@@ -268,6 +292,8 @@ test('a stopped server applies edited settings during Deploy while preserving th
           await writeFile(path.join(destination, 'bedrock_server'), newBinary, { encoding: 'utf8', mode: 0o600 });
         },
       },
+      undefined,
+      fixtureRuntimeDependencies,
     );
 
     const started = waitForUpdatedProcess(state, null);

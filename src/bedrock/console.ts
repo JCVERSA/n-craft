@@ -27,6 +27,7 @@ interface ProcessExit {
 interface StartOptions {
   binaryPath: string;
   workingDirectory: string;
+  libraryDirectories?: string[];
   timeoutMs: number;
   signal?: AbortSignal;
   onEulaPrompt: () => void;
@@ -143,9 +144,10 @@ export class BedrockConsole extends EventEmitter {
     const environment: NodeJS.ProcessEnv = { ...process.env };
     delete environment.PANEL_TOKEN;
     delete environment.PLAYIT_SECRET_KEY;
-    environment.LD_LIBRARY_PATH = existingLibraryPath
-      ? `${options.workingDirectory}${path.delimiter}${existingLibraryPath}`
-      : options.workingDirectory;
+    environment.LD_LIBRARY_PATH = [
+      ...(options.libraryDirectories ?? []),
+      ...(existingLibraryPath ?? '').split(path.delimiter).filter(Boolean),
+    ].join(path.delimiter);
 
     let child: ChildProcess;
     try {

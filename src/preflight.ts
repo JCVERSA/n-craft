@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { SystemCheck, SystemPreflight, TunnelProvider } from './types/backend.ts';
 import { resolveTunnelProvider } from './tunnelProvider.ts';
 import { DISK_HEADROOM_BYTES, getMaxArchiveBytes, MAX_UNPACKED_BYTES } from './bedrock/limits.ts';
+import { inspectBundledOpenSsl11 } from './bedrock/runtimeDependencies.ts';
 
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;
@@ -88,6 +89,40 @@ async function libcurlCheck(): Promise<SystemCheck> {
   };
 }
 
+async function legacyOpenSslCheck(dataDirectory: string): Promise<SystemCheck> {
+  if (await inspectBundledOpenSsl11(dataDirectory)) {
+    return { ok: true, detail: 'libssl.so.1.1 et libcrypto.so.1.1 sont présentes dans le runtime local N-Craft.' };
+  }
+
+  const ldconfig = spawnSync('ldconfig', ['-p'], { encoding: 'utf8', timeout: 3000, maxBuffer: 1024 * 1024 });
+  const linkerCache = `${ldconfig.stdout ?? ''}\n${ldconfig.stderr ?? ''}`;
+  if (ldconfig.status === 0 && /libssl\.so\.1\.1\s/.test(linkerCache) && /libcrypto\.so\.1\.1\s/.test(linkerCache)) {
+    return { ok: true, detail: 'libssl.so.1.1 et libcrypto.so.1.1 sont référencées par ldconfig.' };
+  }
+
+  const libraryPaths = [
+    ...(process.env.LD_LIBRARY_PATH ?? '').split(path.delimiter).filter(Boolean),
+    '/lib/x86_64-linux-gnu',
+    '/usr/lib/x86_64-linux-gnu',
+    '/usr/local/lib',
+  ];
+  for (const directory of libraryPaths) {
+    try {
+      await Promise.all([
+        access(path.join(directory, 'libssl.so.1.1'), constants.R_OK),
+        access(path.join(directory, 'libcrypto.so.1.1'), constants.R_OK),
+      ]);
+      return { ok: true, detail: `OpenSSL 1.1 est présent dans ${directory}.` };
+    } catch {
+      // Continue through known linker directories.
+    }
+  }
+  return {
+    ok: false,
+    detail: 'OpenSSL 1.1 (version en fin de vie) est absent ; N-Craft ne le prépare localement depuis l’archive Ubuntu signée que si le binaire BDS choisi l’exige.',
+  };
+}
+
 async function getDiskFreeBytes(directory: string): Promise<number | null> {
   let candidate = path.resolve(directory);
   while (true) {
@@ -149,6 +184,9 @@ export class SystemInspector {
     const libcurl = process.platform === 'linux'
       ? await libcurlCheck()
       : { ok: false, detail: 'BDS Linux exige un conteneur Linux.' };
+    const legacyOpenSsl = process.platform === 'linux'
+      ? await legacyOpenSslCheck(this.dataDirectory)
+      : { ok: false, detail: 'Compatibilité OpenSSL 1.1 réservée au runtime Linux Bedrock.' };
 
     const portwarpPath = resolveExecutable(this.portwarpCommand);
     const portwarpBinary: SystemCheck = portwarpPath
@@ -247,6 +285,7 @@ export class SystemInspector {
       glibcVersion,
       glibc,
       libcurl,
+      legacyOpenSsl,
       memoryLimitBytes,
       memoryRequirementBytes: BEDROCK_MEMORY_REQUIREMENT,
       memoryWarning,
