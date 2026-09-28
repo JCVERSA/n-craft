@@ -39,6 +39,8 @@ import {
   X,
 } from 'lucide-react';
 import { AboutModal } from '../components/AboutModal.tsx';
+import { SeedTools } from '../components/SeedTools.tsx';
+import { XuidConverter } from '../components/XuidConverter.tsx';
 import { NebulaBrandMark } from '../components/NebulaBrandMark.tsx';
 import { useDialogs } from '../components/DialogProvider.tsx';
 import { NetherAmbientBackground } from '../components/NetherAmbientBackground.tsx';
@@ -2030,10 +2032,11 @@ export function LivePanelView() {
                     <span>Joueurs maximum</span>
                     <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={configurationLocked} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
                   </label>
-                  <label className="nether-field">
-                    <span>Seed <small>{selectedWorld ? 'verrouillée · monde déjà généré' : 'optionnelle · vide = aléatoire'}</small></span>
-                    <input value={configuration.seed} maxLength={80} disabled={configurationLocked || Boolean(selectedWorld)} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
-                  </label>
+                  <div className="nether-field deploy-seed-field">
+                    <label className="deploy-seed-field__label" htmlFor="deploy-seed">Seed <small>{selectedWorld ? 'verrouillée · monde déjà généré' : 'optionnelle · vide = aléatoire'}</small></label>
+                    <input id="deploy-seed" value={configuration.seed} maxLength={80} disabled={configurationLocked || Boolean(selectedWorld)} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
+                    <SeedTools seed={configuration.seed} onCopy={(seed) => { void handleCopy(seed, 'Seed'); }} />
+                  </div>
                   <label className="nether-field">
                     <span>Distance de vue <small>chunks</small></span>
                     <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={configurationLocked} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="nether-input" />
@@ -2058,6 +2061,7 @@ export function LivePanelView() {
                   </div>
                   {configuration.adminXuids.some((xuid) => xuid.length > 0 && !/^\d{1,20}$/.test(xuid)) && <p className="inline-error">Le XUID doit contenir uniquement des chiffres, sans espace.</p>}
                   {configuration.adminXuids.every((xuid) => xuid.length > 0) && new Set(configuration.adminXuids).size !== configuration.adminXuids.length && <p className="inline-error">Chaque XUID administrateur doit être unique.</p>}
+                  <XuidConverter onCopy={handleCopy} />
                 </div>
 
                 <div className="deploy-options-grid">
@@ -2258,7 +2262,11 @@ export function LivePanelView() {
 
                       <div className="managed-world__details">
                         <span><small>Version dédiée</small><strong>{world.version ? `BDS ${world.version}` : 'Non associée'}</strong></span>
-                        <span><small>Seed</small><strong>{world.seed === null ? 'Inconnue · non modifiable' : world.seed || 'Aléatoire'}</strong></span>
+                        <span className="managed-world__seed-detail">
+                          <small>Seed</small>
+                          <strong>{world.seed === null ? 'Inconnue · non modifiable' : world.seed || 'Aléatoire'}</strong>
+                          {world.seed !== null && world.seed.trim() && <SeedTools seed={world.seed} copyLabel={`Copier la seed de ${world.name}`} onCopy={(seed) => { void handleCopy(seed, `Seed de « ${world.name} »`); }} />}
+                        </span>
                         <span><small>Dernière utilisation</small><strong>{world.lastUsedAt ? new Date(world.lastUsedAt).toLocaleString('fr-FR') : 'Jamais démarré ici'}</strong></span>
                         {world.lastModifiedAt && <span><small>level.dat modifié</small><strong>{new Date(world.lastModifiedAt).toLocaleDateString('fr-FR')}</strong></span>}
                       </div>
