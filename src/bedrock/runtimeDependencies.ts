@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
+import { readCleartextMessage, readKeys, verify } from 'openpgp';
 import { chmod, lstat, mkdir, mkdtemp, open, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -167,23 +168,6 @@ async function fetchUbuntuBytes(urlInput: string, maximumBytes: number, signal?:
   return bytes;
 }
 
-function clearSignedPayload(inRelease: string): string {
-  const normalized = inRelease.replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('-----BEGIN PGP SIGNED MESSAGE-----\n')) {
-    throw new Error('Métadonnées Ubuntu invalides : signature InRelease absente.');
-  }
-  const bodyStart = normalized.indexOf('\n\n');
-  const signatureStart = normalized.indexOf('\n-----BEGIN PGP SIGNATURE-----', bodyStart + 2);
-  if (bodyStart < 0 || signatureStart < 0) {
-    throw new Error('Métadonnées Ubuntu invalides : enveloppe InRelease incomplète.');
-  }
-  return normalized
-    .slice(bodyStart + 2, signatureStart)
-    .split('\n')
-    .map((line) => line.startsWith('- ') ? line.slice(2) : line)
-    .join('\n');
-}
-
 export function parseUbuntuReleaseSha256(payload: string): Map<string, { sha256: string; size: number }> {
   const sectionMatch = payload.match(/(?:^|\n)SHA256:\s*\n([\s\S]*?)(?=\n[A-Za-z][A-Za-z0-9-]*:\s*|\s*$)/);
   if (!sectionMatch?.[1]) throw new Error('Métadonnées Ubuntu invalides : section SHA256 absente.');
@@ -291,31 +275,65 @@ async function hasBundledOpenSsl11(dataDirectory: string): Promise<boolean> {
   }
 }
 
-async function verifyUbuntuInRelease(inRelease: Buffer, keyring: Buffer, temporaryDirectory: string, signal?: AbortSignal): Promise<string> {
-  const keyringPath = path.join(temporaryDirectory, 'ubuntu-archive-keyring.gpg');
-  const inReleasePath = path.join(temporaryDirectory, 'InRelease');
-  const gpgHome = path.join(temporaryDirectory, 'gnupg');
-  await mkdir(gpgHome, { recursive: false, mode: 0o700 });
-  await writeFile(keyringPath, keyring, { flag: 'wx', mode: 0o600 });
-  await writeFile(inReleasePath, inRelease, { flag: 'wx', mode: 0o600 });
+export async function verifyUbuntuInRelease(
+  inRelease: Buffer,
+  keyring: Buffer,
+  options: {
+    trustedFingerprints?: ReadonlySet<string>;
+    signal?: AbortSignal;
+  } = {},
+): Promise<string> {
+  const trustedFingerprints = options.trustedFingerprints ?? TRUSTED_UBUNTU_ARCHIVE_FINGERPRINTS;
+  throwIfAborted(options.signal);
 
-  const verification = await runCommand(
-    'gpgv',
-    ['--homedir', gpgHome, '--status-fd', '1', '--keyring', keyringPath, inReleasePath],
-    { signal, timeoutMs: 15_000, maxBufferBytes: 1024 * 1024 },
+  const archiveKeys = await readKeys({ binaryKeys: keyring });
+  const trustedKeys = archiveKeys.filter((key) =>
+    trustedFingerprints.has(key.getFingerprint().toUpperCase()),
   );
-  if (verification.exitCode !== 0) {
-    throw new Error(`Signature InRelease Ubuntu invalide : ${verification.stderr.trim() || 'gpgv a refusé le fichier.'}`);
+  if (trustedKeys.length === 0) {
+    throw new Error('Signature Ubuntu refusée : l’empreinte ne correspond pas à la clé d’archive Ubuntu épinglée.');
   }
-  const validSignatureLines = verification.stdout
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('[GNUPG:] VALIDSIG '));
-  const trustedSignature = validSignatureLines.some((line) =>
-    line.split(/\s+/).slice(2).some((field) => TRUSTED_UBUNTU_ARCHIVE_FINGERPRINTS.has(field.toUpperCase())),
-  );
-  if (!trustedSignature) throw new Error('Signature Ubuntu refusée : l’empreinte ne correspond pas à la clé d’archive Ubuntu épinglée.');
 
-  const payload = clearSignedPayload(inRelease.toString('utf8'));
+  const trustedKeyIds = new Set<string>();
+  for (const key of trustedKeys) {
+    trustedKeyIds.add(key.getKeyID().toHex().toUpperCase());
+    for (const subkey of key.getSubkeys()) trustedKeyIds.add(subkey.getKeyID().toHex().toUpperCase());
+  }
+
+  let message;
+  try {
+    message = await readCleartextMessage({ cleartextMessage: inRelease.toString('utf8') });
+  } catch {
+    throw new Error('Métadonnées Ubuntu invalides : enveloppe InRelease ou signature absente.');
+  }
+  if (!message.getSigningKeyIDs().some((keyId) => trustedKeyIds.has(keyId.toHex().toUpperCase()))) {
+    throw new Error('Signature Ubuntu refusée : le fichier n’a pas été signé par la clé d’archive épinglée.');
+  }
+
+  let verification;
+  try {
+    verification = await verify({
+      message,
+      verificationKeys: trustedKeys,
+      expectSigned: true,
+    });
+  } catch {
+    throw new Error('Signature InRelease Ubuntu invalide : le contenu ne correspond pas à la signature.');
+  }
+  const trustedSignatures = verification.signatures.filter((signature) =>
+    trustedKeyIds.has(signature.keyID.toHex().toUpperCase()),
+  );
+  if (trustedSignatures.length === 0) {
+    throw new Error('Signature Ubuntu refusée : aucune signature vérifiable de la clé d’archive épinglée.');
+  }
+  try {
+    await Promise.all(trustedSignatures.map((signature) => signature.verified));
+  } catch {
+    throw new Error('Signature InRelease Ubuntu invalide : le contenu ne correspond pas à la signature.');
+  }
+  throwIfAborted(options.signal);
+
+  const payload = message.getText();
   if (
     parseReleaseValue(payload, 'Origin') !== 'Ubuntu' ||
     parseReleaseValue(payload, 'Label') !== 'Ubuntu' ||
@@ -364,7 +382,7 @@ async function installUbuntuFocalOpenSsl11(dataDirectory: string, signal?: Abort
       fetchUbuntuBytes(UBUNTU_ARCHIVE_KEY_URL, MAX_KEYRING_BYTES, signal),
       fetchUbuntuBytes(UBUNTU_INRELEASE_URL, MAX_INRELEASE_BYTES, signal),
     ]);
-    const payload = await verifyUbuntuInRelease(inRelease, keyring, downloadsDirectory, signal);
+    const payload = await verifyUbuntuInRelease(inRelease, keyring, { signal });
     const signedFiles = parseUbuntuReleaseSha256(payload);
     const packagesHash = signedFiles.get(UBUNTU_PACKAGES_RELATIVE_PATH);
     if (!packagesHash || packagesHash.size > MAX_PACKAGES_GZIP_BYTES) {

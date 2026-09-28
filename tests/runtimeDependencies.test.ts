@@ -3,10 +3,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import * as openpgp from 'openpgp';
 import {
   BedrockRuntimeDependencies,
   getOpenSsl11LibraryDirectory,
   parseUbuntuFocalLibsslRecord,
+  verifyUbuntuInRelease,
   type BinaryDependencyReport,
 } from '../src/bedrock/runtimeDependencies.ts';
 
@@ -140,5 +142,58 @@ test('accepts only a signed focal-updates libssl1.1 amd64 package record shape',
   assert.throws(
     () => parseUbuntuFocalLibsslRecord(packages.replace('Architecture: amd64\nFilename: pool/main/o/openssl/libssl1.1_', 'Architecture: arm64\nFilename: pool/main/o/openssl/libssl1.1_')),
     /No.*libssl1\.1|Aucun paquet/,
+  );
+});
+
+async function createSignedUbuntuRelease(payload: string): Promise<{
+  inRelease: Buffer;
+  keyring: Buffer;
+  fingerprint: string;
+}> {
+  const keyPair = await openpgp.generateKey({
+    type: 'ecc',
+    curve: 'ed25519Legacy',
+    userIDs: [{ name: 'N-Craft Ubuntu archive test key' }],
+    format: 'object',
+  });
+  const message = await openpgp.createCleartextMessage({ text: payload });
+  const signed = await openpgp.sign({ message, signingKeys: keyPair.privateKey });
+  return {
+    inRelease: Buffer.from(signed),
+    keyring: Buffer.from(keyPair.publicKey.write()),
+    fingerprint: keyPair.publicKey.getFingerprint().toUpperCase(),
+  };
+}
+
+test('verifies a signed Ubuntu InRelease with the pinned key fingerprint without gpgv', async () => {
+  const payload = [
+    'Origin: Ubuntu',
+    'Label: Ubuntu',
+    'Suite: focal-updates',
+    'Codename: focal',
+    `Date: ${new Date().toUTCString()}`,
+    'Architectures: amd64 arm64',
+    'Components: main universe',
+    'SHA256:',
+    ` ${'a'.repeat(64)} 123 main/binary-amd64/Packages.gz`,
+  ].join('\n');
+  const signedRelease = await createSignedUbuntuRelease(payload);
+  const trustedFingerprints = new Set([signedRelease.fingerprint]);
+
+  assert.equal(
+    await verifyUbuntuInRelease(signedRelease.inRelease, signedRelease.keyring, { trustedFingerprints }),
+    payload,
+  );
+  await assert.rejects(
+    verifyUbuntuInRelease(signedRelease.inRelease, signedRelease.keyring, {
+      trustedFingerprints: new Set(['0'.repeat(40)]),
+    }),
+    /empreinte.*clé d’archive Ubuntu épinglée/,
+  );
+
+  const tamperedRelease = Buffer.from(signedRelease.inRelease.toString('utf8').replace('Codename: focal', 'Codename: jammy'));
+  await assert.rejects(
+    verifyUbuntuInRelease(tamperedRelease, signedRelease.keyring, { trustedFingerprints }),
+    /Signature InRelease Ubuntu invalide/,
   );
 });
