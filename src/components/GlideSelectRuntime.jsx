@@ -1,5 +1,5 @@
 // Adapted from JCVERSA/noto (mcversionselectionanimation.txt); animation and interaction model retained.
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowDown01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 
@@ -53,7 +53,7 @@ export default function GlideSelect({
   invalid,
   className = ''
 }) {
-  const items = options.map(norm);
+  const items = useMemo(() => options.map(norm), [options]);
   const [inner, setInner] = useState(defaultValue ?? '');
   const current = value ?? inner;
   const selected = items.findIndex(it => it.value === current);

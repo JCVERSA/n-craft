@@ -55,7 +55,6 @@ import SwipeToast from '../components/SwipeToast.jsx';
 import {
   appendMetricSample,
   loadMetricHistory,
-  normalizeMetricHistory,
   saveMetricHistory,
   type BedrockMetricSample,
   type MetricStorage,
@@ -294,6 +293,18 @@ function hasConfigurationSettingsChanged(current: DeployConfiguration, next: Dep
     || current.adminXuids.some((xuid, index) => xuid !== next.adminXuids[index]);
 }
 
+function hasDeployConfigurationChanged(current: DeployConfiguration, next: DeployConfiguration): boolean {
+  return current.version !== next.version || hasConfigurationSettingsChanged(current, next);
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function haveSameConsoleLogIds(current: ConsoleLog[], next: ConsoleLog[]): boolean {
+  return current.length === next.length && current.every((line, index) => line.id === next[index]?.id);
+}
+
 export function LivePanelView() {
   const dialogs = useDialogs();
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -365,6 +376,16 @@ export function LivePanelView() {
   }, [navMenuOpen]);
 
   const [versions, setVersions] = useState<PublicVersion[]>([]);
+  const deploymentVersionOptions = useMemo<GlideSelectOption[]>(() => versions.map((version) => ({
+    value: version.version,
+    label: version.label,
+    tag: version.releaseDate ?? `Client ${version.clientVersion}`,
+  })), [versions]);
+  const worldVersionOptions = useMemo<GlideSelectOption[]>(() => versions.map((version) => ({
+    value: version.version,
+    label: `BDS ${version.version}`,
+    tag: `client ${version.clientVersion}`,
+  })), [versions]);
   const [worlds, setWorlds] = useState<ManagedWorld[]>([]);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
   const [selectedWorldId, setSelectedWorldId] = useState<string | null>(null);
@@ -379,7 +400,7 @@ export function LivePanelView() {
   const [renameWorldId, setRenameWorldId] = useState<string | null>(null);
   const [renameWorldValue, setRenameWorldValue] = useState('');
   const [assignWorldVersion, setAssignWorldVersion] = useState<Record<string, string>>({});
-  const [configTouched, setConfigTouched] = useState(false);
+  const configTouchedRef = useRef(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
   const [chatbotBusy, setChatbotBusy] = useState(false);
@@ -392,6 +413,18 @@ export function LivePanelView() {
   const socketRef = useRef<WebSocket | null>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
   const worldImportInputRef = useRef<HTMLInputElement>(null);
+  const applyStatus = useCallback((nextStatus: StatusResponse) => {
+    setStatus((current) => current && areJsonValuesEqual(current, nextStatus) ? current : nextStatus);
+  }, []);
+  const applyPanelState = useCallback((nextState: PersistentPanelState) => {
+    setStatus((current) => {
+      if (!current || areJsonValuesEqual(current.state, nextState)) return current;
+      return { ...current, state: nextState };
+    });
+  }, []);
+  const applyConfigurationIfChanged = useCallback((nextConfiguration: DeployConfiguration) => {
+    setConfiguration((current) => hasDeployConfigurationChanged(current, nextConfiguration) ? nextConfiguration : current);
+  }, []);
 
   useEffect(() => {
     previousActiveSectionRef.current = activeSection;
@@ -422,8 +455,11 @@ export function LivePanelView() {
   const refreshStatus = useCallback(async (forceConfiguration = false) => {
     try {
       const next = await apiRequest<StatusResponse>('/api/server/status');
-      setStatus(next);
-      if (next.state.activeConfig && (!configTouched || forceConfiguration)) setConfiguration(next.state.activeConfig);
+      applyStatus(next);
+      const activeConfig = next.state.activeConfig;
+      if (activeConfig && (!configTouchedRef.current || forceConfiguration)) {
+        applyConfigurationIfChanged(activeConfig);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setAuthenticated(false);
@@ -432,7 +468,7 @@ export function LivePanelView() {
         setNotice((error as Error).message);
       }
     }
-  }, [configTouched]);
+  }, [applyConfigurationIfChanged, applyStatus]);
 
   useEffect(() => {
     saveMetricHistory(metricHistory, getMetricStorage());
@@ -449,31 +485,6 @@ export function LivePanelView() {
       memoryBytes: server.memoryBytes,
     }));
   }, [authenticated, status?.state.server.status, status?.state.server.metricsUpdatedAt, status?.state.server.cpuPercent, status?.state.server.memoryBytes]);
-
-  useEffect(() => {
-    let timer: number | undefined;
-    const trimHistory = () => setMetricHistory((current) => normalizeMetricHistory(current));
-    const stopTrimming = () => {
-      if (timer === undefined) return;
-      window.clearInterval(timer);
-      timer = undefined;
-    };
-    const startTrimming = () => {
-      if (document.visibilityState !== 'visible' || timer !== undefined) return;
-      trimHistory();
-      timer = window.setInterval(trimHistory, 10_000);
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') startTrimming();
-      else stopTrimming();
-    };
-    startTrimming();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      stopTrimming();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -528,17 +539,17 @@ export function LivePanelView() {
         ]).then(([catalog, nextStatus, worldResult]) => {
           if (cancelled) return;
           setVersions(catalog.versions);
-          setStatus(nextStatus);
+          applyStatus(nextStatus);
           setWorlds(worldResult.worlds);
           const currentConfig = nextStatus.state.activeConfig;
           const activeWorld = currentConfig
             ? worldResult.worlds.find((world) => world.version === currentConfig.version && world.folder === currentConfig.levelName)
             : undefined;
-          if (currentConfig && !configTouched) {
-            setConfiguration(currentConfig);
+          if (currentConfig && !configTouchedRef.current) {
+            applyConfigurationIfChanged(currentConfig);
             setSelectedWorldId(activeWorld?.id ?? null);
             setNewWorldName('Nouveau monde');
-            setConfigTouched(false);
+            configTouchedRef.current = false;
           }
           setWorldImportVersion(currentConfig?.version ?? catalog.versions[0]?.version ?? '');
         }).catch((error) => {
@@ -562,24 +573,58 @@ export function LivePanelView() {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [authenticated, configTouched, refreshStatus]);
+  }, [authenticated, applyConfigurationIfChanged, applyStatus, refreshStatus]);
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated || activeSection !== 'console') return undefined;
     let disposed = false;
     let reconnectTimer: number | undefined;
+    let flushTimer: number | undefined;
     let currentSocket: WebSocket | null = null;
+    let reconnectDelay = 2500;
+    let pendingLines: ConsoleLog[] = [];
 
+    const flushPendingLines = () => {
+      if (flushTimer !== undefined) {
+        window.clearTimeout(flushTimer);
+        flushTimer = undefined;
+      }
+      if (pendingLines.length === 0) return;
+      const batch = pendingLines;
+      pendingLines = [];
+      setConsoleLogs((current) => [...current, ...batch].slice(-500));
+    };
+    const queueConsoleLine = (line: ConsoleLog) => {
+      pendingLines.push(line);
+      if (flushTimer === undefined) flushTimer = window.setTimeout(flushPendingLines, 100);
+    };
+    const closeCurrentSocket = () => {
+      const socket = currentSocket;
+      if (!socket) return;
+      currentSocket = null;
+      if (socketRef.current === socket) socketRef.current = null;
+      flushPendingLines();
+      socket.close();
+      setConsoleConnected(false);
+    };
     const connect = () => {
-      if (disposed) return;
+      if (disposed || document.visibilityState !== 'visible' || currentSocket) return;
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      currentSocket = new WebSocket(`${scheme}//${window.location.host}/api/server/console`);
-      socketRef.current = currentSocket;
-      currentSocket.onopen = () => {
+      const socket = new WebSocket(`${scheme}//${window.location.host}/api/server/console`);
+      currentSocket = socket;
+      socketRef.current = socket;
+      socket.onopen = () => {
+        if (disposed || currentSocket !== socket) return;
+        reconnectDelay = 2500;
         setConsoleConnected(true);
         setConsoleError('');
       };
-      currentSocket.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (disposed || currentSocket !== socket) return;
         try {
           const message = JSON.parse(String(event.data)) as {
             type?: string;
@@ -589,12 +634,13 @@ export function LivePanelView() {
             state?: PersistentPanelState;
           };
           if (message.type === 'snapshot' && Array.isArray(message.lines)) {
-            setConsoleLogs(message.lines.slice(-500));
-            if (message.state) setStatus((current) => current ? { ...current, state: message.state! } : current);
+            const nextLines = message.lines.slice(-500);
+            setConsoleLogs((current) => haveSameConsoleLogIds(current, nextLines) ? current : nextLines);
+            if (message.state) applyPanelState(message.state);
           } else if (message.type === 'line' && message.line) {
-            setConsoleLogs((previous) => [...previous.slice(-499), message.line!]);
+            queueConsoleLine(message.line);
           } else if (message.type === 'state' && message.state) {
-            setStatus((current) => current ? { ...current, state: message.state! } : current);
+            applyPanelState(message.state);
           } else if (message.type === 'error' && message.error) {
             setConsoleError(message.error);
           }
@@ -602,24 +648,51 @@ export function LivePanelView() {
           setConsoleError('Message WebSocket invalide.');
         }
       };
-      currentSocket.onclose = () => {
+      socket.onclose = () => {
+        if (currentSocket !== socket) return;
+        currentSocket = null;
+        if (socketRef.current === socket) socketRef.current = null;
         setConsoleConnected(false);
-        if (!disposed) reconnectTimer = window.setTimeout(connect, 2500);
+        flushPendingLines();
+        if (!disposed && document.visibilityState === 'visible') {
+          reconnectTimer = window.setTimeout(() => {
+            reconnectTimer = undefined;
+            connect();
+          }, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+        }
       };
-      currentSocket.onerror = () => {
-        setConsoleConnected(false);
+      socket.onerror = () => {
+        if (currentSocket === socket) setConsoleConnected(false);
       };
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        connect();
+        return;
+      }
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
+      closeCurrentSocket();
+    };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     connect();
     return () => {
       disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
-      currentSocket?.close();
-      socketRef.current = null;
+      if (flushTimer !== undefined) window.clearTimeout(flushTimer);
+      pendingLines = [];
+      const socket = currentSocket;
+      currentSocket = null;
+      if (socketRef.current === socket) socketRef.current = null;
+      socket?.close();
       setConsoleConnected(false);
     };
-  }, [authenticated]);
+  }, [authenticated, activeSection, applyPanelState]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -637,7 +710,7 @@ export function LivePanelView() {
   }, [authenticated, status?.state.server.status, refreshWorlds]);
 
   const markConfigTouched = () => {
-    setConfigTouched(true);
+    configTouchedRef.current = true;
     setFormError('');
     setNotice('');
   };
@@ -664,7 +737,7 @@ export function LivePanelView() {
       seed: world.seed ?? '',
       eulaAccepted: next.eulaAccepted || fallback.eulaAccepted,
     });
-    setConfigTouched(true);
+    configTouchedRef.current = true;
     setFormError('');
     setNotice('');
     setWorldManagerError('');
@@ -675,7 +748,7 @@ export function LivePanelView() {
     setSelectedWorldId(null);
     setWorldEditId(null);
     setNewWorldName(`Nouveau monde ${worlds.filter((world) => world.version === configuration.version).length + 1}`);
-    setConfigTouched(true);
+    configTouchedRef.current = true;
     setFormError('');
     switchPanel('deploy');
   };
@@ -787,7 +860,7 @@ export function LivePanelView() {
         }),
       });
       setSelectedWorldId(deployment.worldId);
-      setConfigTouched(false);
+      configTouchedRef.current = false;
       setWorldEditId(null);
       setNotice('Opération acceptée. Suis le démarrage du monde et l’état du serveur dans le tableau de bord.');
       await Promise.all([refreshStatus(true), refreshWorlds()]);
@@ -839,7 +912,7 @@ export function LivePanelView() {
         body: JSON.stringify({ config: configuration }),
       });
       setConfiguration(configuration);
-      setConfigTouched(false);
+      configTouchedRef.current = false;
       setNotice('Réglages enregistrés. Bedrock reste arrêté; tu peux le démarrer quand tu veux. Le tunnel reste actif.');
       await Promise.all([refreshStatus(true), refreshWorlds()]);
     } catch (error) {
@@ -879,7 +952,7 @@ export function LivePanelView() {
       const active = status?.state.activeConfig;
       const editsActiveWorld = active?.version === world.version && active.levelName === world.folder;
       setWorldEditId(null);
-      setConfigTouched(!editsActiveWorld);
+      configTouchedRef.current = !editsActiveWorld;
       pushPanelToast({
         tone: 'success',
         title: 'Réglages enregistrés',
@@ -1853,11 +1926,7 @@ export function LivePanelView() {
                   <div className="nether-field cartridge-slot__picker">
                     <span id="bedrock-version-label">Version du serveur <b>requise</b></span>
                     <GlideSelect
-                      options={versions.map((version): GlideSelectOption => ({
-                        value: version.version,
-                        label: version.label,
-                        tag: version.releaseDate ?? `Client ${version.clientVersion}`,
-                      }))}
+                      options={deploymentVersionOptions}
                       value={configuration.version}
                       onChange={(value) => changeField('version', value)}
                       labelledBy="bedrock-version-label"
@@ -2091,7 +2160,7 @@ export function LivePanelView() {
                 <div className="nether-field">
                   <span id="world-import-version-label">Version BDS exacte</span>
                   <GlideSelect
-                    options={versions.map((version): GlideSelectOption => ({ value: version.version, label: `BDS ${version.version}`, tag: `client ${version.clientVersion}` }))}
+                    options={worldVersionOptions}
                     value={worldImportVersion}
                     onChange={setWorldImportVersion}
                     labelledBy="world-import-version-label"
@@ -2192,7 +2261,7 @@ export function LivePanelView() {
                           <div className="nether-field">
                             <span id={`assign-version-label-${world.id}`}>Attribuer la version d’origine</span>
                             <GlideSelect
-                              options={versions.map((version): GlideSelectOption => ({ value: version.version, label: `BDS ${version.version}`, tag: `client ${version.clientVersion}` }))}
+                              options={worldVersionOptions}
                               value={assignWorldVersion[world.id] ?? (versions.some((version) => version.version === configuration.version) ? configuration.version : '')}
                               onChange={(value) => setAssignWorldVersion((current) => ({ ...current, [world.id]: value }))}
                               labelledBy={`assign-version-label-${world.id}`}
