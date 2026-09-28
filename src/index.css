@@ -393,8 +393,7 @@ select:focus-visible {
 .ncraft-login-card { padding: clamp(22px, 5vw, 34px); }
 .login-brand-row { display: flex; align-items: center; gap: 16px; }
 .login-brand-row > div { min-width: 0; flex: 1; }
-.login-brand-row .login-wordmark { width: min(250px, 100%); margin: 4px 0 0; font-size: 0; letter-spacing: 0; line-height: 0; }
-.login-wordmark img { display: block; width: 100%; height: auto; }
+.login-brand-row .login-wordmark { margin: 5px 0 0; color: var(--nether-text); font-size: clamp(22px, 2.7vw, 29px); font-weight: 700; letter-spacing: -.045em; line-height: 1.05; }
 .login-subtitle { margin: 6px 0 0; color: var(--nether-muted); font-size: 12px; }
 .login-divider { height: 1px; margin: 24px 0; background: linear-gradient(90deg, rgba(255,184,117,.4), rgba(197,160,255,.14), transparent); }
 .login-heading { display: flex; align-items: center; gap: 12px; }
@@ -407,18 +406,24 @@ select:focus-visible {
 .login-footer svg { color: var(--nether-moss); }
 
 .brand-mark {
+  position: relative;
   display: inline-grid;
   width: 42px;
   height: 42px;
   flex: 0 0 auto;
+  overflow: hidden;
   place-items: center;
-  border: 1px solid rgba(255, 184, 117, 0.34);
+  border: 1px solid rgba(69, 205, 244, 0.48);
   border-radius: 13px;
-  color: #1b1110;
-  background: linear-gradient(145deg, #ffd095, #ff8757 58%, #b773dc);
-  box-shadow: 0 5px 20px rgba(255, 122, 44, 0.2), inset 0 1px rgba(255,255,255,.55);
+  color: #d9f8ff;
+  background: #08152b;
+  box-shadow: 0 5px 20px rgba(28, 163, 231, 0.2), inset 0 1px rgba(255,255,255,.18);
 }
 
+.nebula-brand-mark { display: block; width: 100%; height: 100%; flex: 0 0 auto; overflow: hidden; }
+.nebula-brand-mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nebula-brand-mark--header { width: 40px; height: 40px; }
+@media (min-width: 640px) { .nebula-brand-mark--header { width: 44px; height: 44px; } }
 .brand-mark--large { width: 56px; height: 56px; border-radius: 17px; }
 
 .ncraft-header {
@@ -443,7 +448,7 @@ select:focus-visible {
 
 .ncraft-brand { display: flex; align-items: center; gap: 12px; min-width: max-content; }
 .ncraft-brand__copy { display: grid; min-width: 0; align-content: center; gap: 5px; }
-.ncraft-brand__wordmark { display: block; width: clamp(110px, 11vw, 160px); height: auto; max-height: 28px; object-fit: contain; object-position: left center; }
+.ncraft-brand__name { display: block; color: var(--nether-text); font-size: clamp(14px, 1.3vw, 17px); font-weight: 700; letter-spacing: -.035em; line-height: 1.05; white-space: nowrap; }
 .ncraft-brand__copy small { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; letter-spacing: 0.13em; }
 
 .ncraft-nav { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(234,214,245,.07); border-radius: 13px; background: rgba(18,15,20,.74); }
@@ -893,7 +898,7 @@ select:focus-visible {
   .ncraft-header__inner { width: min(100% - 24px,1460px); min-height: 66px; gap: 9px; }
   .ncraft-brand { gap: 9px; }
   .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
-  .ncraft-brand__wordmark { width: min(118px, 32vw); }
+  .ncraft-brand__name { font-size: 14px; }
   .ncraft-brand__copy { gap: 3px; }
   .ncraft-brand__copy small { font-size: 8px; letter-spacing: .1em; }
   .ncraft-header__actions { gap: 7px; }
@@ -1419,7 +1424,7 @@ select:focus-visible {
 .ncraft-about-card__dot--moss { color: #9be6b0; background: #9be6b0; }
 .ncraft-about-card__chrome-label { margin-left: auto; color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .13em; }
 .ncraft-about-card__intro { display: grid; grid-template-columns: 52px minmax(0,1fr); align-items: start; gap: 14px; padding: 20px 0 17px; }
-.ncraft-about-card__mark { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid rgba(255,184,117,.25); border-radius: 15px; color: #2a1b13; background: linear-gradient(145deg,#ffd095,#ff8757 58%,#b773dc); box-shadow: 0 9px 24px rgba(255,122,44,.15), inset 0 1px rgba(255,255,255,.5); }
+.ncraft-about-card__mark { position: relative; display: grid; width: 52px; height: 52px; flex: 0 0 auto; overflow: hidden; place-items: center; border: 1px solid rgba(69,205,244,.42); border-radius: 15px; background: #08152b; box-shadow: 0 9px 24px rgba(28,163,231,.16), inset 0 1px rgba(255,255,255,.16); }
 .ncraft-about-card__intro .nether-eyebrow { margin: 2px 0 5px; font-size: 9px; }
 .ncraft-about-card__intro h3 { margin: 0; color: var(--nether-text); font-size: 25px; letter-spacing: -.035em; line-height: 1.15; }
 .ncraft-about-card__intro p:last-child { max-width: 58ch; margin: 8px 0 0; color: var(--nether-muted); font-size: 12px; line-height: 1.65; }

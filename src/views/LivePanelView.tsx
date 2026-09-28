@@ -38,6 +38,7 @@ import {
   X,
 } from 'lucide-react';
 import { AboutModal } from '../components/AboutModal.tsx';
+import { NebulaBrandMark } from '../components/NebulaBrandMark.tsx';
 import { useDialogs } from '../components/DialogProvider.tsx';
 import { NetherAmbientBackground } from '../components/NetherAmbientBackground.tsx';
 import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
@@ -1239,7 +1240,7 @@ export function LivePanelView() {
           initial={reduceMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <span className="brand-mark"><Activity size={22} /></span>
+          <span className="brand-mark"><NebulaBrandMark /></span>
           <Loader2 className="spin-soft" size={18} />
           <span>Chargement du panneau…</span>
         </motion.div>
@@ -1261,7 +1262,7 @@ export function LivePanelView() {
           <aside className="ncraft-login-showcase">
             <div className="login-showcase__texture" aria-hidden="true" />
             <div className="login-showcase__brand" aria-hidden="true">
-              <span className="brand-mark"><Activity size={19} /></span>
+              <span className="brand-mark"><NebulaBrandMark /></span>
               <span>BEDROCK CONTROL DECK</span>
             </div>
             <div className="login-showcase__portal" aria-hidden="true"><span /><span /><span /></div>
@@ -1290,19 +1291,10 @@ export function LivePanelView() {
             transition={{ duration: reduceMotion ? 0 : 0.3, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="login-brand-row">
-              <span className="brand-mark brand-mark--large"><Activity size={25} /></span>
+              <span className="brand-mark brand-mark--large"><NebulaBrandMark /></span>
               <div>
                 <p className="nether-eyebrow">BEDROCK CONTROL DECK</p>
-                <h1 className="login-wordmark">
-                  <img
-                    className="bedrock-craft-wordmark"
-                    src="/assets/minecraft/bedrock-craft-wordmark.webp"
-                    alt="Bedrock Craft"
-                    width="2186"
-                    height="376"
-                    decoding="async"
-                  />
-                </h1>
+                <h1 className="login-wordmark">Nebula Craft</h1>
                 <p className="login-subtitle">Panneau privé · instance Bedrock</p>
               </div>
             </div>
@@ -1473,20 +1465,12 @@ export function LivePanelView() {
 
       <header className="ncraft-header">
         <div className="ncraft-header__inner">
-          <a className="ncraft-brand" href="#overview" aria-label="Bedrock Craft, accueil" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
+          <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
             <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { rotate: 8, scale: 1.04 }}>
-              <Activity size={21} strokeWidth={2.2} />
+              <NebulaBrandMark />
             </motion.span>
             <span className="ncraft-brand__copy">
-              <img
-                className="ncraft-brand__wordmark"
-                src="/assets/minecraft/bedrock-craft-wordmark.webp"
-                alt=""
-                aria-hidden="true"
-                width="2186"
-                height="376"
-                decoding="async"
-              />
+              <strong className="ncraft-brand__name">Nebula Craft</strong>
               <small>BEDROCK CONTROL DECK</small>
             </span>
           </a>

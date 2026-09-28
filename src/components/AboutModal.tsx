@@ -1,5 +1,6 @@
-import { Activity, ArrowUpRight, Boxes, Code2, Github, Layers3, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Boxes, Code2, Github, Layers3, Sparkles } from 'lucide-react';
 import { NebulaModal } from './NebulaModal.tsx';
+import { NebulaBrandMark } from './NebulaBrandMark.tsx';
 
 const PROJECT_REPOSITORY = 'https://github.com/JCVERSA/n-craft';
 const UI_REFERENCE_REPOSITORY = 'https://github.com/JCVERSA/noto';
@@ -26,7 +27,7 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="ncraft-about-card__intro">
-            <span className="ncraft-about-card__mark" aria-hidden="true"><Activity size={25} /></span>
+            <span className="ncraft-about-card__mark" aria-hidden="true"><NebulaBrandMark /></span>
             <div>
               <p className="nether-eyebrow">MONO-INSTANCE · LINUX</p>
               <h3 id="ncraft-about-product-name">Nebula Craft</h3>

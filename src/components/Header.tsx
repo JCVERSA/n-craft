@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { useServer } from '../context/ServerContext.tsx';
 import { ScreenView, ASSETS } from '../types/server.ts';
 import { playClickSound } from '../utils/audio.ts';
+import { NebulaBrandMark } from './NebulaBrandMark.tsx';
 
 interface ViewTab {
   id: ScreenView;
@@ -49,11 +50,7 @@ export function Header() {
             className="p-1 bg-[#0e0e0e] mc-inset flex items-center justify-center shrink-0 relative group cursor-pointer"
             onClick={() => handleTabClick('dashboard')}
           >
-            <img
-              src={ASSETS.BEACON_LOGO}
-              alt="Nebula Craft Beacon Crest"
-              className="h-10 w-10 sm:h-11 sm:w-11 object-contain"
-            />
+            <NebulaBrandMark alt="Emblème Nebula Craft" className="nebula-brand-mark--header" />
             {serverStatus === 'RUNNING' && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#97d85d] mc-bevel animate-ping" />
             )}
