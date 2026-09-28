@@ -1065,19 +1065,26 @@ export function LivePanelView() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.42, ease: [0.22, 1, 0.36, 1] }}
         >
-          <aside className="ncraft-login-showcase" aria-hidden="true">
-            <div className="login-showcase__texture" />
-            <div className="login-showcase__brand">
+          <aside className="ncraft-login-showcase">
+            <div className="login-showcase__texture" aria-hidden="true" />
+            <div className="login-showcase__brand" aria-hidden="true">
               <span className="brand-mark"><Activity size={19} /></span>
               <span>BEDROCK CONTROL DECK</span>
             </div>
-            <div className="login-showcase__portal"><span /><span /><span /></div>
+            <div className="login-showcase__portal" aria-hidden="true"><span /><span /><span /></div>
+            <img
+              className="login-showcase__mascot"
+              src="/assets/minecraft/creeper-mascot.svg"
+              alt="Creeper pixelisé, mascotte de N-Craft"
+              width="140"
+              height="204"
+            />
             <div className="login-showcase__content">
               <p className="login-showcase__eyebrow">CONSOLE OPÉRATEUR · MINECRAFT BEDROCK</p>
               <p className="login-showcase__title">Garde la main<br /><span>sur ton monde.</span></p>
               <p className="login-showcase__description">Déploie Bedrock, retrouve tes sauvegardes et surveille ton serveur depuis un seul panneau privé.</p>
             </div>
-            <div className="login-showcase__footer">
+            <div className="login-showcase__footer" aria-hidden="true">
               <span><LockKeyhole size={14} /> Accès privé</span>
               <span><ShieldCheck size={14} /> Jeton non conservé</span>
             </div>
@@ -1555,6 +1562,7 @@ export function LivePanelView() {
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <PanelHeading
+            variant="deployment"
             eyebrow="DÉPLOIEMENT BEDROCK"
             title="Déployer Bedrock"
             description="Choisis une build BDS et sa sauvegarde. Enregistrer les propriétés laisse Bedrock arrêté; changer de version ou de monde lance le déploiement et son redémarrage."
@@ -2099,9 +2107,9 @@ export function LivePanelView() {
 }
 
 
-function PanelHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+function PanelHeading({ eyebrow, title, description, variant }: { eyebrow: string; title: string; description: string; variant?: 'deployment' }) {
   return (
-    <header className="ncraft-tab-heading">
+    <header className={`ncraft-tab-heading ${variant === 'deployment' ? 'ncraft-tab-heading--deployment' : ''}`}>
       <div className="ncraft-tab-heading__copy">
         <p className="nether-eyebrow">{eyebrow}</p>
         <h1>{title}</h1>

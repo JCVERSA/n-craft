@@ -1009,6 +1009,17 @@ select:focus-visible {
     linear-gradient(120deg, rgba(33,26,34,.94), rgba(19,15,21,.94));
   box-shadow: inset 0 1px rgba(255,255,255,.045);
 }
+.ncraft-tab-heading--deployment {
+  isolation: isolate;
+  background-color: #171219;
+  background-image:
+    linear-gradient(90deg, rgba(18,14,20,.97) 0%, rgba(18,14,20,.86) 47%, rgba(18,14,20,.58) 100%),
+    url('/assets/minecraft/bedrock-world-deployer.webp');
+  background-size: auto, cover;
+  background-position: center, 58% center;
+  background-repeat: no-repeat;
+}
+.ncraft-tab-heading--deployment .ncraft-tab-heading__ornament { opacity: .45; }
 .ncraft-tab-heading::after {
   position: absolute;
   right: 0;
@@ -1043,7 +1054,7 @@ select:focus-visible {
 .world-manager-empty__link { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; color: var(--nether-soul); font-size: 11px; font-weight: 700; }
 .empty-state__link:hover, .world-manager-empty__link:hover { text-decoration: underline; }
 
-/* Private access screen: the left panel is an original CSS illustration, not mock server data. */
+/* Private access screen: decorative local artwork only; no mock server data. */
 .ncraft-auth-shell { position: relative; overflow: visible; padding: clamp(18px, 4vw, 42px); }
 .ncraft-login-layout {
   display: grid;
@@ -1062,10 +1073,15 @@ select:focus-visible {
   padding: clamp(26px, 4vw, 44px);
   border: 1px solid rgba(255,184,117,.2);
   border-radius: 22px;
-  background:
-    radial-gradient(ellipse at 75% 28%, rgba(255,155,89,.2), transparent 30%),
-    radial-gradient(ellipse at 38% 90%, rgba(128,74,117,.12), transparent 44%),
-    linear-gradient(145deg, rgba(39,27,37,.98), rgba(17,13,19,.98) 72%);
+  background-color: #171219;
+  background-image:
+    linear-gradient(90deg, rgba(25,18,27,.97) 0%, rgba(25,18,27,.86) 48%, rgba(17,13,19,.52) 100%),
+    radial-gradient(ellipse at 75% 28%, rgba(255,155,89,.18), transparent 31%),
+    url('/assets/minecraft/bedrock-nebula-login.webp'),
+    linear-gradient(145deg, #271b25, #110d13 72%);
+  background-size: auto, auto, cover, auto;
+  background-position: center, center, 58% center, center;
+  background-repeat: no-repeat;
   box-shadow: 0 28px 80px rgba(7,4,9,.46), inset 0 1px rgba(255,255,255,.065);
 }
 .ncraft-login-showcase::before,
@@ -1090,14 +1106,30 @@ select:focus-visible {
 .login-showcase__portal span { position: absolute; inset: 0; border: 1px solid rgba(255,184,117,.13); border-radius: 50%; box-shadow: 0 0 46px rgba(255,135,82,.045), inset 0 0 28px rgba(197,160,255,.04); }
 .login-showcase__portal span:nth-child(2) { inset: 14%; border-style: dashed; border-color: rgba(197,160,255,.17); }
 .login-showcase__portal span:nth-child(3) { inset: 29%; border-color: rgba(255,184,117,.19); }
-.login-showcase__content { max-width: 510px; margin-top: auto; padding: 70px 0 54px; }
+.login-showcase__content { position: relative; z-index: 2; max-width: 360px; margin-top: auto; padding: 70px 0 54px; }
 .login-showcase__eyebrow { margin: 0 0 13px; color: var(--nether-magma); font: 700 10px 'JetBrains Mono',monospace; letter-spacing: .14em; }
 .login-showcase__title { margin: 0; color: #fff7f0; font-size: clamp(36px, 4.7vw, 58px); font-weight: 700; letter-spacing: -.055em; line-height: 1.02; text-wrap: balance; }
 .login-showcase__title span { color: var(--nether-magma); text-shadow: 0 0 32px rgba(255,153,64,.15); }
 .login-showcase__description { max-width: 43ch; margin: 18px 0 0; color: #c2b5c3; font-size: 14px; line-height: 1.7; }
-.login-showcase__footer { display: flex; flex-wrap: wrap; gap: 10px 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.09); color: #c5b9c8; font-size: 11px; }
+.login-showcase__footer { z-index: 2; display: flex; flex-wrap: wrap; gap: 10px 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.09); color: #c5b9c8; font-size: 11px; }
 .login-showcase__footer span { display: inline-flex; align-items: center; gap: 7px; }
 .login-showcase__footer svg { color: var(--nether-magma); }
+
+.login-showcase__mascot {
+  position: absolute;
+  right: clamp(22px, 4vw, 42px);
+  bottom: 57px;
+  z-index: 1;
+  width: min(25%, 148px);
+  height: auto;
+  filter: drop-shadow(0 15px 20px rgba(4,5,6,.58));
+  animation: creeper-float 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes creeper-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-6px) rotate(.7deg); }
+}
 .ncraft-login-layout .ncraft-login-card { align-self: center; width: 100%; }
 .login-token-field { position: relative; }
 .login-token-input { padding-right: 54px; }
@@ -1127,8 +1159,9 @@ select:focus-visible {
 @media (max-width: 980px) {
   .ncraft-login-layout { width: min(100%, 540px); grid-template-columns: minmax(0,1fr); gap: 12px; }
   .ncraft-login-showcase { min-height: 280px; padding: 24px; }
-  .login-showcase__content { max-width: 440px; padding: 45px 0 34px; }
-  .login-showcase__title { font-size: clamp(32px, 7vw, 44px); }
+  .login-showcase__content { width: 72%; max-width: 360px; padding: 45px 0 34px; }
+  .login-showcase__mascot { right: 21px; bottom: 45px; width: 124px; }
+  .login-showcase__title { font-size: clamp(30px, 6vw, 40px); }
   .login-showcase__description { max-width: 52ch; margin-top: 11px; font-size: 12px; }
   .login-showcase__portal { top: 7%; right: 7%; width: min(42vw, 210px); }
   .ncraft-login-layout .ncraft-login-card { justify-self: center; }
@@ -1140,15 +1173,18 @@ select:focus-visible {
   .ncraft-tab-heading__copy h1 { font-size: clamp(24px, 7vw, 31px); }
   .ncraft-tab-heading__copy > p:last-child { max-width: 53ch; font-size: 12px; }
   .ncraft-tab-heading__ornament { right: -60px; width: 160px; opacity: .7; }
+  .ncraft-tab-heading--deployment { background-position: center, 64% center; }
   .ncraft-operations-stack--diagnostics { display: flex; }
   .ncraft-operations-stack--diagnostics > :last-child { grid-column: auto; }
-  .ncraft-login-showcase { min-height: 235px; padding: 19px; border-radius: 17px; }
+  .ncraft-login-showcase { min-height: 275px; padding: 19px; border-radius: 17px; }
   .login-showcase__brand { font-size: 9px; }
-  .login-showcase__content { padding: 38px 0 24px; }
-  .login-showcase__eyebrow { font-size: 9px; }
-  .login-showcase__title { font-size: clamp(31px, 9vw, 42px); }
-  .login-showcase__description { max-width: 38ch; font-size: 11px; }
+  .login-showcase__content { width: 66%; padding: 38px 0 27px; }
+  .login-showcase__mascot { right: 12px; bottom: 42px; width: 92px; }
+  .login-showcase__eyebrow { font-size: 8px; letter-spacing: .09em; }
+  .login-showcase__title { font-size: clamp(27px, 7.8vw, 35px); }
+  .login-showcase__description { max-width: 27ch; margin-top: 8px; font-size: 10px; line-height: 1.45; }
   .login-showcase__footer { gap: 8px 14px; padding-top: 11px; font-size: 10px; }
+  .ncraft-tab-heading--deployment { background-position: center, 68% center; }
   .ncraft-auth-shell { padding: 14px 12px; }
   .ncraft-login-layout { gap: 10px; }
   .ncraft-login-layout .ncraft-login-card { padding: 20px 17px; }
