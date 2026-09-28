@@ -392,8 +392,9 @@ select:focus-visible {
 .ncraft-loading-card .brand-mark { margin-right: 2px; }
 .ncraft-login-card { padding: clamp(22px, 5vw, 34px); }
 .login-brand-row { display: flex; align-items: center; gap: 16px; }
-.login-brand-row h1 { margin: 4px 0 0; font-size: 20px; letter-spacing: 0.12em; font-weight: 800; }
-.login-brand-row h1 span { color: var(--nether-magma); }
+.login-brand-row > div { min-width: 0; flex: 1; }
+.login-brand-row .login-wordmark { width: min(250px, 100%); margin: 4px 0 0; font-size: 0; letter-spacing: 0; line-height: 0; }
+.login-wordmark img { display: block; width: 100%; height: auto; }
 .login-subtitle { margin: 6px 0 0; color: var(--nether-muted); font-size: 12px; }
 .login-divider { height: 1px; margin: 24px 0; background: linear-gradient(90deg, rgba(255,184,117,.4), rgba(197,160,255,.14), transparent); }
 .login-heading { display: flex; align-items: center; gap: 12px; }
@@ -441,9 +442,8 @@ select:focus-visible {
 }
 
 .ncraft-brand { display: flex; align-items: center; gap: 12px; min-width: max-content; }
-.ncraft-brand__copy { display: grid; gap: 5px; }
-.ncraft-brand__copy strong { color: var(--nether-text); font-size: 14px; font-weight: 800; letter-spacing: 0.13em; }
-.ncraft-brand__copy em { color: var(--nether-magma); font-style: normal; }
+.ncraft-brand__copy { display: grid; min-width: 0; align-content: center; gap: 5px; }
+.ncraft-brand__wordmark { display: block; width: clamp(110px, 11vw, 160px); height: auto; max-height: 28px; object-fit: contain; object-position: left center; }
 .ncraft-brand__copy small { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; letter-spacing: 0.13em; }
 
 .ncraft-nav { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(234,214,245,.07); border-radius: 13px; background: rgba(18,15,20,.74); }
@@ -891,8 +891,9 @@ select:focus-visible {
   .ncraft-header__inner { width: min(100% - 24px,1460px); min-height: 66px; gap: 9px; }
   .ncraft-brand { gap: 9px; }
   .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
-  .ncraft-brand__copy strong { font-size: 11px; }
-  .ncraft-brand__copy small { font-size: 9px; }
+  .ncraft-brand__wordmark { width: min(118px, 32vw); }
+  .ncraft-brand__copy { gap: 3px; }
+  .ncraft-brand__copy small { font-size: 8px; letter-spacing: .1em; }
   .ncraft-header__actions { gap: 7px; }
   .ncraft-header__actions .status-pill { min-height: 36px; padding: 7px 8px; font-size: 9px; }
   .logout-button { width: 44px; min-width: 44px; padding: 0; }

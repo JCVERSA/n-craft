@@ -1100,7 +1100,16 @@ export function LivePanelView() {
               <span className="brand-mark brand-mark--large"><Activity size={25} /></span>
               <div>
                 <p className="nether-eyebrow">BEDROCK CONTROL DECK</p>
-                <h1>NEBULA <span>CRAFT</span></h1>
+                <h1 className="login-wordmark">
+                  <img
+                    className="bedrock-craft-wordmark"
+                    src="/assets/minecraft/bedrock-craft-wordmark.webp"
+                    alt="Bedrock Craft"
+                    width="2186"
+                    height="376"
+                    decoding="async"
+                  />
+                </h1>
                 <p className="login-subtitle">Panneau privé · instance Bedrock</p>
               </div>
             </div>
@@ -1261,12 +1270,20 @@ export function LivePanelView() {
 
       <header className="ncraft-header">
         <div className="ncraft-header__inner">
-          <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
+          <a className="ncraft-brand" href="#overview" aria-label="Bedrock Craft, accueil" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
             <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { rotate: 8, scale: 1.04 }}>
               <Activity size={21} strokeWidth={2.2} />
             </motion.span>
             <span className="ncraft-brand__copy">
-              <strong>NEBULA <em>CRAFT</em></strong>
+              <img
+                className="ncraft-brand__wordmark"
+                src="/assets/minecraft/bedrock-craft-wordmark.webp"
+                alt=""
+                aria-hidden="true"
+                width="2186"
+                height="376"
+                decoding="async"
+              />
               <small>BEDROCK CONTROL DECK</small>
             </span>
           </a>
