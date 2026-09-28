@@ -19,7 +19,9 @@ import { LocaltonetRunner } from './src/localtonet/localtonetRunner.ts';
 import { PortwarpRunner } from './src/portwarp/portwarpRunner.ts';
 import { resolveTunnelProvider } from './src/tunnelProvider.ts';
 import { createAuthRouter } from './src/routes/auth.routes.ts';
+import { createPixelStudioRouter } from './src/routes/pixelStudio.routes.ts';
 import { createServerRouter } from './src/routes/server.routes.ts';
+import { PixelStudioAIService } from './src/pixelStudio/aiService.ts';
 import { StateStore } from './src/state.ts';
 import { VersionCatalog } from './src/versionCatalog.ts';
 import { parseProxyTrust, requireHttpsInProduction } from './src/security.ts';
@@ -61,6 +63,7 @@ await catalog.load();
 const worldManager = new WorldManager(dataDirectory, serverDirectory);
 
 const auth = new PanelAuthService(process.env.PANEL_TOKEN);
+const pixelStudioAI = new PixelStudioAIService();
 const bedrockConsole = new BedrockConsole(dataDirectory);
 const inspector = new SystemInspector(
   dataDirectory,
@@ -125,6 +128,7 @@ app.get('/api/health', (_request, response) => {
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
 app.use('/api/auth', createAuthRouter(auth));
+app.use('/api/pixel-studio', createPixelStudioRouter(auth, pixelStudioAI));
 app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, worldManager, playitRunner, portwarpRunner, chatbot, tunnelProvider }));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -24,6 +24,7 @@ import {
   MessageCircle,
   LogOut,
   Package,
+  Paintbrush,
   Pencil,
   Play,
   Power,
@@ -89,8 +90,10 @@ interface StatusResponse {
 
 type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
 
-type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'console';
+type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'console' | 'pixel-studio';
 type TabNavigation = 'desktop' | 'mobile';
+
+const PixelStudioView = lazy(() => import('./PixelStudioView.tsx'));
 
 const PANEL_TABS: Array<{ id: PanelTabId; label: string; compactLabel: string; icon: LucideIcon }> = [
   { id: 'overview', label: 'Vue générale', compactLabel: 'Vue', icon: Server },
@@ -98,6 +101,7 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string; compactLabel: string; i
   { id: 'worlds', label: 'Mondes', compactLabel: 'Mondes', icon: Globe },
   { id: 'diagnostics', label: 'Diagnostics', compactLabel: 'Diag.', icon: ShieldCheck },
   { id: 'console', label: 'Console', compactLabel: 'Console', icon: Terminal },
+  { id: 'pixel-studio', label: 'Pixel Studio', compactLabel: 'Studio', icon: Paintbrush },
 ];
 
 type PanelToastTone = 'success' | 'warning' | 'error' | 'info';
@@ -114,6 +118,9 @@ const BRANCHED_NAV_ITEMS: BranchedMenuItem[] = [
   ] },
   { label: 'Supervision', children: [
     { value: 'diagnostics', label: 'Diagnostics système' },
+  ] },
+  { label: 'Création', children: [
+    { value: 'pixel-studio', label: 'Pixel Studio' },
   ] },
 ];
 
@@ -2533,6 +2540,21 @@ export function LivePanelView() {
             <p className="console-footnote">Aucun shell n’est lancé : la commande est écrite directement sur stdin de bedrock_server.</p>
           </NetherCard>
             </motion.div>
+          )}
+        </section>
+
+        <section
+          id="panel-pixel-studio"
+          className="ncraft-tab-panel"
+          role="tabpanel"
+          aria-label="Pixel Studio"
+          tabIndex={0}
+          hidden={activeSection !== 'pixel-studio'}
+        >
+          {activeSection === 'pixel-studio' && (
+            <Suspense fallback={<div className="pixel-studio-loading" role="status" aria-live="polite"><Loader2 className="spin-soft" size={20} /> Chargement de Pixel Studio…</div>}>
+              <PixelStudioView onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })} />
+            </Suspense>
           )}
         </section>
 
