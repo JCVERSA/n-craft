@@ -430,10 +430,13 @@ select:focus-visible {
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid rgba(234, 214, 245, 0.08);
-  background: rgba(11, 9, 13, 0.84);
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(234, 214, 245, 0.13);
+  background:
+    linear-gradient(112deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,.012) 32%, transparent 62%, rgba(197,160,255,.04) 100%),
+    rgba(11, 9, 13, 0.82);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.22), inset 0 1px rgba(255,255,255,.12);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
 }
 
 .ncraft-header__inner {
@@ -888,7 +891,7 @@ select:focus-visible {
   .ncraft-operations-stack { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
   .ncraft-operations-stack > :last-child { grid-column: 1 / -1; }
   .ncraft-main { padding-bottom: 100px; }
-  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
+  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding: 6px; border: 1px solid rgba(225,206,237,.19); border-radius: 15px; background: linear-gradient(118deg, rgba(255,255,255,.09), rgba(255,255,255,.018) 36%, transparent 64%, rgba(197,160,255,.07)), rgba(18,15,21,.84); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.16), inset 0 -1px rgba(9,7,10,.28); backdrop-filter: blur(18px) saturate(145%); -webkit-backdrop-filter: blur(18px) saturate(145%); }
   .mobile-dock button { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
   .mobile-dock button:hover, .mobile-dock button:focus-visible, .mobile-dock button[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
@@ -1594,4 +1597,24 @@ select:focus-visible {
 @media (max-width: 700px) {
   .ncraft-toast-stack { right: 10px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
   .deploy-jelly-setting { min-height: 94px; padding-inline: 9px; }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  @supports not (-webkit-backdrop-filter: blur(1px)) {
+    .ncraft-header { background: rgba(11,9,13,.97); }
+    .mobile-dock { background: rgba(18,15,21,.98); }
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ncraft-header {
+    background: rgba(11,9,13,.98);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .mobile-dock {
+    background: rgba(18,15,21,.98);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
