@@ -1189,7 +1189,8 @@ select:focus-visible {
   line-height: 1.2;
   text-align: center;
 }
-.mobile-dock button span { display: flex; min-height: 20px; align-items: center; justify-content: center; overflow-wrap: anywhere; }
+.mobile-dock button > .mobile-dock__label { display: flex; min-height: 20px; align-items: center; justify-content: center; overflow-wrap: anywhere; }
+.mobile-dock__label-compact { display: none; }
 .mobile-dock button[aria-selected="true"] { color: var(--nether-magma); background: linear-gradient(180deg, rgba(255,184,117,.12), rgba(255,184,117,.035)); box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
 .mobile-dock button:active { transform: scale(.97); }
 
@@ -1240,7 +1241,10 @@ select:focus-visible {
 
 @media (max-width: 380px) {
   .mobile-dock { right: 6px; left: 6px; gap: 8px; padding: 5px 4px; }
-  .mobile-dock button { gap: 2px; padding-inline: 1px; font-size: 8px; }
+  .mobile-dock button { gap: 2px; padding-inline: 1px; font-size: 9px; }
+  .mobile-dock button > .mobile-dock__label { font-size: 10px; letter-spacing: -.02em; }
+  .mobile-dock__label-full { display: none; }
+  .mobile-dock__label-compact { display: inline; }
 }
 
 .login-token-label { color: #c7bdcb; font-size: 12px; font-weight: 600; }

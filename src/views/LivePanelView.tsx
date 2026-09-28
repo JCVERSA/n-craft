@@ -92,12 +92,12 @@ type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
 type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'console';
 type TabNavigation = 'desktop' | 'mobile';
 
-const PANEL_TABS: Array<{ id: PanelTabId; label: string; icon: LucideIcon }> = [
-  { id: 'overview', label: 'Vue générale', icon: Server },
-  { id: 'deploy', label: 'Déploiement', icon: Package },
-  { id: 'worlds', label: 'Mondes', icon: Globe },
-  { id: 'diagnostics', label: 'Diagnostics', icon: ShieldCheck },
-  { id: 'console', label: 'Console', icon: Terminal },
+const PANEL_TABS: Array<{ id: PanelTabId; label: string; compactLabel: string; icon: LucideIcon }> = [
+  { id: 'overview', label: 'Vue générale', compactLabel: 'Vue', icon: Server },
+  { id: 'deploy', label: 'Déploiement', compactLabel: 'Déployer', icon: Package },
+  { id: 'worlds', label: 'Mondes', compactLabel: 'Mondes', icon: Globe },
+  { id: 'diagnostics', label: 'Diagnostics', compactLabel: 'Diag.', icon: ShieldCheck },
+  { id: 'console', label: 'Console', compactLabel: 'Console', icon: Terminal },
 ];
 
 type PanelToastTone = 'success' | 'warning' | 'error' | 'info';
@@ -2551,6 +2551,7 @@ export function LivePanelView() {
               type="button"
               id={`mobile-tab-${tab.id}`}
               role="tab"
+              aria-label={tab.label}
               aria-controls={`panel-${tab.id}`}
               aria-selected={activeSection === tab.id}
               tabIndex={activeSection === tab.id ? 0 : -1}
@@ -2558,7 +2559,10 @@ export function LivePanelView() {
               onKeyDown={(event) => handleTabKeyDown(event, tab.id, 'mobile')}
             >
               <Icon size={17} aria-hidden="true" />
-              <span>{tab.label}</span>
+              <span className="mobile-dock__label" aria-hidden="true">
+                <span className="mobile-dock__label-full">{tab.label}</span>
+                <span className="mobile-dock__label-compact">{tab.compactLabel}</span>
+              </span>
             </button>
           );
         })}
