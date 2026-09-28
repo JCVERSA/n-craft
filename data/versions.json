@@ -1,0 +1,1284 @@
+{
+  "versions": [
+    {
+      "version": "1.21.131.1",
+      "clientVersion": "1.21.131",
+      "channel": "stable",
+      "label": "Bedrock 1.21.131 · BDS 1.21.131.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.131.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.130.4",
+      "clientVersion": "1.21.130",
+      "channel": "stable",
+      "label": "Bedrock 1.21.130 · BDS 1.21.130.4",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.130.4.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.130.3",
+      "clientVersion": "1.21.130",
+      "channel": "stable",
+      "label": "Bedrock 1.21.130 · BDS 1.21.130.3",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.130.3.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.124.2",
+      "clientVersion": "1.21.124",
+      "channel": "stable",
+      "label": "Bedrock 1.21.124 · BDS 1.21.124.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.124.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.123.2",
+      "clientVersion": "1.21.123",
+      "channel": "stable",
+      "label": "Bedrock 1.21.123 · BDS 1.21.123.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.123.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.122.2",
+      "clientVersion": "1.21.122",
+      "channel": "stable",
+      "label": "Bedrock 1.21.122 · BDS 1.21.122.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.122.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.121.1",
+      "clientVersion": "1.21.121",
+      "channel": "stable",
+      "label": "Bedrock 1.21.121 · BDS 1.21.121.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.121.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.120.4",
+      "clientVersion": "1.21.120",
+      "channel": "stable",
+      "label": "Bedrock 1.21.120 · BDS 1.21.120.4",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.120.4.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.114.1",
+      "clientVersion": "1.21.114",
+      "channel": "stable",
+      "label": "Bedrock 1.21.114 · BDS 1.21.114.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.114.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.113.1",
+      "clientVersion": "1.21.113",
+      "channel": "stable",
+      "label": "Bedrock 1.21.113 · BDS 1.21.113.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.113.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.112.1",
+      "clientVersion": "1.21.112",
+      "channel": "stable",
+      "label": "Bedrock 1.21.112 · BDS 1.21.112.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.112.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.111.1",
+      "clientVersion": "1.21.111",
+      "channel": "stable",
+      "label": "Bedrock 1.21.111 · BDS 1.21.111.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.111.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.110.2",
+      "clientVersion": "1.21.111",
+      "channel": "stable",
+      "label": "Bedrock 1.21.111 · BDS 1.21.110.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.110.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.102.1",
+      "clientVersion": "1.21.101",
+      "channel": "stable",
+      "label": "Bedrock 1.21.101 · BDS 1.21.102.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.102.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.101.1",
+      "clientVersion": "1.21.101",
+      "channel": "stable",
+      "label": "Bedrock 1.21.101 · BDS 1.21.101.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.101.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.100.7",
+      "clientVersion": "1.21.100",
+      "channel": "stable",
+      "label": "Bedrock 1.21.100 · BDS 1.21.100.7",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.100.7.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.100.6",
+      "clientVersion": "1.21.100",
+      "channel": "stable",
+      "label": "Bedrock 1.21.100 · BDS 1.21.100.6",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.100.6.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.95.1",
+      "clientVersion": "1.21.94",
+      "channel": "stable",
+      "label": "Bedrock 1.21.94 · BDS 1.21.95.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.95.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.94.2",
+      "clientVersion": "1.21.94",
+      "channel": "stable",
+      "label": "Bedrock 1.21.94 · BDS 1.21.94.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.94.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.94.1",
+      "clientVersion": "1.21.94",
+      "channel": "stable",
+      "label": "Bedrock 1.21.94 · BDS 1.21.94.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.94.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.93.1",
+      "clientVersion": "1.21.93",
+      "channel": "stable",
+      "label": "Bedrock 1.21.93 · BDS 1.21.93.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.93.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.92.1",
+      "clientVersion": "1.21.92",
+      "channel": "stable",
+      "label": "Bedrock 1.21.92 · BDS 1.21.92.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.92.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.91.1",
+      "clientVersion": "1.21.91",
+      "channel": "stable",
+      "label": "Bedrock 1.21.91 · BDS 1.21.91.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.91.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.90.4",
+      "clientVersion": "1.21.90",
+      "channel": "stable",
+      "label": "Bedrock 1.21.90 · BDS 1.21.90.4",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.90.4.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.90.3",
+      "clientVersion": "1.21.90",
+      "channel": "stable",
+      "label": "Bedrock 1.21.90 · BDS 1.21.90.3",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.90.3.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.84.1",
+      "clientVersion": "1.21.84",
+      "channel": "stable",
+      "label": "Bedrock 1.21.84 · BDS 1.21.84.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.84.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.83.1",
+      "clientVersion": "1.21.82",
+      "channel": "stable",
+      "label": "Bedrock 1.21.82 · BDS 1.21.83.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.83.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.82.1",
+      "clientVersion": "1.21.82",
+      "channel": "stable",
+      "label": "Bedrock 1.21.82 · BDS 1.21.82.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.82.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.81.2",
+      "clientVersion": "1.21.81",
+      "channel": "stable",
+      "label": "Bedrock 1.21.81 · BDS 1.21.81.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.81.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.80.3",
+      "clientVersion": "1.21.80",
+      "channel": "stable",
+      "label": "Bedrock 1.21.80 · BDS 1.21.80.3",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.80.3.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.73.01",
+      "clientVersion": "1.21.73",
+      "channel": "stable",
+      "label": "Bedrock 1.21.73 · BDS 1.21.73.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.73.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.72.01",
+      "clientVersion": "1.21.72",
+      "channel": "stable",
+      "label": "Bedrock 1.21.72 · BDS 1.21.72.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.72.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.71.01",
+      "clientVersion": "1.21.71",
+      "channel": "stable",
+      "label": "Bedrock 1.21.71 · BDS 1.21.71.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.71.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.70.04",
+      "clientVersion": "1.21.70",
+      "channel": "stable",
+      "label": "Bedrock 1.21.70 · BDS 1.21.70.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.70.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.62.01",
+      "clientVersion": "1.21.62",
+      "channel": "stable",
+      "label": "Bedrock 1.21.62 · BDS 1.21.62.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.62.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.61.01",
+      "clientVersion": "1.21.61",
+      "channel": "stable",
+      "label": "Bedrock 1.21.61 · BDS 1.21.61.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.61.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.60.10",
+      "clientVersion": "1.21.60",
+      "channel": "stable",
+      "label": "Bedrock 1.21.60 · BDS 1.21.60.10",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.60.10.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.51.02",
+      "clientVersion": "1.21.51",
+      "channel": "stable",
+      "label": "Bedrock 1.21.51 · BDS 1.21.51.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.51.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.51.01",
+      "clientVersion": "1.21.51",
+      "channel": "stable",
+      "label": "Bedrock 1.21.51 · BDS 1.21.51.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.51.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.50.10",
+      "clientVersion": "1.21.50",
+      "channel": "stable",
+      "label": "Bedrock 1.21.50 · BDS 1.21.50.10",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.50.10.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.44.01",
+      "clientVersion": "1.21.44",
+      "channel": "stable",
+      "label": "Bedrock 1.21.44 · BDS 1.21.44.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.44.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.43.01",
+      "clientVersion": "1.21.43",
+      "channel": "stable",
+      "label": "Bedrock 1.21.43 · BDS 1.21.43.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.43.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.42.01",
+      "clientVersion": "1.21.42",
+      "channel": "stable",
+      "label": "Bedrock 1.21.42 · BDS 1.21.42.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.42.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.41.01",
+      "clientVersion": "1.21.41",
+      "channel": "stable",
+      "label": "Bedrock 1.21.41 · BDS 1.21.41.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.41.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.31.04",
+      "clientVersion": "1.21.31",
+      "channel": "stable",
+      "label": "Bedrock 1.21.31 · BDS 1.21.31.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.31.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.30.03",
+      "clientVersion": "1.21.30",
+      "channel": "stable",
+      "label": "Bedrock 1.21.30 · BDS 1.21.30.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.30.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.23.01",
+      "clientVersion": "1.21.23",
+      "channel": "stable",
+      "label": "Bedrock 1.21.23 · BDS 1.21.23.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.23.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.22.01",
+      "clientVersion": "1.21.22",
+      "channel": "stable",
+      "label": "Bedrock 1.21.22 · BDS 1.21.22.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.22.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.20.03",
+      "clientVersion": "1.21.20",
+      "channel": "stable",
+      "label": "Bedrock 1.21.20 · BDS 1.21.20.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.20.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.3.01",
+      "clientVersion": "1.21.3",
+      "channel": "stable",
+      "label": "Bedrock 1.21.3 · BDS 1.21.3.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.3.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.2.02",
+      "clientVersion": "1.21.2",
+      "channel": "stable",
+      "label": "Bedrock 1.21.2 · BDS 1.21.2.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.2.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.1.03",
+      "clientVersion": "1.21.1",
+      "channel": "stable",
+      "label": "Bedrock 1.21.1 · BDS 1.21.1.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.1.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.21.0.03",
+      "clientVersion": "1.21.0",
+      "channel": "stable",
+      "label": "Bedrock 1.21.0 · BDS 1.21.0.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.0.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.81.01",
+      "clientVersion": "1.20.81",
+      "channel": "stable",
+      "label": "Bedrock 1.20.81 · BDS 1.20.81.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.81.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.80.05",
+      "clientVersion": "1.20.80",
+      "channel": "stable",
+      "label": "Bedrock 1.20.80 · BDS 1.20.80.05",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.80.05.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.73.01",
+      "clientVersion": "1.20.73",
+      "channel": "stable",
+      "label": "Bedrock 1.20.73 · BDS 1.20.73.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.73.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.72.01",
+      "clientVersion": "1.20.72",
+      "channel": "stable",
+      "label": "Bedrock 1.20.72 · BDS 1.20.72.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.72.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.71.01",
+      "clientVersion": "1.20.71",
+      "channel": "stable",
+      "label": "Bedrock 1.20.71 · BDS 1.20.71.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.71.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.70.05",
+      "clientVersion": "1.20.70",
+      "channel": "stable",
+      "label": "Bedrock 1.20.70 · BDS 1.20.70.05",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.70.05.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.62.03",
+      "clientVersion": "1.20.62",
+      "channel": "stable",
+      "label": "Bedrock 1.20.62 · BDS 1.20.62.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.62.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.62.02",
+      "clientVersion": "1.20.62",
+      "channel": "stable",
+      "label": "Bedrock 1.20.62 · BDS 1.20.62.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.62.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.62.01",
+      "clientVersion": "1.20.62",
+      "channel": "stable",
+      "label": "Bedrock 1.20.62 · BDS 1.20.62.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.62.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.61.01",
+      "clientVersion": "1.20.60",
+      "channel": "stable",
+      "label": "Bedrock 1.20.60 · BDS 1.20.61.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.61.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.51.01",
+      "clientVersion": "1.20.51",
+      "channel": "stable",
+      "label": "Bedrock 1.20.51 · BDS 1.20.51.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.51.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.50.03",
+      "clientVersion": "1.20.50",
+      "channel": "stable",
+      "label": "Bedrock 1.20.50 · BDS 1.20.50.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.50.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.41.02",
+      "clientVersion": "1.20.41",
+      "channel": "stable",
+      "label": "Bedrock 1.20.41 · BDS 1.20.41.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.41.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.40.01",
+      "clientVersion": "1.20.40",
+      "channel": "stable",
+      "label": "Bedrock 1.20.40 · BDS 1.20.40.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.40.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.32.03",
+      "clientVersion": "1.20.32",
+      "channel": "stable",
+      "label": "Bedrock 1.20.32 · BDS 1.20.32.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.32.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.31.01",
+      "clientVersion": "1.20.31",
+      "channel": "stable",
+      "label": "Bedrock 1.20.31 · BDS 1.20.31.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.31.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.30.02",
+      "clientVersion": "1.20.30",
+      "channel": "stable",
+      "label": "Bedrock 1.20.30 · BDS 1.20.30.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.30.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.15.01",
+      "clientVersion": "1.20.15",
+      "channel": "stable",
+      "label": "Bedrock 1.20.15 · BDS 1.20.15.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.15.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.14.01",
+      "clientVersion": "1.20.14",
+      "channel": "stable",
+      "label": "Bedrock 1.20.14 · BDS 1.20.14.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.14.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.13.01",
+      "clientVersion": "1.20.13",
+      "channel": "stable",
+      "label": "Bedrock 1.20.13 · BDS 1.20.13.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.13.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.12.01",
+      "clientVersion": "1.20.12",
+      "channel": "stable",
+      "label": "Bedrock 1.20.12 · BDS 1.20.12.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.12.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.11.01",
+      "clientVersion": "1.20.11",
+      "channel": "stable",
+      "label": "Bedrock 1.20.11 · BDS 1.20.11.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.11.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.10.01",
+      "clientVersion": "1.20.10",
+      "channel": "stable",
+      "label": "Bedrock 1.20.10 · BDS 1.20.10.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.10.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.1.02",
+      "clientVersion": "1.20.1",
+      "channel": "stable",
+      "label": "Bedrock 1.20.1 · BDS 1.20.1.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.1.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.20.0.01",
+      "clientVersion": "1.20.0",
+      "channel": "stable",
+      "label": "Bedrock 1.20.0 · BDS 1.20.0.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.20.0.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.83.01",
+      "clientVersion": "1.19.83",
+      "channel": "stable",
+      "label": "Bedrock 1.19.83 · BDS 1.19.83.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.83.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.81.01",
+      "clientVersion": "1.19.81",
+      "channel": "stable",
+      "label": "Bedrock 1.19.81 · BDS 1.19.81.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.81.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.80.02",
+      "clientVersion": "1.19.80",
+      "channel": "stable",
+      "label": "Bedrock 1.19.80 · BDS 1.19.80.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.80.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.73.02",
+      "clientVersion": "1.19.73",
+      "channel": "stable",
+      "label": "Bedrock 1.19.73 · BDS 1.19.73.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.73.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.72.01",
+      "clientVersion": "1.19.72",
+      "channel": "stable",
+      "label": "Bedrock 1.19.72 · BDS 1.19.72.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.72.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.71.02",
+      "clientVersion": "1.19.71",
+      "channel": "stable",
+      "label": "Bedrock 1.19.71 · BDS 1.19.71.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.71.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.70.02",
+      "clientVersion": "1.19.70",
+      "channel": "stable",
+      "label": "Bedrock 1.19.70 · BDS 1.19.70.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.70.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.63.01",
+      "clientVersion": "1.19.63",
+      "channel": "stable",
+      "label": "Bedrock 1.19.63 · BDS 1.19.63.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.63.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.62.01",
+      "clientVersion": "1.19.62",
+      "channel": "stable",
+      "label": "Bedrock 1.19.62 · BDS 1.19.62.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.62.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.61.01",
+      "clientVersion": "1.19.61",
+      "channel": "stable",
+      "label": "Bedrock 1.19.61 · BDS 1.19.61.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.61.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.60.04",
+      "clientVersion": "1.19.60",
+      "channel": "stable",
+      "label": "Bedrock 1.19.60 · BDS 1.19.60.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.60.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.52.01",
+      "clientVersion": "1.19.52",
+      "channel": "stable",
+      "label": "Bedrock 1.19.52 · BDS 1.19.52.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.52.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.51.01",
+      "clientVersion": "1.19.51",
+      "channel": "stable",
+      "label": "Bedrock 1.19.51 · BDS 1.19.51.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.51.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.50.02",
+      "clientVersion": "1.19.50",
+      "channel": "stable",
+      "label": "Bedrock 1.19.50 · BDS 1.19.50.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.50.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.41.01",
+      "clientVersion": "1.19.41",
+      "channel": "stable",
+      "label": "Bedrock 1.19.41 · BDS 1.19.41.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.41.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.40.02",
+      "clientVersion": "1.19.40",
+      "channel": "stable",
+      "label": "Bedrock 1.19.40 · BDS 1.19.40.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.40.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.31.01",
+      "clientVersion": "1.19.31",
+      "channel": "stable",
+      "label": "Bedrock 1.19.31 · BDS 1.19.31.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.31.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.30.04",
+      "clientVersion": "1.19.30",
+      "channel": "stable",
+      "label": "Bedrock 1.19.30 · BDS 1.19.30.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.30.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.22.01",
+      "clientVersion": "1.19.22",
+      "channel": "stable",
+      "label": "Bedrock 1.19.22 · BDS 1.19.22.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.22.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.21.01",
+      "clientVersion": "1.19.21",
+      "channel": "stable",
+      "label": "Bedrock 1.19.21 · BDS 1.19.21.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.21.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.20.02",
+      "clientVersion": "1.19.20",
+      "channel": "stable",
+      "label": "Bedrock 1.19.20 · BDS 1.19.20.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.20.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.11.01",
+      "clientVersion": "1.19.11",
+      "channel": "stable",
+      "label": "Bedrock 1.19.11 · BDS 1.19.11.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.11.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.10.03",
+      "clientVersion": "1.19.10",
+      "channel": "stable",
+      "label": "Bedrock 1.19.10 · BDS 1.19.10.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.10.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.2.02",
+      "clientVersion": "1.19.2",
+      "channel": "stable",
+      "label": "Bedrock 1.19.2 · BDS 1.19.2.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.2.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.19.1.01",
+      "clientVersion": "1.19.1",
+      "channel": "stable",
+      "label": "Bedrock 1.19.1 · BDS 1.19.1.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.19.1.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.33.02",
+      "clientVersion": "1.18.33",
+      "channel": "stable",
+      "label": "Bedrock 1.18.33 · BDS 1.18.33.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.33.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.32.02",
+      "clientVersion": "1.18.32",
+      "channel": "stable",
+      "label": "Bedrock 1.18.32 · BDS 1.18.32.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.32.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.31.04",
+      "clientVersion": "1.18.31",
+      "channel": "stable",
+      "label": "Bedrock 1.18.31 · BDS 1.18.31.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.31.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.30.04",
+      "clientVersion": "1.18.30",
+      "channel": "stable",
+      "label": "Bedrock 1.18.30 · BDS 1.18.30.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.30.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.12.01",
+      "clientVersion": "1.18.12",
+      "channel": "stable",
+      "label": "Bedrock 1.18.12 · BDS 1.18.12.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.12.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.11.01",
+      "clientVersion": "1.18.10",
+      "channel": "stable",
+      "label": "Bedrock 1.18.10 · BDS 1.18.11.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.11.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.2.03",
+      "clientVersion": "1.18.2",
+      "channel": "stable",
+      "label": "Bedrock 1.18.2 · BDS 1.18.2.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.2.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.1.02",
+      "clientVersion": "1.18.1",
+      "channel": "stable",
+      "label": "Bedrock 1.18.1 · BDS 1.18.1.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.1.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.18.0.02",
+      "clientVersion": "1.18.0",
+      "channel": "stable",
+      "label": "Bedrock 1.18.0 · BDS 1.18.0.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.18.0.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.41.01",
+      "clientVersion": "1.17.41",
+      "channel": "stable",
+      "label": "Bedrock 1.17.41 · BDS 1.17.41.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.41.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.40.06",
+      "clientVersion": "1.17.40",
+      "channel": "stable",
+      "label": "Bedrock 1.17.40 · BDS 1.17.40.06",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.40.06.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.34.02",
+      "clientVersion": "1.17.34",
+      "channel": "stable",
+      "label": "Bedrock 1.17.34 · BDS 1.17.34.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.34.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.33.01",
+      "clientVersion": "1.17.33",
+      "channel": "stable",
+      "label": "Bedrock 1.17.33 · BDS 1.17.33.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.33.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.32.02",
+      "clientVersion": "1.17.32",
+      "channel": "stable",
+      "label": "Bedrock 1.17.32 · BDS 1.17.32.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.32.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.31.01",
+      "clientVersion": "1.17.30",
+      "channel": "stable",
+      "label": "Bedrock 1.17.30 · BDS 1.17.31.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.31.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.30.04",
+      "clientVersion": "1.17.30",
+      "channel": "stable",
+      "label": "Bedrock 1.17.30 · BDS 1.17.30.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.30.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.11.01",
+      "clientVersion": "1.17.11",
+      "channel": "stable",
+      "label": "Bedrock 1.17.11 · BDS 1.17.11.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.11.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.10.04",
+      "clientVersion": "1.17.10",
+      "channel": "stable",
+      "label": "Bedrock 1.17.10 · BDS 1.17.10.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.10.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.2.01",
+      "clientVersion": "1.17.2",
+      "channel": "stable",
+      "label": "Bedrock 1.17.2 · BDS 1.17.2.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.2.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.1.01",
+      "clientVersion": "1.17.1",
+      "channel": "stable",
+      "label": "Bedrock 1.17.1 · BDS 1.17.1.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.1.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.17.0.03",
+      "clientVersion": "1.17.0",
+      "channel": "stable",
+      "label": "Bedrock 1.17.0 · BDS 1.17.0.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.17.0.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.221.01",
+      "clientVersion": "1.16.221",
+      "channel": "stable",
+      "label": "Bedrock 1.16.221 · BDS 1.16.221.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.221.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.220.02",
+      "clientVersion": "1.16.220",
+      "channel": "stable",
+      "label": "Bedrock 1.16.220 · BDS 1.16.220.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.220.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.210.06",
+      "clientVersion": "1.16.210",
+      "channel": "stable",
+      "label": "Bedrock 1.16.210 · BDS 1.16.210.06",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.210.06.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.210.05",
+      "clientVersion": "1.16.210",
+      "channel": "stable",
+      "label": "Bedrock 1.16.210 · BDS 1.16.210.05",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.210.05.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.201.03",
+      "clientVersion": "1.16.201",
+      "channel": "stable",
+      "label": "Bedrock 1.16.201 · BDS 1.16.201.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.201.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.201.02",
+      "clientVersion": "1.16.201",
+      "channel": "stable",
+      "label": "Bedrock 1.16.201 · BDS 1.16.201.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.201.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.200.02",
+      "clientVersion": "1.16.200",
+      "channel": "stable",
+      "label": "Bedrock 1.16.200 · BDS 1.16.200.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.200.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.101.01",
+      "clientVersion": "1.16.101",
+      "channel": "stable",
+      "label": "Bedrock 1.16.101 · BDS 1.16.101.01",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.101.01.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.100.04",
+      "clientVersion": "1.16.100",
+      "channel": "stable",
+      "label": "Bedrock 1.16.100 · BDS 1.16.100.04",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.100.04.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.40.02",
+      "clientVersion": "1.16.40",
+      "channel": "stable",
+      "label": "Bedrock 1.16.40 · BDS 1.16.40.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.40.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.20.03",
+      "clientVersion": "1.16.20",
+      "channel": "stable",
+      "label": "Bedrock 1.16.20 · BDS 1.16.20.03",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.20.03.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.1.02",
+      "clientVersion": "1.16.1",
+      "channel": "stable",
+      "label": "Bedrock 1.16.1 · BDS 1.16.1.02",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.1.02.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.16.0.2",
+      "clientVersion": "1.16.0",
+      "channel": "stable",
+      "label": "Bedrock 1.16.0 · BDS 1.16.0.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.16.0.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.60.5",
+      "clientVersion": "1.14.60",
+      "channel": "stable",
+      "label": "Bedrock 1.14.60 · BDS 1.14.60.5",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.60.5.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.32.1",
+      "clientVersion": "1.14.32",
+      "channel": "stable",
+      "label": "Bedrock 1.14.32 · BDS 1.14.32.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.32.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.30.2",
+      "clientVersion": "1.14.30",
+      "channel": "stable",
+      "label": "Bedrock 1.14.30 · BDS 1.14.30.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.30.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.21.0",
+      "clientVersion": "1.14.21",
+      "channel": "stable",
+      "label": "Bedrock 1.14.21 · BDS 1.14.21.0",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.21.0.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.20.1",
+      "clientVersion": "1.14.20",
+      "channel": "stable",
+      "label": "Bedrock 1.14.20 · BDS 1.14.20.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.20.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.1.4",
+      "clientVersion": "1.14.1",
+      "channel": "stable",
+      "label": "Bedrock 1.14.1 · BDS 1.14.1.4",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.1.4.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.14.0.9",
+      "clientVersion": "1.14.0",
+      "channel": "stable",
+      "label": "Bedrock 1.14.0 · BDS 1.14.0.9",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.14.0.9.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.13.3.0",
+      "clientVersion": "1.13.3",
+      "channel": "stable",
+      "label": "Bedrock 1.13.3 · BDS 1.13.3.0",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.13.3.0.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.13.2.0",
+      "clientVersion": "1.13.2",
+      "channel": "stable",
+      "label": "Bedrock 1.13.2 · BDS 1.13.2.0",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.13.2.0.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.13.1.5",
+      "clientVersion": "1.13.1",
+      "channel": "stable",
+      "label": "Bedrock 1.13.1 · BDS 1.13.1.5",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.13.1.5.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.13.0.34",
+      "clientVersion": "1.13.0",
+      "channel": "stable",
+      "label": "Bedrock 1.13.0 · BDS 1.13.0.34",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.13.0.34.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.12.1.1",
+      "clientVersion": "1.12.1",
+      "channel": "stable",
+      "label": "Bedrock 1.12.1 · BDS 1.12.1.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.12.1.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.12.0.28",
+      "clientVersion": "1.12.0",
+      "channel": "stable",
+      "label": "Bedrock 1.12.0 · BDS 1.12.0.28",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.12.0.28.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.11.4.2",
+      "clientVersion": "1.11.4",
+      "channel": "stable",
+      "label": "Bedrock 1.11.4 · BDS 1.11.4.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.11.4.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.11.2.1",
+      "clientVersion": "1.11.2",
+      "channel": "stable",
+      "label": "Bedrock 1.11.2 · BDS 1.11.2.1",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.11.2.1.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.11.1.2",
+      "clientVersion": "1.11.1",
+      "channel": "stable",
+      "label": "Bedrock 1.11.1 · BDS 1.11.1.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.11.1.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.11.0.23",
+      "clientVersion": "1.11.0",
+      "channel": "stable",
+      "label": "Bedrock 1.11.0 · BDS 1.11.0.23",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.11.0.23.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.10.0.7",
+      "clientVersion": "1.10.0",
+      "channel": "stable",
+      "label": "Bedrock 1.10.0 · BDS 1.10.0.7",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.10.0.7.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.9.0.15",
+      "clientVersion": "1.9.0",
+      "channel": "stable",
+      "label": "Bedrock 1.9.0 · BDS 1.9.0.15",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.9.0.15.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.8.1.2",
+      "clientVersion": "1.8.1",
+      "channel": "stable",
+      "label": "Bedrock 1.8.1 · BDS 1.8.1.2",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.8.1.2.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.8.0.24",
+      "clientVersion": "1.8.0",
+      "channel": "stable",
+      "label": "Bedrock 1.8.0 · BDS 1.8.0.24",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.8.0.24.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.7.0.13",
+      "clientVersion": "1.7.0",
+      "channel": "stable",
+      "label": "Bedrock 1.7.0 · BDS 1.7.0.13",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.7.0.13.zip",
+      "releaseDate": null
+    },
+    {
+      "version": "1.6.1.0",
+      "clientVersion": "1.6.1",
+      "channel": "stable",
+      "label": "Bedrock 1.6.1 · BDS 1.6.1.0",
+      "downloadUrl": "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.6.1.0.zip",
+      "releaseDate": null
+    }
+  ]
+}

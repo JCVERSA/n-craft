@@ -1,0 +1,344 @@
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { DeployInProgressError, DeployPipeline } from '../src/bedrock/deployPipeline.ts';
+import { StateStore } from '../src/state.ts';
+import type { SystemPreflight } from '../src/types/backend.ts';
+
+const configuration = {
+  version: '1.19.50.02',
+  serverName: 'test',
+  levelName: 'world',
+  gamemode: 'survival' as const,
+  difficulty: 'normal' as const,
+  maxPlayers: 4,
+  adminXuids: ['1234567890123456'],
+  seed: '',
+  viewDistance: 10,
+  allowCheats: false,
+  eulaAccepted: true,
+};
+
+function preflight(deployReady: boolean): SystemPreflight {
+  return {
+    checkedAt: new Date().toISOString(),
+    platform: 'linux',
+    arch: 'x64',
+    nodeVersion: 'v22',
+    glibcVersion: '2.36',
+    glibc: { ok: true, detail: 'test' },
+    libcurl: { ok: deployReady, detail: deployReady ? 'test' : 'missing for test' },
+    legacyOpenSsl: { ok: false, detail: 'not installed in test fixture' },
+    memoryLimitBytes: 2 * 1024 ** 3,
+    memoryRequirementBytes: 4 * 1024 ** 3,
+    memoryWarning: true,
+    diskFreeBytes: 8 * 1024 ** 3,
+    dataDiskFreeBytes: 8 * 1024 ** 3,
+    serverDiskFreeBytes: 8 * 1024 ** 3,
+    dataDiskRequiredBytes: 6 * 1024 ** 3,
+    serverDiskRequiredBytes: 0,
+    sharedDiskVolume: true,
+    diskWarning: false,
+    portwarpBinary: { ok: false, detail: 'missing' },
+    playitBinary: { ok: false, detail: 'missing' },
+    playitCliBinary: { ok: false, detail: 'missing' },
+    localtonetBinary: { ok: false, detail: 'missing' },
+    bedrockBinary: { ok: false, detail: 'not deployed' },
+    deployReady,
+    warnings: [],
+  };
+}
+
+test('rejects concurrent deploy calls in process', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-lock-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+
+    let releasePreflight!: (value: SystemPreflight) => void;
+    const preflightPromise = new Promise<SystemPreflight>((resolve) => { releasePreflight = resolve; });
+    const inspector = { inspect: async () => preflightPromise } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isRunning: false,
+      pid: null,
+      stop: async () => undefined,
+      start: async () => undefined,
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => undefined,
+    );
+
+    const preflightStarted = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.step !== 'preflight') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+    pipeline.start(configuration);
+    assert.throws(() => pipeline.start(configuration), DeployInProgressError);
+    await preflightStarted;
+
+    const pipelineFailed = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.status !== 'failed') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+    releasePreflight(preflight(false));
+
+    await pipelineFailed;
+    await new Promise<void>((resolve) => {
+      const waitForPipeline = () => pipeline.isRunning ? setImmediate(waitForPipeline) : resolve();
+      waitForPipeline();
+    });
+    await state.flush();
+    assert.equal(state.getSnapshot().pipeline.status, 'failed');
+    assert.equal(state.getSnapshot().server.status, 'stopped');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('an unavailable release leaves the running server and existing data untouched', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-stop-failure-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    const sentinelPath = path.join(serverDirectory, 'preserve-me.txt');
+    await writeFile(sentinelPath, 'old world', 'utf8');
+
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    const inspector = { inspect: async () => preflight(true) } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isRunning: true,
+      pid: 4321,
+      stop: async () => { stopCalls += 1; throw new Error('process did not exit'); },
+      start: async () => { throw new Error('must not start'); },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const pipeline = new DeployPipeline(state, fakeConsole, inspector, dataDirectory, serverDirectory, () => undefined);
+    const pipelineFailed = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.status !== 'failed') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+
+    pipeline.start(configuration);
+    await pipelineFailed;
+    await new Promise<void>((resolve) => {
+      const waitForPipeline = () => pipeline.isRunning ? setImmediate(waitForPipeline) : resolve();
+      waitForPipeline();
+    });
+    await state.flush();
+
+    assert.equal(await readFile(sentinelPath, 'utf8'), 'old world');
+    assert.equal(stopCalls, 0, 'the running Bedrock server is not stopped when the release is unavailable');
+    assert.equal(state.getSnapshot().server.status, 'running');
+    assert.equal(state.getSnapshot().pipeline.status, 'failed');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('runtime dependency failure is detected before a running server is stopped or files are replaced', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-runtime-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    const sentinelPath = path.join(serverDirectory, 'preserve-me.txt');
+    await writeFile(sentinelPath, 'old server data', 'utf8');
+
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    await state.setActiveConfig(configuration);
+    await state.updateServer({ status: 'running', pid: 4321, startedAt: new Date().toISOString(), error: null });
+    const inspector = { inspect: async () => preflight(true) } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    let startCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isRunning: true,
+      pid: 4321,
+      stop: async () => { stopCalls += 1; },
+      start: async () => { startCalls += 1; },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const runtimeDependencies = {
+      ensureForBinary: async () => {
+        assert.equal(fakeConsole.isRunning, true, 'dependency checks happen while the old server is still online');
+        throw new Error('verified OpenSSL 1.1 runtime unavailable');
+      },
+      libraryDirectories: () => [],
+    };
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => ({
+        version: configuration.version,
+        clientVersion: '1.19.50',
+        channel: 'stable',
+        label: configuration.version,
+        downloadUrl: 'https://fixture.invalid/bedrock.zip',
+        releaseDate: null,
+      }),
+      {
+        download: async (_url, destination) => {
+          await writeFile(destination, 'fixture archive', 'utf8');
+          return { bytes: 15, finalUrl: 'https://fixture.invalid/bedrock.zip' };
+        },
+        extract: async (_archive, destination) => {
+          await writeFile(path.join(destination, 'bedrock_server'), '#!/bin/sh\\nexit 0\\n', { mode: 0o700 });
+        },
+      },
+      undefined,
+      runtimeDependencies,
+    );
+    const pipelineFailed = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.status !== 'failed') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+
+    pipeline.start(configuration);
+    await pipelineFailed;
+    await new Promise<void>((resolve) => {
+      const waitForPipeline = () => pipeline.isRunning ? setImmediate(waitForPipeline) : resolve();
+      waitForPipeline();
+    });
+
+    assert.equal(await readFile(sentinelPath, 'utf8'), 'old server data');
+    assert.equal(stopCalls, 0);
+    assert.equal(startCalls, 0);
+    assert.equal(state.getSnapshot().server.status, 'running');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('scheduled restart validates OpenSSL before stopping the live Bedrock process', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-scheduled-runtime-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    await writeFile(path.join(serverDirectory, 'bedrock_server'), '#!/bin/sh\\nexit 0\\n', { mode: 0o700 });
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    await state.setActiveConfig(configuration);
+    await state.updateServer({ status: 'running', pid: 4321, startedAt: new Date().toISOString(), error: null });
+    const readyPreflight = { ...preflight(true), bedrockBinary: { ok: true, detail: 'present' } };
+    const inspector = { inspect: async () => readyPreflight } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    let startCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isReady: true,
+      isRunning: true,
+      pid: 4321,
+      stop: async () => { stopCalls += 1; },
+      start: async () => { startCalls += 1; },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const runtimeDependencies = {
+      ensureForBinary: async () => { throw new Error('verified OpenSSL 1.1 runtime unavailable'); },
+      libraryDirectories: () => [],
+    };
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => undefined,
+      undefined,
+      undefined,
+      runtimeDependencies,
+    );
+
+    await assert.rejects(pipeline.restartExisting(), /verified OpenSSL 1\.1 runtime unavailable/);
+    assert.equal(stopCalls, 0);
+    assert.equal(startCalls, 0);
+    assert.equal(state.getSnapshot().server.status, 'running');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
+
+test('shutdown cancels an in-flight preflight without changing server files or starting Bedrock', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'nebula-deploy-shutdown-'));
+  try {
+    const dataDirectory = path.join(directory, 'data');
+    const serverDirectory = path.join(directory, 'bedrock', 'server');
+    await mkdir(serverDirectory, { recursive: true });
+    const sentinelPath = path.join(serverDirectory, 'preserve-me.txt');
+    await writeFile(sentinelPath, 'old data', 'utf8');
+
+    const state = new StateStore(dataDirectory);
+    await state.initialize();
+    let releasePreflight!: (value: SystemPreflight) => void;
+    const preflightPromise = new Promise<SystemPreflight>((resolve) => { releasePreflight = resolve; });
+    const inspector = { inspect: async () => preflightPromise } as unknown as ConstructorParameters<typeof DeployPipeline>[2];
+    let stopCalls = 0;
+    let startCalls = 0;
+    const fakeConsole = Object.assign(new EventEmitter(), {
+      isRunning: false,
+      pid: null,
+      stop: async () => { stopCalls += 1; },
+      start: async () => { startCalls += 1; },
+    }) as unknown as ConstructorParameters<typeof DeployPipeline>[1];
+    const pipeline = new DeployPipeline(
+      state,
+      fakeConsole,
+      inspector,
+      dataDirectory,
+      serverDirectory,
+      () => undefined,
+    );
+
+    const preflightStarted = new Promise<void>((resolve) => {
+      const onChange = (snapshot: ReturnType<StateStore['getSnapshot']>) => {
+        if (snapshot.pipeline.step !== 'preflight') return;
+        state.removeListener('change', onChange);
+        resolve();
+      };
+      state.on('change', onChange);
+    });
+    pipeline.start(configuration);
+    await preflightStarted;
+
+    const shutdown = pipeline.shutdown();
+    releasePreflight(preflight(true));
+    await shutdown;
+    await state.flush();
+
+    assert.equal(await readFile(sentinelPath, 'utf8'), 'old data');
+    assert.equal(startCalls, 0);
+    assert.equal(stopCalls, 2);
+    assert.equal(pipeline.isRunning, false);
+    assert.equal(state.getSnapshot().pipeline.status, 'failed');
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});

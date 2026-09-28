@@ -6,3 +6,18 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime data; keep the manually curated catalogue in Git.
+data/state.json
+data/bedrock-chatbot/
+data/worlds.json
+data/.world-import-*/
+data/.world-upload-*.zip
+data/panel.pid
+data/playit/
+data/state.json.*.tmp
+data/state.json.corrupt-*
+data/server.log*
+data/runtime/
+data/*.zip
+bedrock/server/
