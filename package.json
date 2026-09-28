@@ -13,7 +13,8 @@
     "preview": "NODE_ENV=production node build/server.js",
     "clean": "rm -rf dist build",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "chatbot:probe": "tsx scripts/chatbot-bds-probe.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
