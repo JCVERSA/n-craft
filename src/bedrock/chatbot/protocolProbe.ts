@@ -71,8 +71,8 @@ export function resolveProtocolProbeTarget(
 export interface ProbeClient {
   username?: string;
   on(event: string, listener: (...args: unknown[]) => void): this;
-  init(): void;
-  connect(): void;
+  init(): void | Promise<unknown>;
+  connect(): void | Promise<unknown>;
   queue(name: string, packet: Record<string, unknown>): void;
   disconnect?(reason?: string, hide?: boolean): void;
   close?(reason?: string): void;
@@ -123,6 +123,7 @@ export async function runChatbotBdsProtocolProbe(options: {
   port: number;
   clientFactory: ProbeClientFactory;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<ProtocolProbeResult> {
   const target = resolveProtocolProbeTarget(options.entry);
   if (!target.supported || !target.clientVersion || target.protocolVersion === null) {
@@ -134,6 +135,10 @@ export async function runChatbotBdsProtocolProbe(options: {
   const timeoutMs = options.timeoutMs ?? 25_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
     throw new Error('Le délai de test doit être compris entre 1000 et 120000 ms.');
+  }
+  if (options.signal?.aborted) {
+    const reason = options.signal.reason;
+    throw reason instanceof Error ? reason : new Error('Test de compatibilité annulé.');
   }
 
   const suffix = randomBytes(4).toString('hex');
@@ -157,6 +162,7 @@ export async function runChatbotBdsProtocolProbe(options: {
       conLog: () => undefined,
       delayedInit: true,
     });
+    clients.push(sender);
     const receiver = options.clientFactory({
       host: '127.0.0.1',
       port: options.port,
@@ -170,7 +176,7 @@ export async function runChatbotBdsProtocolProbe(options: {
       conLog: () => undefined,
       delayedInit: true,
     });
-    clients.push(sender, receiver);
+    clients.push(receiver);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -180,10 +186,20 @@ export async function runChatbotBdsProtocolProbe(options: {
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
+        options.signal?.removeEventListener('abort', onAbort);
         if (error) reject(error);
         else resolve();
       };
-      timer = setTimeout(() => finish(new Error('Aucun aller-retour du message de test avant le délai imparti.')), timeoutMs);
+      const onAbort = () => {
+        const reason = options.signal?.reason;
+        finish(reason instanceof Error ? reason : new Error('Test de compatibilité annulé.'));
+      };
+      options.signal?.addEventListener('abort', onAbort, { once: true });
+      if (options.signal?.aborted) {
+        onAbort();
+        return;
+      }
+      timer = setTimeout(() => finish(new Error(`Aucun aller-retour du message de test sur 127.0.0.1:${options.port}; vérifie que le BDS temporaire est démarré sur ce port.`)), timeoutMs);
 
       receiver.on('text', (packet) => {
         if (packetContainsMarker(packet, marker)) finish();
@@ -195,9 +211,11 @@ export async function runChatbotBdsProtocolProbe(options: {
         client.on('close', () => finish(new Error('La connexion au BDS a été fermée avant le test de chat.')));
         client.on('connect_allowed', () => {
           try {
-            client.connect();
+            void Promise.resolve(client.connect()).catch(() => {
+              finish(new Error(`Impossible de joindre le BDS temporaire sur 127.0.0.1:${options.port}; vérifie qu’il est démarré et que son port correspond.`));
+            });
           } catch {
-            finish(new Error('Impossible de terminer la connexion au BDS local.'));
+            finish(new Error(`Impossible de joindre le BDS temporaire sur 127.0.0.1:${options.port}; vérifie qu’il est démarré et que son port correspond.`));
           }
         });
         client.on('spawn', () => {
@@ -213,7 +231,11 @@ export async function runChatbotBdsProtocolProbe(options: {
       }
 
       try {
-        for (const client of clients) client.init();
+        for (const client of clients) {
+          void Promise.resolve(client.init()).catch(() => {
+            finish(new Error(`Impossible de joindre le BDS temporaire sur 127.0.0.1:${options.port}; vérifie qu’il est démarré et que son port correspond.`));
+          });
+        }
       } catch {
         finish(new Error('Impossible de démarrer les clients de test Bedrock.'));
       }

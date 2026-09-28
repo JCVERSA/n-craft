@@ -102,6 +102,38 @@ test('probe connects two offline loopback clients and requires a relayed chat ma
   }
 });
 
+test('probe converts a rejected client initialization into a readable connection failure', async () => {
+  await assert.rejects(
+    runChatbotBdsProtocolProbe({
+      entry: build('1.19.50.02'),
+      port: 29_132,
+      timeoutMs: 2_000,
+      clientFactory: (options) => {
+        const client = new FakeProbeClient(options);
+        client.init = () => Promise.reject(new Error('native transport failure'));
+        return client;
+      },
+    }),
+    /Impossible de joindre le BDS temporaire sur 127.0.0.1:29132/,
+  );
+});
+
+test('probe rejects an already-aborted attempt before creating any network client', async () => {
+  const controller = new AbortController();
+  controller.abort(new Error('test annulé par le terminal'));
+  let created = false;
+  await assert.rejects(
+    runChatbotBdsProtocolProbe({
+      entry: build('1.19.50.02'),
+      port: 29_132,
+      signal: controller.signal,
+      clientFactory: () => { created = true; throw new Error('should not be called'); },
+    }),
+    /test annulé par le terminal/,
+  );
+  assert.equal(created, false);
+});
+
 test('probe rejects invalid ports before creating any network client', async () => {
   let created = false;
   await assert.rejects(

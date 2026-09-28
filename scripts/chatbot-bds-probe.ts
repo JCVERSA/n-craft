@@ -56,6 +56,7 @@ async function main(): Promise<void> {
   console.log(`Version BDS à tester : ${entry.version}`);
   console.log(`Client de test : ${target.clientVersion} · protocole ${target.protocolVersion}${target.usesAlias ? ' (alias de protocole)' : ''}`);
   console.log(`Adresse : 127.0.0.1:${args.port} (le script refuse les connexions distantes)`);
+  console.log(`Le BDS temporaire doit déjà être démarré et écouter sur le port ${args.port}; cette commande ne démarre pas le serveur.`);
   console.log('Le test envoie un message ordinaire et aléatoire entre deux clients hors ligne; il ne commence pas par « .. ».');
   console.log('Aucun compte Microsoft, aucune clé IA, aucun monde et aucun fichier de configuration N-Craft ne sont utilisés.');
   console.warn('À utiliser uniquement avec une copie BDS temporaire et vide, en mode hors ligne, sans port public, tunnel ni transfert UDP.');
@@ -73,11 +74,30 @@ async function main(): Promise<void> {
   const { Client } = require('bedrock-protocol/src/client.js') as {
     Client: new(options: Record<string, unknown>) => ProbeClient;
   };
-  const result = await runChatbotBdsProtocolProbe({
-    entry,
-    port: args.port,
-    clientFactory: (clientOptions) => new Client(clientOptions),
+  const abortController = new AbortController();
+  let rejectNativeFailure: (reason?: unknown) => void = () => undefined;
+  let nativeFailureHandled = false;
+  const nativeFailure = new Promise<never>((_resolve, reject) => { rejectNativeFailure = reject; });
+  process.on('unhandledRejection', (reason: unknown) => {
+    if (nativeFailureHandled) return;
+    nativeFailureHandled = true;
+    const failure = new Error(
+      `Le client RakNet n’a pas pu joindre le BDS sur 127.0.0.1:${args.port}. Démarre d’abord la copie temporaire, vérifie server-port=${args.port} et online-mode=false, puis relance le probe.`,
+    );
+    abortController.abort(failure);
+    rejectNativeFailure(failure);
+    // Consume the native detail without printing internal stack traces or account data.
+    void reason;
   });
+  const result = await Promise.race([
+    runChatbotBdsProtocolProbe({
+      entry,
+      port: args.port,
+      signal: abortController.signal,
+      clientFactory: (clientOptions) => new Client(clientOptions),
+    }),
+    nativeFailure,
+  ]);
   console.log(`PASS — le BDS ${result.build} a relayé le message entre deux clients de test (protocole ${result.protocolVersion}).`);
   console.log('Cela valide ce test local uniquement; l’authentification Microsoft et les fournisseurs IA ne sont pas testés.');
 }
