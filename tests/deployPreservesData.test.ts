@@ -82,9 +82,11 @@ async function waitForUpdatedProcess(state: StateStore, previousPid: number | nu
 function testVersion(version: string): VersionEntry {
   return {
     version,
+    clientVersion: version.split('.').slice(0, 3).join('.'),
+    channel: 'stable',
     label: version,
     downloadUrl: `https://minecraft.azureedge.net/bin-linux/bedrock-server-${version}.zip`,
-    releaseDate: 'test',
+    releaseDate: null,
   };
 }
 

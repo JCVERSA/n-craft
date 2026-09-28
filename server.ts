@@ -8,6 +8,7 @@ import path from 'node:path';
 import { PanelAuthService } from './src/auth.ts';
 import { BedrockConsole, attachConsoleWebSocket } from './src/bedrock/console.ts';
 import { DeployPipeline } from './src/bedrock/deployPipeline.ts';
+import { WorldManager } from './src/bedrock/worldManager.ts';
 import { BedrockRestartScheduler } from './src/bedrock/scheduler.ts';
 import { BedrockMetricsSampler } from './src/bedrock/processMetrics.ts';
 import { SystemInspector } from './src/preflight.ts';
@@ -55,6 +56,7 @@ const state = new StateStore(dataDirectory);
 await state.initialize();
 const catalog = new VersionCatalog(dataDirectory);
 await catalog.load();
+const worldManager = new WorldManager(dataDirectory, serverDirectory);
 
 const auth = new PanelAuthService(process.env.PANEL_TOKEN);
 const bedrockConsole = new BedrockConsole(dataDirectory);
@@ -74,7 +76,10 @@ const pipeline = new DeployPipeline(
   dataDirectory,
   serverDirectory,
   (version) => catalog.get(version),
+  undefined,
+  worldManager,
 );
+await worldManager.initialize(state.getSnapshot().activeConfig);
 const scheduler = new BedrockRestartScheduler(state, bedrockConsole, pipeline);
 const metricsSampler = new BedrockMetricsSampler(state);
 const playitRunner = new PlayitRunner(playitCommand, process.env.PLAYIT_SECRET_KEY, state, {
@@ -106,7 +111,7 @@ app.get('/api/health', (_request, response) => {
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
 app.use('/api/auth', createAuthRouter(auth));
-app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, playitRunner, portwarpRunner, tunnelProvider }));
+app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, worldManager, playitRunner, portwarpRunner, tunnelProvider }));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 
 let viteServer: ViteDevServer | null = null;

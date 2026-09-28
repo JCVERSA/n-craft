@@ -10,6 +10,7 @@ import { mergeBedrockRelease } from './installRelease.ts';
 import { SystemInspector } from '../preflight.ts';
 import { StateStore } from '../state.ts';
 import type { DeployConfiguration, PipelineStep, VersionEntry } from '../types/backend.ts';
+import type { WorldManager } from './worldManager.ts';
 
 export class DeployInProgressError extends Error {
   constructor() {
@@ -97,6 +98,7 @@ export class DeployPipeline {
       download: typeof downloadBedrockArchive;
       extract: typeof extractZipSafely;
     } = { download: downloadBedrockArchive, extract: extractZipSafely },
+    private readonly worldManager?: WorldManager,
   ) {
     this.serverDirectory = path.resolve(serverDirectory);
     this.stopTimeoutMs = this.readTimeout('BDS_STOP_TIMEOUT_MS', 10_000);
@@ -114,7 +116,7 @@ export class DeployPipeline {
 
   /** Start without holding the HTTP request open for the full download/extract. */
   start(configuration: DeployConfiguration): void {
-    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    if (this.active || this.shuttingDown || this.worldManager?.isBusy) throw new DeployInProgressError();
     this.active = true;
     const controller = new AbortController();
     this.activeController = controller;
@@ -129,14 +131,14 @@ export class DeployPipeline {
     );
   }
 
-  /** Restart an already deployed server without touching its world or configuration. */
-  startExisting(): void {
-    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+  /** Start an already installed BDS build, optionally selecting a different world of that exact build. */
+  startExisting(configuration?: DeployConfiguration): void {
+    if (this.active || this.shuttingDown || this.worldManager?.isBusy) throw new DeployInProgressError();
 
     this.active = true;
     const controller = new AbortController();
     this.activeController = controller;
-    const runPromise = this.runExistingStart(controller.signal);
+    const runPromise = this.runExistingStart(controller.signal, configuration);
     this.activeRun = runPromise;
     void runPromise.then(
       () => this.finishRun(runPromise),
@@ -149,7 +151,7 @@ export class DeployPipeline {
 
   /** Atomic stop/start operation used by the scheduled restart countdown. */
   restartExisting(): Promise<void> {
-    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    if (this.active || this.shuttingDown || this.worldManager?.isBusy) throw new DeployInProgressError();
     if (!this.bedrockConsole.isReady) throw new Error('Le redémarrage planifié a été annulé : Bedrock n’est plus en ligne.');
     if (!this.state.getSnapshot().activeConfig) throw new ServerNotInstalledError();
 
@@ -162,7 +164,7 @@ export class DeployPipeline {
   }
 
   async stop(): Promise<void> {
-    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    if (this.active || this.shuttingDown || this.worldManager?.isBusy) throw new DeployInProgressError();
     this.active = true;
     const runPromise = this.performStop();
     this.activeRun = runPromise;
@@ -175,7 +177,7 @@ export class DeployPipeline {
 
   /** Save changed settings only while Bedrock is stopped; never downloads or starts it. */
   async saveConfiguration(configuration: DeployConfiguration): Promise<void> {
-    if (this.active || this.shuttingDown) throw new DeployInProgressError();
+    if (this.active || this.shuttingDown || this.worldManager?.isBusy) throw new DeployInProgressError();
     const snapshot = this.state.getSnapshot();
     const currentConfig = snapshot.activeConfig;
     if (!currentConfig) throw new ServerNotInstalledError();
@@ -438,6 +440,11 @@ export class DeployPipeline {
         playersOnline: this.bedrockConsole.onlinePlayersCount,
         error: null,
       });
+      if (this.worldManager) {
+        await this.worldManager.markUsedByConfiguration(deploymentConfig).catch((error) => {
+          console.warn(`[worlds] Could not update last-used metadata: ${(error as Error).message}`);
+        });
+      }
       if (!this.bedrockConsole.isReady) throw new Error('bedrock_server s’est arrêté pendant la finalisation du déploiement.');
       await this.state.updatePipeline({ status: 'idle', step: 'running', error: null });
       if (!this.bedrockConsole.isReady) throw new Error('bedrock_server s’est arrêté juste après la finalisation du déploiement.');
@@ -521,12 +528,16 @@ export class DeployPipeline {
     }
   }
 
-  private async runExistingStart(signal: AbortSignal): Promise<void> {
+  private async runExistingStart(signal: AbortSignal, requestedConfiguration?: DeployConfiguration): Promise<void> {
     let attemptedStart = false;
     const currentConfig = this.state.getSnapshot().activeConfig;
     try {
       if (!currentConfig) throw new ServerNotInstalledError();
       if (this.bedrockConsole.isRunning) throw new Error('bedrock_server est déjà en cours d’exécution.');
+      if (requestedConfiguration && requestedConfiguration.version !== currentConfig.version) {
+        throw new ConfigurationError('Le démarrage direct exige la version BDS déjà installée ; un changement de version nécessite un déploiement.');
+      }
+      const configuration = requestedConfiguration ?? currentConfig;
 
       throwIfAborted(signal);
       await this.setStep('preflight');
@@ -551,6 +562,14 @@ export class DeployPipeline {
       }
       if (!binaryInfo.isFile() || binaryInfo.isSymbolicLink() || (binaryInfo.mode & 0o111) === 0) {
         throw new ServerNotInstalledError();
+      }
+
+      if (requestedConfiguration) {
+        await this.setStep('writing_config');
+        throwIfAborted(signal);
+        await writeBedrockConfiguration(this.serverDirectory, currentConfig, { preserveExisting: true });
+        await updateBedrockConfiguration(this.serverDirectory, currentConfig, configuration);
+        await this.state.setActiveConfig(configuration);
       }
 
       throwIfAborted(signal);
@@ -584,6 +603,11 @@ export class DeployPipeline {
         playersOnline: this.bedrockConsole.onlinePlayersCount,
         error: null,
       });
+      if (this.worldManager) {
+        await this.worldManager.markUsedByConfiguration(configuration).catch((error) => {
+          console.warn(`[worlds] Could not update last-used metadata: ${(error as Error).message}`);
+        });
+      }
       await this.state.updatePipeline({ status: 'idle', step: 'running', error: null });
     } catch (error) {
       const message = (error as Error).message || 'Erreur inconnue pendant le démarrage de Bedrock.';

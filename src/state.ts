@@ -274,9 +274,9 @@ export class StateStore extends EventEmitter {
     });
   }
 
-  async setActiveConfig(config: DeployConfiguration): Promise<void> {
+  async setActiveConfig(config: DeployConfiguration | null): Promise<void> {
     await this.update(() => {
-      this.state.activeConfig = structuredClone(config);
+      this.state.activeConfig = config ? structuredClone(config) : null;
     });
   }
 

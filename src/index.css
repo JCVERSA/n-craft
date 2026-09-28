@@ -786,6 +786,80 @@ select:focus-visible {
 .nether-banner--success { color: #c1edcf; border-color: rgba(155,230,176,.17); background: rgba(65,133,85,.09); }
 .nether-banner--danger { color: #ffc2c2; border-color: rgba(255,143,146,.18); background: rgba(165,49,56,.11); }
 
+.world-choice-box { min-width: 0; margin: 0; padding: 0; border: 0; }
+.world-choice-box legend { margin-bottom: 9px; color: #ddd4e1; font-size: 12px; font-weight: 700; }
+.world-choice-box legend b { margin-left: 4px; color: var(--nether-magma); font: 600 9px 'JetBrains Mono', monospace; text-transform: uppercase; }
+.world-choice-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.world-choice-card { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 60px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.09); border-radius: 11px; color: var(--nether-muted); background: rgba(9,7,10,.5); text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.world-choice-card:hover:not(:disabled) { border-color: rgba(155,230,176,.36); background: rgba(155,230,176,.055); }
+.world-choice-card:disabled { cursor: not-allowed; opacity: .55; }
+.world-choice-card.is-selected { border-color: rgba(155,230,176,.55); color: #e3f5e7; background: linear-gradient(115deg,rgba(155,230,176,.11),rgba(10,8,12,.68)); box-shadow: inset 0 0 0 1px rgba(155,230,176,.08); }
+.world-choice-card__radio { position: relative; display: block; width: 17px; height: 17px; flex: 0 0 auto; border: 1px solid rgba(225,212,232,.42); border-radius: 50%; }
+.world-choice-card.is-selected .world-choice-card__radio { border-color: var(--nether-moss); }
+.world-choice-card.is-selected .world-choice-card__radio::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--nether-moss); box-shadow: 0 0 10px rgba(155,230,176,.35); }
+.world-choice-card__copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.world-choice-card__copy strong { overflow: hidden; color: var(--nether-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.world-choice-card__copy small, .world-choice-card__meta { color: var(--nether-dim); font-size: 9px; line-height: 1.4; }
+.world-choice-card > svg { flex: 0 0 auto; color: var(--nether-moss); }
+.world-choice-note { display: flex; align-items: flex-start; gap: 6px; margin: 9px 0 0; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
+.world-choice-note svg { flex: 0 0 auto; color: var(--nether-moss); }
+.world-selected-summary { display: grid; min-height: 44px; align-content: center; gap: 3px; padding: 8px 11px; border: 1px solid rgba(155,230,176,.15); border-radius: 9px; background: rgba(11,24,15,.52); }
+.world-selected-summary strong { color: #d8f0de; font-size: 12px; }
+.world-selected-summary small { color: var(--nether-muted); font-size: 10px; }
+
+.world-manager-card { scroll-margin-top: 100px; }
+.world-manager-count { display: inline-flex; min-height: 34px; align-items: center; padding: 6px 10px; border: 1px solid rgba(155,230,176,.15); border-radius: 9px; color: #c2e5cb; background: rgba(155,230,176,.06); font: 10px 'JetBrains Mono', monospace; white-space: nowrap; }
+.world-manager-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.world-manager-toolbar p { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
+.world-manager-toolbar p svg { flex: 0 0 auto; color: var(--nether-moss); }
+.world-manager-message { margin: 10px 0; }
+.world-manager-message > span { flex: 1; }
+.world-manager-message > button { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; margin: -6px -5px 0 0; border: 0; border-radius: 8px; color: inherit; background: transparent; cursor: pointer; }
+.world-import-panel { margin-bottom: 16px; padding: 14px; border: 1px solid rgba(197,160,255,.14); border-radius: 13px; background: radial-gradient(ellipse at 100% 0,rgba(197,160,255,.055),transparent 42%),rgba(9,7,10,.44); }
+.world-import-panel__heading { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.world-import-icon { display: grid; width: 33px; height: 33px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(197,160,255,.2); border-radius: 9px; color: var(--nether-portal); background: rgba(197,160,255,.08); }
+.world-import-panel__heading div { display: grid; gap: 3px; }
+.world-import-panel__heading strong { color: var(--nether-text); font-size: 12px; }
+.world-import-panel__heading small { color: var(--nether-muted); font-size: 10px; }
+.world-import-grid { display: grid; grid-template-columns: minmax(180px,.8fr) minmax(160px,.8fr) minmax(190px,1fr) auto; align-items: end; gap: 10px; }
+.world-file-field { min-width: 0; }
+.world-file-input { width: 100%; min-width: 0; min-height: 44px; padding: 5px; border: 1px solid rgba(224,205,235,.2); border-radius: 9px; color: var(--nether-muted); background: rgba(10,8,12,.8); font: 10px 'JetBrains Mono',monospace; }
+.world-file-input::file-selector-button { min-height: 32px; margin-right: 8px; padding: 4px 8px; border: 1px solid rgba(197,160,255,.25); border-radius: 6px; color: #e1d2f9; background: rgba(197,160,255,.1); font: 10px 'Space Grotesk',system-ui,sans-serif; cursor: pointer; }
+.world-file-input:disabled { opacity: .55; cursor: not-allowed; }
+.world-import-submit { min-height: 44px; white-space: nowrap; }
+.world-import-footnote { margin: 10px 0 0; color: var(--nether-dim); font-size: 9px; line-height: 1.55; }
+.world-manager-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+.managed-world { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding: 13px; border: 1px solid rgba(255,255,255,.075); border-radius: 12px; background: linear-gradient(145deg,rgba(27,23,31,.76),rgba(11,9,13,.72)); transition: border-color .18s ease,background .18s ease; }
+.managed-world:hover { border-color: rgba(155,230,176,.2); }
+.managed-world--current { border-color: rgba(155,230,176,.35); background: linear-gradient(145deg,rgba(30,51,38,.48),rgba(11,9,13,.76)); }
+.managed-world__heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.managed-world__icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(155,230,176,.16); border-radius: 10px; background: rgba(155,230,176,.055); }
+.managed-world__icon img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
+.managed-world__identity { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.managed-world__identity > strong { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; color: var(--nether-text); font-size: 12px; overflow-wrap: anywhere; }
+.managed-world__identity > small { color: var(--nether-dim); font-size: 9px; }
+.managed-world__current-tag { padding: 3px 5px; border: 1px solid rgba(155,230,176,.18); border-radius: 5px; color: var(--nether-moss); font: 8px 'JetBrains Mono',monospace; letter-spacing: .04em; }
+.managed-world__heading .status-pill { min-height: 30px; padding: 5px 7px; font-size: 8px; }
+.managed-world__heading .status-pill__dot { width: 5px; height: 5px; }
+.managed-world__details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06); }
+.managed-world__details > span { display: grid; min-width: 0; gap: 4px; }
+.managed-world__details small { color: var(--nether-dim); font-size: 9px; }
+.managed-world__details strong { overflow-wrap: anywhere; color: #d7cbdc; font: 10px 'JetBrains Mono',monospace; line-height: 1.45; }
+.managed-world__actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.managed-world__actions .nether-btn { flex: 1 1 auto; }
+.managed-world__actions .nether-btn--danger { flex: 0 0 auto; }
+.world-rename-row { display: flex; align-items: center; gap: 6px; }
+.world-rename-row .nether-input { min-height: 40px; font-size: 12px; }
+.world-rename-row .icon-button { min-width: 40px; min-height: 40px; padding: 0; }
+.world-assign-row { display: flex; align-items: end; gap: 9px; }
+.world-assign-row .nether-field { flex: 1; }
+.world-manager-empty { display: flex; min-height: 170px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; color: var(--nether-dim); text-align: center; }
+.world-manager-empty > svg { color: var(--nether-moss); }
+.world-manager-empty strong { color: var(--nether-text); font-size: 12px; }
+.world-manager-empty span { color: var(--nether-muted); font-size: 10px; }
+.world-manager-empty a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--nether-soul); font-size: 10px; font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
 .mobile-dock { display: none; }
 
 @media (max-width: 1160px) {
@@ -801,10 +875,13 @@ select:focus-visible {
   .ncraft-nav { display: none; }
   .ncraft-main { width: min(100% - 28px,1460px); padding-top: 18px; }
   .ncraft-overview-grid, .ncraft-telemetry-grid, .ncraft-workspace-grid { grid-template-columns: minmax(0,1fr); }
+  .world-manager-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .world-import-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .world-import-submit { grid-column: 1 / -1; }
   .ncraft-operations-stack { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
   .ncraft-operations-stack > :last-child { grid-column: 1 / -1; }
   .ncraft-main { padding-bottom: 100px; }
-  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
+  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 3px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
   .mobile-dock a { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
   .mobile-dock a:hover, .mobile-dock a:focus-visible, .mobile-dock a[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
@@ -857,6 +934,11 @@ select:focus-visible {
   .ncraft-section-heading h2 { font-size: 19px; }
   .section-heading-note { font-size: 10px; }
   .ncraft-operations-stack { display: flex; }
+  .world-manager-toolbar { align-items: flex-start; flex-direction: column; }
+  .world-choice-grid, .world-manager-list, .world-import-grid { grid-template-columns: minmax(0,1fr); }
+  .world-import-submit { grid-column: auto; }
+  .managed-world__actions .nether-btn { flex: 1 1 44%; }
+  .world-assign-row { align-items: stretch; flex-direction: column; }
   .cartridge-slot { grid-template-columns: 45px minmax(0,1fr); gap: 9px; padding: 10px; }
   .cartridge-slot__art { width: 44px; height: 50px; }
   .cartridge-slot__info { grid-column: 2; padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,.08); border-left: 0; }

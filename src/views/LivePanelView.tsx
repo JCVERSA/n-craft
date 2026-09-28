@@ -11,18 +11,23 @@ import {
   Clock3,
   Copy,
   Database,
+  Download,
   ExternalLink,
+  FileUp,
   Globe,
   Layers,
   Loader2,
   LockKeyhole,
   LogOut,
   Package,
+  Pencil,
   Play,
   Power,
   RefreshCw,
+  Save,
   Server,
   ShieldCheck,
+  Trash2,
   Terminal,
   Users,
   Wifi,
@@ -54,6 +59,7 @@ import type {
   SystemPreflight,
   TunnelProvider,
   VersionEntry,
+  ManagedWorld,
 } from '../types/backend.ts';
 
 interface StatusResponse {
@@ -242,7 +248,20 @@ export function LivePanelView() {
   const [metricHistory, setMetricHistory] = useState<BedrockMetricSample[]>(() => loadMetricHistory(getMetricStorage()));
   const reduceMotion = useReducedMotion();
   const [versions, setVersions] = useState<PublicVersion[]>([]);
+  const [worlds, setWorlds] = useState<ManagedWorld[]>([]);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
+  const [selectedWorldId, setSelectedWorldId] = useState<string | null>(null);
+  const [worldEditId, setWorldEditId] = useState<string | null>(null);
+  const [newWorldName, setNewWorldName] = useState('Nouveau monde');
+  const [worldImportFile, setWorldImportFile] = useState<File | null>(null);
+  const [worldImportName, setWorldImportName] = useState('');
+  const [worldImportVersion, setWorldImportVersion] = useState('');
+  const [worldBusyId, setWorldBusyId] = useState<string | null>(null);
+  const [worldManagerError, setWorldManagerError] = useState('');
+  const [worldManagerNotice, setWorldManagerNotice] = useState('');
+  const [renameWorldId, setRenameWorldId] = useState<string | null>(null);
+  const [renameWorldValue, setRenameWorldValue] = useState('');
+  const [assignWorldVersion, setAssignWorldVersion] = useState<Record<string, string>>({});
   const [configTouched, setConfigTouched] = useState(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
@@ -253,6 +272,7 @@ export function LivePanelView() {
   const [consoleError, setConsoleError] = useState('');
   const socketRef = useRef<WebSocket | null>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
+  const worldImportInputRef = useRef<HTMLInputElement>(null);
 
   const isPipelineBusy = Boolean(status?.deployBusy || status?.state.pipeline.status === 'running' || busyAction === 'deploy' || busyAction === 'save-config' || busyAction === 'start');
   const currentStepIndex = useMemo(
@@ -260,11 +280,27 @@ export function LivePanelView() {
     [status?.state.pipeline.step],
   );
 
-  const refreshStatus = useCallback(async () => {
+  const refreshWorlds = useCallback(async () => {
+    try {
+      const result = await apiRequest<{ worlds: ManagedWorld[] }>('/api/server/worlds');
+      setWorlds(result.worlds);
+      return result.worlds;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setAuthenticated(false);
+        setStatus(null);
+      } else {
+        setWorldManagerError((error as Error).message);
+      }
+      return [];
+    }
+  }, []);
+
+  const refreshStatus = useCallback(async (forceConfiguration = false) => {
     try {
       const next = await apiRequest<StatusResponse>('/api/server/status');
       setStatus(next);
-      if (next.state.activeConfig && !configTouched) setConfiguration(next.state.activeConfig);
+      if (next.state.activeConfig && (!configTouched || forceConfiguration)) setConfiguration(next.state.activeConfig);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setAuthenticated(false);
@@ -360,7 +396,7 @@ export function LivePanelView() {
 
   useEffect(() => {
     if (!authenticated || typeof IntersectionObserver === 'undefined') return;
-    const sectionIds = ['overview', 'deploy', 'diagnostics', 'console'];
+    const sectionIds = ['overview', 'deploy', 'worlds', 'diagnostics', 'console'];
     const sections = sectionIds.map((id) => document.getElementById(id)).filter((section): section is HTMLElement => Boolean(section));
     if (sections.length === 0) return;
     const visibility = new Map<string, { ratio: number; top: number }>();
@@ -397,14 +433,23 @@ export function LivePanelView() {
         void Promise.all([
           apiRequest<{ versions: PublicVersion[] }>('/api/server/versions'),
           apiRequest<StatusResponse>('/api/server/status'),
-        ]).then(([catalog, nextStatus]) => {
+          apiRequest<{ worlds: ManagedWorld[] }>('/api/server/worlds'),
+        ]).then(([catalog, nextStatus, worldResult]) => {
           if (cancelled) return;
           setVersions(catalog.versions);
           setStatus(nextStatus);
-          if (nextStatus.state.activeConfig && !configTouched) {
-            setConfiguration(nextStatus.state.activeConfig);
+          setWorlds(worldResult.worlds);
+          const currentConfig = nextStatus.state.activeConfig;
+          const activeWorld = currentConfig
+            ? worldResult.worlds.find((world) => world.version === currentConfig.version && world.folder === currentConfig.levelName)
+            : undefined;
+          if (currentConfig && !configTouched) {
+            setConfiguration(currentConfig);
+            setSelectedWorldId(activeWorld?.id ?? null);
+            setNewWorldName('Nouveau monde');
             setConfigTouched(false);
           }
+          setWorldImportVersion(currentConfig?.version ?? catalog.versions[0]?.version ?? '');
         }).catch((error) => {
           if (cancelled) return;
           if (error instanceof ApiError && error.status === 401) setAuthenticated(false);
@@ -496,6 +541,10 @@ export function LivePanelView() {
     }
   }, [versions, configuration.version, status?.state.activeConfig]);
 
+  useEffect(() => {
+    if (authenticated && status?.state.server.status === 'running') void refreshWorlds();
+  }, [authenticated, status?.state.server.status, refreshWorlds]);
+
   const markConfigTouched = () => {
     setConfigTouched(true);
     setFormError('');
@@ -504,7 +553,40 @@ export function LivePanelView() {
 
   const changeField = <K extends keyof DeployConfiguration>(key: K, value: DeployConfiguration[K]) => {
     markConfigTouched();
+    if (key === 'version') {
+      setSelectedWorldId(null);
+      setWorldEditId(null);
+    }
     setConfiguration((current) => ({ ...current, [key]: value }));
+  };
+
+  const chooseWorld = (world: ManagedWorld, editSettings: boolean) => {
+    if (!world.version || world.status !== 'ready') return;
+    const fallback = configuration;
+    const next = world.configuration ?? fallback;
+    setSelectedWorldId(world.id);
+    setWorldEditId(editSettings ? world.id : null);
+    setConfiguration({
+      ...next,
+      version: world.version,
+      levelName: world.folder,
+      seed: world.seed ?? '',
+      eulaAccepted: next.eulaAccepted || fallback.eulaAccepted,
+    });
+    setConfigTouched(true);
+    setFormError('');
+    setNotice('');
+    setWorldManagerError('');
+    document.getElementById('deploy')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  const chooseNewWorld = () => {
+    setSelectedWorldId(null);
+    setWorldEditId(null);
+    setNewWorldName(`Nouveau monde ${worlds.filter((world) => world.version === configuration.version).length + 1}`);
+    setConfigTouched(true);
+    setFormError('');
+    document.getElementById('deploy')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
   };
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -547,12 +629,9 @@ export function LivePanelView() {
     setFormError('');
     setNotice('');
     const currentConfig = status?.state.activeConfig;
+    const targetWorld = selectedWorldId ? worlds.find((world) => world.id === selectedWorldId) : undefined;
     if (status?.state.server.status === 'running') {
       setFormError('Arrête Bedrock avant de modifier la configuration ou la version.');
-      return;
-    }
-    if (currentConfig && configuration.version === currentConfig.version) {
-      setFormError('Aucune nouvelle version sélectionnée. Enregistre les réglages sans redéployer Bedrock.');
       return;
     }
     if (!isValidForm(configuration)) {
@@ -563,33 +642,57 @@ export function LivePanelView() {
       setFormError('Choisis une version Bedrock disponible dans le catalogue vérifié.');
       return;
     }
+    if (targetWorld && (targetWorld.status !== 'ready' || targetWorld.version !== configuration.version)) {
+      setFormError('Le monde choisi doit être complet et appartenir à la version BDS sélectionnée.');
+      return;
+    }
     if (status?.system.deployReady === false) {
-      setFormError('Déploiement bloqué : les dépendances Linux obligatoires (glibc/libcurl) ne sont pas toutes détectées. Consulte les contrôles système ci-dessous.');
+      setFormError('Démarrage bloqué : les dépendances Linux obligatoires (glibc/libcurl) ne sont pas toutes détectées. Consulte les contrôles système ci-dessous.');
       return;
     }
 
-    const worldWarning = currentConfig ? getWorldSettingsConfirmation(currentConfig, configuration) : null;
+    const targetConfiguration = {
+      ...configuration,
+      levelName: targetWorld?.folder ?? newWorldName.trim(),
+      seed: targetWorld ? targetWorld.seed ?? '' : configuration.seed,
+    };
+    const worldDescription = targetWorld
+      ? `Reprendre « ${targetWorld.name} » avec son dossier et sa progression existants (BDS ${targetWorld.version}).`
+      : `Créer un nouveau monde « ${newWorldName.trim()} » dédié à BDS ${configuration.version}.`;
+    const versionOperation = !currentConfig || currentConfig.version !== configuration.version;
     const confirmationMessage = [
-      `Mettre à jour Bedrock vers ${configuration.version} dans ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} ?`,
-      isExistingDeployment
-        ? 'Mise à jour non destructive : les mondes, sauvegardes, packs, permissions et fichiers inconnus sont conservés. Les réglages modifiés seront appliqués.'
-        : 'Première installation : le dossier existant n’est pas supprimé. Le monde et les fichiers déjà présents seront conservés autant que possible.',
-      'Bedrock est arrêté pour cette opération. Après le déploiement, il démarrera automatiquement; le tunnel restera actif.',
-      worldWarning ?? '',
+      versionOperation
+        ? `Déployer BDS ${configuration.version} dans ${status?.serverDirectory ?? 'BEDROCK_SERVER_DIR'} ?`
+        : `Démarrer le monde avec BDS ${configuration.version} ?`,
+      worldDescription,
+      versionOperation
+        ? isExistingDeployment
+          ? 'Mise à jour non destructive : les mondes, sauvegardes, packs, permissions et fichiers inconnus sont conservés. Les réglages modifiés seront appliqués.'
+          : 'Première installation : aucun monde ni fichier existant ne sera supprimé ou remplacé.'
+        : 'Le binaire BDS déjà installé sera réutilisé ; aucun téléchargement de version ne sera effectué.',
+      'Bedrock doit être arrêté. Après cette opération, il démarrera automatiquement; le tunnel restera actif.',
       status?.system.memoryWarning ? 'Le conteneur est sous le budget mémoire recommandé ; un arrêt OOM est possible.' : '',
-      status?.system.diskWarning ? `Espace disque détecté : DATA_DIR ${formatBytes(status.system.dataDiskFreeBytes)} libres / ${formatBytes(status.system.dataDiskRequiredBytes)} estimés${status.system.sharedDiskVolume === false ? ` ; BEDROCK_SERVER_DIR ${formatBytes(status.system.serverDiskFreeBytes)} libres / ${formatBytes(status.system.serverDiskRequiredBytes)} estimés` : status.system.sharedDiskVolume === null ? ' ; volume de BEDROCK_SERVER_DIR incertain' : ' ; volume partagé, archive + extraction incluses'}. Le déploiement reste autorisé, mais peut échouer si le volume est plein.` : '',
-      'Confirmer le déploiement non destructif ?',
+      status?.system.diskWarning && versionOperation ? `Espace disque détecté : DATA_DIR ${formatBytes(status.system.dataDiskFreeBytes)} libres / ${formatBytes(status.system.dataDiskRequiredBytes)} estimés${status.system.sharedDiskVolume === false ? ` ; BEDROCK_SERVER_DIR ${formatBytes(status.system.serverDiskFreeBytes)} libres / ${formatBytes(status.system.serverDiskRequiredBytes)} estimés` : status.system.sharedDiskVolume === null ? ' ; volume de BEDROCK_SERVER_DIR incertain' : ' ; volume partagé, archive + extraction incluses'}. Le déploiement reste autorisé, mais peut échouer si le volume est plein.` : '',
+      'Confirmer cette opération ?',
     ].filter(Boolean).join('\n\n');
     if (!window.confirm(confirmationMessage)) return;
 
     setBusyAction('deploy');
     try {
-      await apiRequest('/api/server/deploy', {
+      const deployment = await apiRequest<{ worldId: string }>('/api/server/deploy', {
         method: 'POST',
-        body: JSON.stringify({ config: configuration }),
+        body: JSON.stringify({
+          config: targetConfiguration,
+          world: targetWorld
+            ? { mode: 'existing', id: targetWorld.id }
+            : { mode: 'new', name: newWorldName.trim() },
+        }),
       });
-      setNotice('Déploiement accepté. Suis chaque étape et son résultat dans la progression ci-dessous.');
-      await refreshStatus();
+      setSelectedWorldId(deployment.worldId);
+      setConfigTouched(false);
+      setWorldEditId(null);
+      setNotice('Opération acceptée. Suis le démarrage du monde et l’état du serveur dans le tableau de bord.');
+      await Promise.all([refreshStatus(true), refreshWorlds()]);
     } catch (error) {
       setFormError((error as Error).message);
     } finally {
@@ -630,12 +733,171 @@ export function LivePanelView() {
       setConfiguration(configuration);
       setConfigTouched(false);
       setNotice('Réglages enregistrés. Bedrock reste arrêté; tu peux le démarrer quand tu veux. Le tunnel reste actif.');
-      await refreshStatus();
+      await Promise.all([refreshStatus(true), refreshWorlds()]);
     } catch (error) {
       setFormError((error as Error).message);
     } finally {
       setBusyAction(null);
     }
+  };
+
+  const handleSaveWorldSettings = async () => {
+    const world = worldEditId ? worlds.find((candidate) => candidate.id === worldEditId) : undefined;
+    if (!world || !world.version) {
+      setWorldManagerError('Choisis un monde attribué à une version BDS avant de modifier ses options.');
+      return;
+    }
+    if (isPipelineBusy || status?.state.server.status === 'running' || (status?.state.server.status === 'failed' && status.state.server.pid !== null)) {
+      setWorldManagerError('Arrête Bedrock avant de modifier les options d’un monde.');
+      return;
+    }
+    if (!isValidForm(configuration)) {
+      setWorldManagerError('Vérifie les options, les XUID administrateur et l’acceptation de l’EULA.');
+      return;
+    }
+    const nextConfiguration = {
+      ...configuration,
+      version: world.version,
+      levelName: world.folder,
+      seed: world.seed ?? '',
+    };
+    setWorldBusyId(world.id);
+    setWorldManagerError('');
+    setWorldManagerNotice('');
+    try {
+      await apiRequest<{ world: ManagedWorld }>(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ configuration: nextConfiguration }),
+      });
+      const active = status?.state.activeConfig;
+      const editsActiveWorld = active?.version === world.version && active.levelName === world.folder;
+      setWorldEditId(null);
+      setConfigTouched(!editsActiveWorld);
+      setWorldManagerNotice(editsActiveWorld
+        ? 'Options enregistrées sur le disque. Bedrock reste arrêté; les chunks et la seed n’ont pas été modifiés.'
+        : 'Options enregistrées pour ce monde. Elles seront appliquées lorsque tu le reprendras; Bedrock reste inchangé.');
+      await Promise.all([refreshWorlds(), ...(editsActiveWorld ? [refreshStatus(true)] : [])]);
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleRenameWorld = async (world: ManagedWorld) => {
+    setWorldBusyId(world.id);
+    setWorldManagerError('');
+    setWorldManagerNotice('');
+    try {
+      await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: renameWorldValue }),
+      });
+      setRenameWorldId(null);
+      setRenameWorldValue('');
+      setWorldManagerNotice('Nom du monde mis à jour. Le dossier et les données n’ont pas été déplacés.');
+      await refreshWorlds();
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleAssignWorld = async (world: ManagedWorld) => {
+    const version = assignWorldVersion[world.id] ?? '';
+    if (!version) {
+      setWorldManagerError('Choisis la version BDS exacte de ce monde.');
+      return;
+    }
+    setWorldBusyId(world.id);
+    setWorldManagerError('');
+    setWorldManagerNotice('');
+    try {
+      await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}/assign`, {
+        method: 'POST',
+        body: JSON.stringify({ version }),
+      });
+      setWorldManagerNotice(`Version BDS ${version} associée. Elle ne sera pas modifiée automatiquement.`);
+      await refreshWorlds();
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleDeleteWorld = async (world: ManagedWorld) => {
+    if (!window.confirm(`Suppression définitive du monde « ${world.name} » et de ses chunks ? Cette action est irréversible.`)) return;
+    const typedName = window.prompt(`Pour confirmer, saisis exactement le nom du monde : ${world.name}`);
+    if (typedName !== world.name) {
+      setWorldManagerError('Suppression annulée : le nom saisi ne correspond pas exactement.');
+      return;
+    }
+    setWorldBusyId(world.id);
+    setWorldManagerError('');
+    setWorldManagerNotice('');
+    try {
+      await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmName: typedName }),
+      });
+      if (selectedWorldId === world.id) {
+        setSelectedWorldId(null);
+        setWorldEditId(null);
+      }
+      setWorldManagerNotice(`Monde « ${world.name} » supprimé.`);
+      await Promise.all([refreshWorlds(), refreshStatus(true)]);
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleImportWorld = async () => {
+    if (!worldImportFile || !worldImportVersion) {
+      setWorldManagerError('Choisis une archive .mcworld ou .zip et sa version BDS cible.');
+      return;
+    }
+    const name = worldImportName.trim() || worldImportFile.name.replace(/\.(mcworld|zip)$/i, '');
+    const query = new URLSearchParams({
+      version: worldImportVersion,
+      name,
+      fileName: worldImportFile.name,
+    });
+    setWorldBusyId('import');
+    setWorldManagerError('');
+    setWorldManagerNotice('');
+    try {
+      const response = await fetch(`/api/server/worlds/import?${query.toString()}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': worldImportFile.type || 'application/octet-stream' },
+        body: worldImportFile,
+      });
+      const payload = await response.json().catch(() => ({})) as { world?: ManagedWorld; error?: string };
+      if (!response.ok || !payload.world) throw new ApiError(payload.error || `Erreur HTTP ${response.status}.`, response.status);
+      setWorldImportFile(null);
+      setWorldImportName('');
+      if (worldImportInputRef.current) worldImportInputRef.current.value = '';
+      const nextWorlds = await refreshWorlds();
+      const imported = nextWorlds.find((world) => world.id === payload.world!.id) ?? payload.world;
+      setWorldManagerNotice(`Monde « ${imported.name} » importé sans remplacer aucun autre monde.`);
+      if (imported.status === 'ready') chooseWorld(imported, false);
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleExportWorld = (world: ManagedWorld) => {
+    const serverStatus = status?.state.server;
+    const bedrockIsRunning = serverStatus?.status === 'running' || (serverStatus?.status === 'failed' && serverStatus.pid !== null);
+    if (world.status !== 'ready' || bedrockIsRunning || isPipelineBusy) return;
+    window.location.assign(`/api/server/worlds/${encodeURIComponent(world.id)}/export`);
   };
 
   const handlePlayitSetup = async () => {
@@ -835,6 +1097,11 @@ export function LivePanelView() {
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
   const activeConfig = status?.state.activeConfig;
+  const activeWorld = activeConfig
+    ? worlds.find((world) => world.version === activeConfig.version && world.folder === activeConfig.levelName)
+    : undefined;
+  const selectedWorld = selectedWorldId ? worlds.find((world) => world.id === selectedWorldId) : undefined;
+  const editingWorld = worldEditId ? worlds.find((world) => world.id === worldEditId) : undefined;
   const selectedVersion = versions.find((version) => version.version === configuration.version);
   const isExistingDeployment = Boolean(activeConfig);
   const configurationLocked = isPipelineBusy || !server
@@ -842,16 +1109,33 @@ export function LivePanelView() {
     || server.status === 'starting'
     || server.status === 'stopping'
     || (server.status === 'failed' && server.pid !== null);
+  const worldsForSelectedVersion = worlds.filter((world) => world.version === configuration.version && world.status === 'ready');
   const hasVersionChange = Boolean(activeConfig && configuration.version !== activeConfig.version);
+  const hasWorldChange = selectedWorldId
+    ? selectedWorld?.id !== activeWorld?.id
+    : true;
+  const isEditingWorldSettings = Boolean(editingWorld && selectedWorldId === editingWorld.id);
   const hasSettingsChanges = Boolean(activeConfig && hasConfigurationSettingsChanged(activeConfig, configuration));
+  const hasEditedWorldSettings = Boolean(editingWorld?.configuration
+    ? hasConfigurationSettingsChanged(editingWorld.configuration, {
+      ...configuration,
+      version: editingWorld.version ?? configuration.version,
+      levelName: editingWorld.folder,
+      seed: editingWorld.seed ?? '',
+    })
+    : isEditingWorldSettings);
+  const operationNeedsDeploy = !isExistingDeployment || hasVersionChange || hasWorldChange;
+  const invalidWorldTarget = selectedWorldId
+    ? !selectedWorld || selectedWorld.status !== 'ready' || selectedWorld.version !== configuration.version
+    : !newWorldName.trim();
   const configurationActionDisabled = configurationLocked
     || !isValidForm(configuration)
-    || (isExistingDeployment
-      ? hasVersionChange
-        ? !selectedVersion || system?.deployReady === false
-        : !hasSettingsChanges
-      : !selectedVersion || system?.deployReady === false);
-  const configurationActionLabel = busyAction === 'save-config'
+    || (isEditingWorldSettings
+      ? !editingWorld?.version || !hasEditedWorldSettings
+      : operationNeedsDeploy
+        ? !selectedVersion || invalidWorldTarget || system?.deployReady === false
+        : !hasSettingsChanges);
+  const configurationActionLabel = busyAction === 'save-config' || (worldBusyId && isEditingWorldSettings)
     ? 'Enregistrement…'
     : isPipelineBusy
       ? busyAction === 'deploy' ? `Déploiement : ${statusLabel(pipeline?.step ?? 'preflight')}` : 'Opération en cours…'
@@ -861,11 +1145,15 @@ export function LivePanelView() {
           ? 'Arrête Bedrock pour modifier'
           : server.status === 'starting' || server.status === 'stopping'
             ? 'Bedrock en transition…'
-            : !isExistingDeployment
-              ? 'Installer & démarrer'
-              : hasVersionChange
-                ? 'Mettre à jour & démarrer'
-                : hasSettingsChanges ? 'Enregistrer les réglages' : 'Aucun changement';
+            : isEditingWorldSettings
+              ? 'Enregistrer les options du monde'
+              : !isExistingDeployment
+                ? 'Installer & démarrer le monde'
+                : hasVersionChange
+                  ? 'Mettre à jour & démarrer'
+                  : hasWorldChange
+                    ? selectedWorld ? 'Reprendre ce monde & démarrer' : 'Créer & démarrer le monde'
+                    : hasSettingsChanges ? 'Enregistrer les réglages' : 'Aucun changement';
   const uptimeSeconds = server?.status === 'running' && server.startedAt
     ? Math.floor((clockNow - Date.parse(server.startedAt)) / 1000)
     : null;
@@ -901,6 +1189,7 @@ export function LivePanelView() {
           <nav className="ncraft-nav" aria-label="Navigation du panneau">
             <a className={activeSection === 'overview' ? 'is-current' : undefined} href="#overview" aria-current={activeSection === 'overview' ? 'location' : undefined} onClick={() => setActiveSection('overview')}><Server size={15} /> Vue générale</a>
             <a className={activeSection === 'deploy' ? 'is-current' : undefined} href="#deploy" aria-current={activeSection === 'deploy' ? 'location' : undefined} onClick={() => setActiveSection('deploy')}><Package size={15} /> Déploiement</a>
+            <a className={activeSection === 'worlds' ? 'is-current' : undefined} href="#worlds" aria-current={activeSection === 'worlds' ? 'location' : undefined} onClick={() => setActiveSection('worlds')}><Globe size={15} /> Mondes</a>
             <a className={activeSection === 'diagnostics' ? 'is-current' : undefined} href="#diagnostics" aria-current={activeSection === 'diagnostics' ? 'location' : undefined} onClick={() => setActiveSection('diagnostics')}><ShieldCheck size={15} /> Diagnostics</a>
             <a className={activeSection === 'console' ? 'is-current' : undefined} href="#console" aria-current={activeSection === 'console' ? 'location' : undefined} onClick={() => setActiveSection('console')}><Terminal size={15} /> Console</a>
           </nav>
@@ -966,7 +1255,7 @@ export function LivePanelView() {
               </span>
               <span className="world-capsule__copy">
                 <small>MONDE ACTIF</small>
-                <strong title={activeConfig?.levelName ?? 'Aucun monde déployé'}>{activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
+                <strong title={activeWorld?.name ?? activeConfig?.levelName ?? 'Aucun monde déployé'}>{activeWorld?.name ?? activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
               </span>
               <span className="world-capsule__version">
                 {activeConfig?.version ? `BDS ${activeConfig.version}` : 'À configurer'}
@@ -1196,7 +1485,7 @@ export function LivePanelView() {
                     options={versions.map((version): GlideSelectOption => ({
                       value: version.version,
                       label: version.label,
-                      tag: version.releaseDate,
+                      tag: version.releaseDate ?? `Client ${version.clientVersion}`,
                     }))}
                     value={configuration.version}
                     onChange={(value) => changeField('version', value)}
@@ -1212,22 +1501,64 @@ export function LivePanelView() {
                   <strong>{selectedVersion?.label ?? (configuration.version || 'Aucune version')}</strong>
                   <small className={!selectedVersion && versions.length > 0 ? 'cartridge-slot__version-error' : undefined}>
                     {selectedVersion
-                      ? `Sortie · ${selectedVersion.releaseDate}`
-                      : versions.length > 0 ? 'Version indisponible · choisis une version du catalogue' : 'Catalogue vérifié du panneau'}
+                      ? `${selectedVersion.channel === 'preview' ? 'Preview' : 'Version stable'} · client ${selectedVersion.clientVersion}${selectedVersion.releaseDate ? ` · sortie ${selectedVersion.releaseDate}` : ''}`
+                      : versions.length > 0 ? 'Version indisponible · choisis une version du catalogue' : 'Catalogue historique du panneau'}
                   </small>
                 </div>
               </div>
-              {versions.length === 0 && <p className="inline-error">Aucun ZIP vérifié disponible dans data/versions.json.</p>}
+              {versions.length === 0 && <p className="inline-error">Aucune archive BDS configurée dans le catalogue local.</p>}
+
+              <fieldset className="world-choice-box" disabled={configurationLocked}>
+                <legend>Monde à démarrer <b>requis</b></legend>
+                <div className="world-choice-grid" role="radiogroup" aria-label="Monde à démarrer">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={!selectedWorldId}
+                    className={`world-choice-card ${!selectedWorldId ? 'is-selected' : ''}`}
+                    onClick={chooseNewWorld}
+                    disabled={configurationLocked}
+                  >
+                    <span className="world-choice-card__radio" aria-hidden="true" />
+                    <span className="world-choice-card__copy"><strong>Créer un nouveau monde</strong><small>Nouveau dossier isolé pour BDS {configuration.version || 'sélectionné'}</small></span>
+                    <Globe size={17} />
+                  </button>
+                  {worldsForSelectedVersion.map((world) => (
+                    <button
+                      key={world.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedWorldId === world.id}
+                      className={`world-choice-card ${selectedWorldId === world.id ? 'is-selected' : ''}`}
+                      onClick={() => chooseWorld(world, false)}
+                      disabled={configurationLocked}
+                    >
+                      <span className="world-choice-card__radio" aria-hidden="true" />
+                      <span className="world-choice-card__copy"><strong>{world.name}</strong><small>Progression existante · BDS {world.version}</small></span>
+                      {world.lastUsedAt ? <span className="world-choice-card__meta">Repris</span> : <Database size={16} />}
+                    </button>
+                  ))}
+                </div>
+                {worldsForSelectedVersion.length === 0 && <p className="world-choice-note">Aucun monde prêt n’est associé à cette version exacte. Les mondes d’autres versions ne sont jamais proposés ici.</p>}
+                {selectedWorld && selectedWorld.version === configuration.version && <p className="world-choice-note"><ShieldCheck size={14} /> Le dossier et les chunks de « {selectedWorld.name} » seront repris tels quels. Les réglages modifiables seront appliqués; la seed reste verrouillée.</p>}
+              </fieldset>
 
               <div className="nether-form-grid">
                 <label className="nether-field">
                   <span>Nom du serveur</span>
                   <input value={configuration.serverName} maxLength={64} disabled={configurationLocked} onChange={(event) => changeField('serverName', event.target.value)} className="nether-input" required />
                 </label>
-                <label className="nether-field">
-                  <span>Nom du monde</span>
-                  <input value={configuration.levelName} maxLength={64} disabled={configurationLocked} onChange={(event) => changeField('levelName', event.target.value)} className="nether-input" required />
-                </label>
+                {selectedWorld ? (
+                  <div className="nether-field">
+                    <span>Monde existant · progression conservée</span>
+                    <div className="world-selected-summary"><strong>{selectedWorld.name}</strong><small>BDS {selectedWorld.version} · dossier isolé</small></div>
+                  </div>
+                ) : (
+                  <label className="nether-field">
+                    <span>Nom du nouveau monde</span>
+                    <input value={newWorldName} maxLength={64} disabled={configurationLocked} onChange={(event) => { markConfigTouched(); setNewWorldName(event.target.value); }} className="nether-input" required />
+                  </label>
+                )}
                 <div className="nether-field deploy-segment-field">
                   <span id="deploy-gamemode-label">Mode de jeu</span>
                   <RubberSegment
@@ -1253,8 +1584,8 @@ export function LivePanelView() {
                   <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={configurationLocked} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
                 </label>
                 <label className="nether-field">
-                  <span>Seed <small>optionnelle · vide = aléatoire</small></span>
-                  <input value={configuration.seed} maxLength={80} disabled={configurationLocked} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
+                  <span>Seed <small>{selectedWorld ? 'verrouillée · monde déjà généré' : 'optionnelle · vide = aléatoire'}</small></span>
+                  <input value={configuration.seed} maxLength={80} disabled={configurationLocked || Boolean(selectedWorld)} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
                 </label>
                 <label className="nether-field">
                   <span>Distance de vue <small>chunks</small></span>
@@ -1307,13 +1638,17 @@ export function LivePanelView() {
               </SpringCheck>
 
               <motion.button
-                type={isExistingDeployment && !hasVersionChange ? 'button' : 'submit'}
-                onClick={isExistingDeployment && !hasVersionChange ? () => void handleSaveConfiguration() : undefined}
-                disabled={configurationActionDisabled}
+                type={isEditingWorldSettings || (isExistingDeployment && !operationNeedsDeploy) ? 'button' : 'submit'}
+                onClick={isEditingWorldSettings
+                  ? () => void handleSaveWorldSettings()
+                  : isExistingDeployment && !operationNeedsDeploy ? () => void handleSaveConfiguration() : undefined}
+                disabled={configurationActionDisabled || (isEditingWorldSettings && worldBusyId === editingWorld?.id)}
                 whileTap={reduceMotion ? undefined : { scale: 0.99 }}
                 className="nether-btn nether-btn--primary nether-btn--wide deploy-submit"
               >
-                {isPipelineBusy ? <Loader2 className="spin-soft" size={18} /> : <ArrowRight size={18} />}
+                {isPipelineBusy || (isEditingWorldSettings && worldBusyId === editingWorld?.id)
+                  ? <Loader2 className="spin-soft" size={18} />
+                  : isEditingWorldSettings || (isExistingDeployment && !operationNeedsDeploy) ? <Save size={18} /> : <ArrowRight size={18} />}
                 {configurationActionLabel}
               </motion.button>
             </form>
@@ -1388,6 +1723,148 @@ export function LivePanelView() {
         </section>
 
         <NetherCard
+          id="worlds"
+          title="Gestionnaire de mondes"
+          eyebrow="SAUVEGARDES BEDROCK ISOLÉES"
+          description="Chaque sauvegarde est associée à un build BDS exact. Reprendre conserve les mêmes chunks; les données d’une version ne sont jamais ouvertes avec une autre version sans choix explicite."
+          icon={Database}
+          accent="moss"
+          className="world-manager-card"
+          action={<span className="world-manager-count">{worlds.length} monde{worlds.length === 1 ? '' : 's'}</span>}
+        >
+          <div className="world-manager-toolbar">
+            <p><ShieldCheck size={15} /> Les opérations de gestion nécessitent l’arrêt de Bedrock. Export recommandé avant suppression.</p>
+            <motion.button type="button" onClick={() => void refreshWorlds()} disabled={configurationLocked} whileTap={reduceMotion ? undefined : { scale: 0.96 }} className="nether-btn nether-btn--quiet nether-btn--tiny">
+              <RefreshCw size={14} /> Actualiser
+            </motion.button>
+          </div>
+
+          {worldManagerError && <div role="alert" className="nether-callout nether-callout--danger world-manager-message"><AlertTriangle size={16} /><span>{worldManagerError}</span></div>}
+          {worldManagerNotice && <div role="status" className="nether-callout nether-callout--success world-manager-message"><CheckCircle2 size={16} /><span>{worldManagerNotice}</span><button type="button" onClick={() => setWorldManagerNotice('')} aria-label="Fermer le message"><X size={15} /></button></div>}
+
+          <div className="world-import-panel">
+            <div className="world-import-panel__heading"><span className="world-import-icon"><FileUp size={17} /></span><div><strong>Importer un monde</strong><small>.mcworld ou archive ZIP Bedrock · aucun écrasement</small></div></div>
+            <div className="world-import-grid">
+              <div className="nether-field">
+                <span id="world-import-version-label">Version BDS exacte</span>
+                <GlideSelect
+                  options={versions.map((version): GlideSelectOption => ({ value: version.version, label: `BDS ${version.version}`, tag: `client ${version.clientVersion}` }))}
+                  value={worldImportVersion}
+                  onChange={setWorldImportVersion}
+                  labelledBy="world-import-version-label"
+                  disabled={configurationLocked || versions.length === 0}
+                  required
+                  invalid={!versions.some((version) => version.version === worldImportVersion)}
+                />
+              </div>
+              <label className="nether-field">
+                <span>Nom dans le gestionnaire</span>
+                <input value={worldImportName} maxLength={80} disabled={configurationLocked} onChange={(event) => setWorldImportName(event.target.value)} className="nether-input" placeholder={worldImportFile?.name.replace(/\.(mcworld|zip)$/i, '') || 'Nom du monde'} />
+              </label>
+              <label className="nether-field world-file-field">
+                <span>Archive Bedrock</span>
+                <input
+                  ref={worldImportInputRef}
+                  type="file"
+                  accept=".mcworld,.zip,application/zip,application/octet-stream"
+                  disabled={configurationLocked}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setWorldImportFile(file);
+                    if (file && !worldImportName) setWorldImportName(file.name.replace(/\.(mcworld|zip)$/i, ''));
+                  }}
+                  className="world-file-input"
+                />
+              </label>
+              <motion.button type="button" onClick={() => void handleImportWorld()} disabled={configurationLocked || !worldImportFile || !worldImportVersion || worldBusyId === 'import'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--primary world-import-submit">
+                {worldBusyId === 'import' ? <Loader2 className="spin-soft" size={16} /> : <FileUp size={16} />}
+                {worldBusyId === 'import' ? 'Import en cours…' : 'Importer sans remplacer'}
+              </motion.button>
+            </div>
+            <p className="world-import-footnote">L’archive est vérifiée et extraite avec des limites de taille; un dossier temporaire est utilisé. Le monde n’est ajouté à la liste qu’après validation, et tout nom de dossier est généré côté serveur.</p>
+          </div>
+
+          {worlds.length === 0 ? (
+            <div className="world-manager-empty"><Globe size={25} /><strong>Aucune sauvegarde enregistrée</strong><span>Crée un monde depuis le déploiement ou importe une archive Bedrock.</span><a href="#deploy" onClick={chooseNewWorld}>Créer le premier monde <ChevronRight size={14} /></a></div>
+          ) : (
+            <div className="world-manager-list">
+              {worlds.map((world) => {
+                const isCurrent = activeWorld?.id === world.id;
+                const sourceLabel = world.source === 'imported' ? 'Importé' : world.source === 'legacy' ? 'Existant' : 'Créé par N-Craft';
+                const statusLabelText = world.status === 'ready' ? 'PRÊT' : world.status === 'pending' ? 'À INITIALISER' : world.status === 'missing' ? 'DOSSIER ABSENT' : world.status === 'unsafe' ? 'INACCESSIBLE' : 'VERSION À ASSOCIER';
+                const statusTone = world.status === 'ready' ? 'running' : world.status === 'missing' || world.status === 'unsafe' ? 'failed' : 'starting';
+                return (
+                  <article key={world.id} className={`managed-world ${isCurrent ? 'managed-world--current' : ''}`}>
+                    <div className="managed-world__heading">
+                      <span className="managed-world__icon"><img src="/assets/minecraft/grass-block.webp" alt="" width="22" height="22" /></span>
+                      <div className="managed-world__identity">
+                        {renameWorldId === world.id ? (
+                          <div className="world-rename-row">
+                            <label className="sr-only" htmlFor={`world-name-${world.id}`}>Nouveau nom pour {world.name}</label>
+                            <input id={`world-name-${world.id}`} value={renameWorldValue} maxLength={80} onChange={(event) => setRenameWorldValue(event.target.value)} className="nether-input" autoFocus />
+                            <button type="button" className="icon-button" aria-label="Enregistrer le nom" disabled={worldBusyId === world.id || configurationLocked} onClick={() => void handleRenameWorld(world)}><Check size={15} /></button>
+                            <button type="button" className="icon-button" aria-label="Annuler le renommage" onClick={() => setRenameWorldId(null)}><X size={15} /></button>
+                          </div>
+                        ) : (
+                          <>
+                            <strong>{world.name}{isCurrent && <span className="managed-world__current-tag">MONDE ACTIF</span>}</strong>
+                            <small>{sourceLabel} · créé le {new Date(world.createdAt).toLocaleDateString('fr-FR')}</small>
+                          </>
+                        )}
+                      </div>
+                      <StatusPill status={statusTone} label={statusLabelText} />
+                    </div>
+
+                    <div className="managed-world__details">
+                      <span><small>Version dédiée</small><strong>{world.version ? `BDS ${world.version}` : 'Non associée'}</strong></span>
+                      <span><small>Seed</small><strong>{world.seed === null ? 'Inconnue · non modifiable' : world.seed || 'Aléatoire'}</strong></span>
+                      <span><small>Dernière utilisation</small><strong>{world.lastUsedAt ? new Date(world.lastUsedAt).toLocaleString('fr-FR') : 'Jamais démarré ici'}</strong></span>
+                      {world.lastModifiedAt && <span><small>level.dat modifié</small><strong>{new Date(world.lastModifiedAt).toLocaleDateString('fr-FR')}</strong></span>}
+                    </div>
+
+                    {world.status === 'unassigned' && (
+                      <div className="world-assign-row">
+                        <div className="nether-field">
+                          <span id={`assign-version-label-${world.id}`}>Attribuer la version d’origine</span>
+                          <GlideSelect
+                            options={versions.map((version): GlideSelectOption => ({ value: version.version, label: `BDS ${version.version}`, tag: `client ${version.clientVersion}` }))}
+                            value={assignWorldVersion[world.id] ?? (versions.some((version) => version.version === configuration.version) ? configuration.version : '')}
+                            onChange={(value) => setAssignWorldVersion((current) => ({ ...current, [world.id]: value }))}
+                            labelledBy={`assign-version-label-${world.id}`}
+                            disabled={configurationLocked || worldBusyId === world.id}
+                            placeholder="Choisir la version exacte…"
+                            required
+                          />
+                        </div>
+                        <button type="button" className="nether-btn nether-btn--quiet" onClick={() => void handleAssignWorld(world)} disabled={configurationLocked || worldBusyId === world.id}><Check size={15} /> Associer</button>
+                      </div>
+                    )}
+
+                    <div className="managed-world__actions">
+                      <button type="button" className="nether-btn nether-btn--primary nether-btn--tiny" onClick={() => isCurrent ? void handleStart() : chooseWorld(world, false)} disabled={configurationLocked || world.status !== 'ready' || !world.version || (isCurrent && startDisabled)}>
+                        <Play size={14} /> {isCurrent ? 'Démarrer ce monde' : 'Choisir & reprendre'}
+                      </button>
+                      <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => chooseWorld(world, true)} disabled={configurationLocked || !world.version || world.status === 'missing' || world.status === 'unsafe'}>
+                        <Pencil size={14} /> Modifier les options
+                      </button>
+                      <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => handleExportWorld(world)} disabled={configurationLocked || world.status !== 'ready'}>
+                        <Download size={14} /> Exporter
+                      </button>
+                      {renameWorldId !== world.id && <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => { setRenameWorldId(world.id); setRenameWorldValue(world.name); }} disabled={configurationLocked}>
+                        <Pencil size={14} /> Renommer
+                      </button>}
+                      <button type="button" className="nether-btn nether-btn--danger nether-btn--tiny" onClick={() => void handleDeleteWorld(world)} disabled={configurationLocked || worldBusyId === world.id}>
+                        {worldBusyId === world.id ? <Loader2 className="spin-soft" size={14} /> : <Trash2 size={14} />} Supprimer
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </NetherCard>
+
+        <NetherCard
           id="console"
           title="Console Bedrock"
           eyebrow="STDIN / STDOUT DU SERVEUR"
@@ -1436,6 +1913,7 @@ export function LivePanelView() {
       <nav className="mobile-dock" aria-label="Navigation rapide">
         <a href="#overview" aria-current={activeSection === 'overview' ? 'location' : undefined} onClick={() => setActiveSection('overview')}><Server size={17} /><span>Accueil</span></a>
         <a href="#deploy" aria-current={activeSection === 'deploy' ? 'location' : undefined} onClick={() => setActiveSection('deploy')}><Package size={17} /><span>Déployer</span></a>
+        <a href="#worlds" aria-current={activeSection === 'worlds' ? 'location' : undefined} onClick={() => setActiveSection('worlds')}><Globe size={17} /><span>Mondes</span></a>
         <a href="#diagnostics" aria-current={activeSection === 'diagnostics' ? 'location' : undefined} onClick={() => setActiveSection('diagnostics')}><ShieldCheck size={17} /><span>État</span></a>
         <a href="#console" aria-current={activeSection === 'console' ? 'location' : undefined} onClick={() => setActiveSection('console')}><Terminal size={17} /><span>Console</span></a>
       </nav>

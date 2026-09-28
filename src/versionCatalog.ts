@@ -8,6 +8,19 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
   'minecraft.azureedge.net',
 ]);
 
+const MAX_CLIENT_VERSION = [1, 21, 132];
+
+export function compareNumericVersions(left: string, right: string): number {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
 function parseEntries(value: unknown): VersionEntry[] {
   if (typeof value !== 'object' || value === null || !Array.isArray((value as { versions?: unknown }).versions)) {
     throw new Error('versions.json doit contenir un tableau "versions".');
@@ -19,15 +32,24 @@ function parseEntries(value: unknown): VersionEntry[] {
     }
     const raw = item as Record<string, unknown>;
     const version = typeof raw.version === 'string' ? raw.version.trim() : '';
+    const clientVersion = typeof raw.clientVersion === 'string' ? raw.clientVersion.trim() : '';
+    const channel = raw.channel === 'preview' ? 'preview' : raw.channel === 'stable' ? 'stable' : null;
     const label = typeof raw.label === 'string' ? raw.label.trim() : '';
     const downloadUrl = typeof raw.downloadUrl === 'string' ? raw.downloadUrl.trim() : '';
-    const releaseDate = typeof raw.releaseDate === 'string' ? raw.releaseDate.trim() : '';
+    const releaseDate = raw.releaseDate === null ? null : typeof raw.releaseDate === 'string' ? raw.releaseDate.trim() : null;
 
     if (!/^\d+(?:\.\d+){1,4}$/.test(version)) {
       throw new Error(`Identifiant de version invalide dans l’entrée #${index + 1}.`);
     }
-    if (!label || label.length > 100) throw new Error(`Label invalide pour Bedrock ${version}.`);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate) || Number.isNaN(Date.parse(`${releaseDate}T00:00:00Z`))) {
+    if (!/^\d+\.\d+\.\d+$/.test(clientVersion)) {
+      throw new Error(`Version Bedrock cliente invalide pour BDS ${version}.`);
+    }
+    if (compareNumericVersions(clientVersion, MAX_CLIENT_VERSION.join('.')) >= 0) {
+      throw new Error(`La version Bedrock ${clientVersion} dépasse la limite du catalogue (avant 1.21.132).`);
+    }
+    if (!channel) throw new Error(`Canal invalide pour BDS ${version}.`);
+    if (!label || label.length > 160) throw new Error(`Label invalide pour Bedrock ${version}.`);
+    if (releaseDate !== null && (!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate) || Number.isNaN(Date.parse(`${releaseDate}T00:00:00Z`)))) {
       throw new Error(`Date de sortie invalide pour Bedrock ${version}.`);
     }
 
@@ -45,7 +67,7 @@ function parseEntries(value: unknown): VersionEntry[] {
       throw new Error(`L’URL de Bedrock ${version} doit être un ZIP Linux hébergé sur le domaine officiel Minecraft.`);
     }
 
-    return { version, label, downloadUrl, releaseDate };
+    return { version, clientVersion, channel, label, downloadUrl, releaseDate };
   });
 
   if (new Set(entries.map((entry) => entry.version)).size !== entries.length) {

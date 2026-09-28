@@ -1,12 +1,45 @@
 export type GameMode = 'survival' | 'creative' | 'adventure';
 export type Difficulty = 'peaceful' | 'easy' | 'normal' | 'hard';
 
+export type VersionChannel = 'stable' | 'preview';
+
 export interface VersionEntry {
+  /** Exact Bedrock Dedicated Server build identifier. */
   version: string;
+  /** Matching Bedrock client version shown in the release history. */
+  clientVersion: string;
+  channel: VersionChannel;
   label: string;
   downloadUrl: string;
-  releaseDate: string;
+  releaseDate: string | null;
 }
+
+export type WorldSource = 'created' | 'imported' | 'legacy';
+export type WorldAvailability = 'ready' | 'pending' | 'missing' | 'unassigned' | 'unsafe';
+
+export interface ManagedWorld {
+  id: string;
+  /** Friendly name shown in the manager; never used as a filesystem path. */
+  name: string;
+  /** Private folder name beneath BEDROCK_SERVER_DIR/worlds. */
+  folder: string;
+  /** Exact BDS build assigned to this world, null until an operator assigns it. */
+  version: string | null;
+  /** Configured generation seed; null means unknown (for imported/legacy worlds). */
+  seed: string | null;
+  configuration: DeployConfiguration | null;
+  source: WorldSource;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+  status: WorldAvailability;
+  sizeBytes: number | null;
+  lastModifiedAt: string | null;
+}
+
+export type WorldSelection =
+  | { mode: 'existing'; id: string }
+  | { mode: 'new'; name: string };
 
 /** A complete, validated deployment request. Never contains a download URL. */
 export interface DeployConfiguration {
