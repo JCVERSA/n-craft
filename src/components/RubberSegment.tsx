@@ -1,6 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
-import './RubberSegment.css';
+import Runtime from './RubberSegmentRuntime.jsx';
 
 export interface SegmentOption<T extends string> {
   value: T;
@@ -13,71 +11,37 @@ interface RubberSegmentProps<T extends string> {
   onChange: (value: T) => void;
   labelledBy: string;
   disabled?: boolean;
+  ariaLabel?: string;
 }
 
+/** Nebula-styled adapter preserving Noto's elastic thumb and pointer physics. */
 export function RubberSegment<T extends string>({
   options,
   value,
   onChange,
   labelledBy,
   disabled = false,
+  ariaLabel,
 }: RubberSegmentProps<T>) {
-  const reduceMotion = useReducedMotion();
-  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
-
-  const moveTo = (index: number) => {
-    if (options.length === 0 || disabled) return;
-    const nextIndex = (index + options.length) % options.length;
-    onChange(options[nextIndex].value);
-    buttons.current[nextIndex]?.focus();
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (disabled) return;
-    let nextIndex: number | null = null;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % options.length;
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + options.length) % options.length;
-    else if (event.key === 'Home') nextIndex = 0;
-    else if (event.key === 'End') nextIndex = options.length - 1;
-    if (nextIndex === null) return;
-    event.preventDefault();
-    moveTo(nextIndex);
-  };
-
   return (
-    <div
-      role="radiogroup"
-      aria-labelledby={labelledBy}
-      aria-disabled={disabled || undefined}
-      className="rubber-segment"
-      data-disabled={disabled ? '' : undefined}
-    >
-      <motion.span
-        aria-hidden="true"
-        className="rubber-segment__thumb"
-        style={{ gridColumn: selectedIndex + 1, gridRow: 1 }}
-        layout="position"
-        transition={reduceMotion ? { duration: 0.01 } : { type: 'spring', duration: 0.24, bounce: 0.12 }}
-      />
-      {options.map((option, index) => (
-        <button
-          key={option.value}
-          ref={(element) => { buttons.current[index] = element; }}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          aria-label={option.label}
-          tabIndex={index === selectedIndex ? 0 : -1}
-          disabled={disabled}
-          className="rubber-segment__option"
-          style={{ gridColumn: index + 1, gridRow: 1 }}
-          onClick={() => onChange(option.value)}
-          onKeyDown={(event) => handleKeyDown(event, index)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <Runtime
+      items={options}
+      value={value}
+      onChange={(nextValue) => onChange(nextValue as T)}
+      labelledBy={labelledBy}
+      ariaLabel={ariaLabel}
+      trackColor="rgba(19, 15, 22, 0.96)"
+      thumbColor="rgba(255, 184, 117, 0.96)"
+      textColor="var(--nether-muted, #cabdca)"
+      activeTextColor="#21160f"
+      size="lg"
+      radius={10}
+      inset={3}
+      equalSlots
+      stretch={100}
+      squash={3}
+      disabled={disabled}
+      className="ncraft-rubber-segment"
+    />
   );
 }

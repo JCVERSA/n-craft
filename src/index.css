@@ -1471,3 +1471,111 @@ select:focus-visible {
   .ncraft-about-links a,
   .ncraft-modal__close { animation: none !important; transition: none !important; }
 }
+
+/* Noto controls, tuned to Nebula Craft's magma/portal palette and layout. */
+.ncraft-nav-shell {
+  position: relative;
+  z-index: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.ncraft-nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 184px;
+  min-height: 52px;
+  padding: 7px 12px;
+  border: 1px solid rgba(234, 214, 245, 0.1);
+  border-radius: 13px;
+  background: rgba(18, 15, 21, 0.86);
+  color: var(--nether-text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+  transition: border-color .18s ease, background .18s ease, transform .16s ease;
+}
+
+.ncraft-nav-trigger > svg:first-child { flex: none; color: var(--nether-magma); }
+.ncraft-nav-trigger > span { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.ncraft-nav-trigger small { color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .13em; }
+.ncraft-nav-trigger strong { overflow: hidden; color: var(--nether-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ncraft-nav-trigger > svg:last-child { flex: none; color: var(--nether-muted); transition: transform .2s ease; }
+.ncraft-nav-trigger > svg:last-child.is-open { transform: rotate(90deg); }
+.ncraft-nav-trigger:hover,
+.ncraft-nav-trigger[aria-expanded='true'] { border-color: rgba(255,184,117,.26); background: rgba(31,24,32,.96); }
+.ncraft-nav-trigger:active { transform: scale(.98); }
+.ncraft-nav-trigger:focus-visible { outline: 2px solid rgba(255,184,117,.76); outline-offset: 3px; }
+
+.ncraft-nav-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: min(320px, calc(100vw - 28px));
+  padding: 14px 16px 15px;
+  border: 1px solid rgba(234,214,245,.13);
+  border-radius: 15px;
+  background: rgba(17, 14, 20, .98);
+  box-shadow: 0 22px 54px rgba(0,0,0,.52), inset 0 1px rgba(255,255,255,.045);
+  backdrop-filter: blur(18px);
+}
+
+.ncraft-nav-popover__eyebrow { margin: 0 0 8px 14px; color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .14em; }
+.ncraft-branched-menu { width: 100%; max-width: 100%; padding-left: 13px; }
+.ncraft-branched-menu .branched-menu__head { min-height: 36px; padding-block: 7px; }
+.ncraft-branched-menu .branched-menu__item { min-height: 34px; }
+.ncraft-branched-menu button:focus-visible { outline: 2px solid rgba(255,184,117,.72); outline-offset: 2px; border-radius: 5px; }
+
+.deploy-jelly-setting {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+}
+.deploy-jelly-setting > strong { color: var(--nether-text); font-size: 11px; }
+.deploy-jelly-setting > small { color: var(--nether-dim); font-size: 9px; line-height: 1.4; }
+.deploy-jelly-setting .jelly-radio { justify-self: start; margin: -1px 0; }
+
+.ncraft-world-frame.refine-frame {
+  flex: 0 0 34px;
+  width: 34px;
+  box-shadow: inset 0 0 0 1px rgba(155,230,176,.13);
+}
+.ncraft-world-frame .refine-frame__print > img { image-rendering: pixelated; filter: drop-shadow(0 2px 4px rgba(0,0,0,.48)); }
+.ncraft-world-swipe-row { width: 100%; }
+.ncraft-world-swipe-row .swipe-row__surface { gap: 9px; }
+
+.ncraft-fuse-unlink { border: 1px solid rgba(255,127,121,.24); }
+.ncraft-fuse-unlink .fuse-button__status { font-size: 1px; }
+
+.ncraft-toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  display: flex;
+  width: min(440px, calc(100vw - 36px));
+  flex-direction: column;
+  gap: 0;
+  pointer-events: none;
+}
+.ncraft-toast-stack .swipe-toast { flex: none; width: 100%; pointer-events: auto; }
+.ncraft-panel-toast .swipe-toast__card { border: 1px solid rgba(255,255,255,.12); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.035); }
+
+@media (max-width: 980px) {
+  .ncraft-nav-shell { display: none; }
+  .ncraft-toast-stack { right: 12px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100vw - 24px)); }
+}
+
+@media (max-width: 700px) {
+  .ncraft-toast-stack { right: 10px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
+  .deploy-jelly-setting { min-height: 94px; padding-inline: 9px; }
+}

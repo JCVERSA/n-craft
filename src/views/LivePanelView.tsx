@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -41,11 +41,16 @@ import { AboutModal } from '../components/AboutModal.tsx';
 import { useDialogs } from '../components/DialogProvider.tsx';
 import { NetherAmbientBackground } from '../components/NetherAmbientBackground.tsx';
 import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
+import BranchedMenu, { type BranchedMenuItem } from '../components/BranchedMenu.jsx';
+import FuseButton from '../components/FuseButton.jsx';
 import { GlideSelect, type GlideSelectOption } from '../components/GlideSelect.tsx';
+import JellyRadio from '../components/JellyRadio.jsx';
 import { NetherCard } from '../components/NetherCard.tsx';
+import RefineFrame from '../components/RefineFrame.jsx';
 import { RubberSegment, type SegmentOption } from '../components/RubberSegment.tsx';
 import { SpringCheck } from '../components/SpringCheck.tsx';
-import { SquishSwitch } from '../components/SquishSwitch.tsx';
+import SwipeRow from '../components/SwipeRow.jsx';
+import SwipeToast from '../components/SwipeToast.jsx';
 import {
   appendMetricSample,
   loadMetricHistory,
@@ -94,6 +99,30 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string; icon: LucideIcon }> = [
   { id: 'diagnostics', label: 'Diagnostics', icon: ShieldCheck },
   { id: 'console', label: 'Console', icon: Terminal },
 ];
+
+type PanelToastTone = 'success' | 'warning' | 'error' | 'info';
+interface PanelToast { id: number; tone: PanelToastTone; title: string; description: string; }
+
+const BRANCHED_NAV_ITEMS: BranchedMenuItem[] = [
+  { label: 'Serveur', children: [
+    { value: 'overview', label: 'Vue générale' },
+    { value: 'worlds', label: 'Mondes sauvegardés' },
+  ] },
+  { label: 'Configuration', children: [
+    { value: 'deploy', label: 'Déploiement' },
+    { value: 'console', label: 'Console Bedrock' },
+  ] },
+  { label: 'Supervision', children: [
+    { value: 'diagnostics', label: 'Diagnostics système' },
+  ] },
+];
+
+const PANEL_TOAST_LOOKS: Record<PanelToastTone, { background: string; fuse: string; icon: ReactNode }> = {
+  success: { background: 'rgba(18, 34, 28, 0.98)', fuse: '#9be6b0', icon: <CheckCircle2 size={17} /> },
+  warning: { background: 'rgba(43, 31, 18, 0.98)', fuse: '#ffb875', icon: <AlertTriangle size={17} /> },
+  error: { background: 'rgba(47, 22, 27, 0.98)', fuse: '#ff7f79', icon: <AlertTriangle size={17} /> },
+  info: { background: 'rgba(28, 22, 39, 0.98)', fuse: '#c5a0ff', icon: <Info size={17} /> },
+};
 
 function panelTabFromHash(hash: string): PanelTabId | null {
   const value = hash.replace(/^#/, '');
@@ -271,6 +300,9 @@ export function LivePanelView() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<PanelTabId>(initialPanelTab);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
+  const navMenuRef = useRef<HTMLDivElement>(null);
+  const navMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [token, setToken] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -279,7 +311,17 @@ export function LivePanelView() {
   const [clockNow, setClockNow] = useState(Date.now());
   const [metricHistory, setMetricHistory] = useState<BedrockMetricSample[]>(() => loadMetricHistory(getMetricStorage()));
   const reduceMotion = useReducedMotion();
+  const [panelToasts, setPanelToasts] = useState<PanelToast[]>([]);
+  const toastSequenceRef = useRef(0);
+  const pushPanelToast = useCallback((toast: Omit<PanelToast, 'id'>) => {
+    const next = { ...toast, id: ++toastSequenceRef.current };
+    setPanelToasts((current) => [...current.slice(-2), next]);
+  }, []);
+  const dismissPanelToast = useCallback((id: number) => {
+    setPanelToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
   const switchPanel = useCallback((nextTab: PanelTabId) => {
+    setNavMenuOpen(false);
     setActiveSection(nextTab);
     if (typeof window === 'undefined') return;
     const nextHash = `#${nextTab}`;
@@ -299,6 +341,27 @@ export function LivePanelView() {
     switchPanel(nextTab.id);
     window.requestAnimationFrame(() => document.getElementById(`${navigation}-tab-${nextTab.id}`)?.focus());
   }, [switchPanel]);
+
+  useEffect(() => {
+    if (!navMenuOpen) return undefined;
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !navMenuRef.current?.contains(event.target)) setNavMenuOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setNavMenuOpen(false);
+      navMenuButtonRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('pointerdown', handleOutsidePointer, true);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointer, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [navMenuOpen]);
+
   const [versions, setVersions] = useState<PublicVersion[]>([]);
   const [worlds, setWorlds] = useState<ManagedWorld[]>([]);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
@@ -309,8 +372,8 @@ export function LivePanelView() {
   const [worldImportName, setWorldImportName] = useState('');
   const [worldImportVersion, setWorldImportVersion] = useState('');
   const [worldBusyId, setWorldBusyId] = useState<string | null>(null);
+  const [worldSwipeNonce, setWorldSwipeNonce] = useState<Record<string, number>>({});
   const [worldManagerError, setWorldManagerError] = useState('');
-  const [worldManagerNotice, setWorldManagerNotice] = useState('');
   const [renameWorldId, setRenameWorldId] = useState<string | null>(null);
   const [renameWorldValue, setRenameWorldValue] = useState('');
   const [assignWorldVersion, setAssignWorldVersion] = useState<Record<string, string>>({});
@@ -827,7 +890,6 @@ export function LivePanelView() {
     };
     setWorldBusyId(world.id);
     setWorldManagerError('');
-    setWorldManagerNotice('');
     try {
       await apiRequest<{ world: ManagedWorld }>(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
         method: 'PATCH',
@@ -837,9 +899,13 @@ export function LivePanelView() {
       const editsActiveWorld = active?.version === world.version && active.levelName === world.folder;
       setWorldEditId(null);
       setConfigTouched(!editsActiveWorld);
-      setWorldManagerNotice(editsActiveWorld
-        ? 'Options enregistrées sur le disque. Bedrock reste arrêté; les chunks et la seed n’ont pas été modifiés.'
-        : 'Options enregistrées pour ce monde. Elles seront appliquées lorsque tu le reprendras; Bedrock reste inchangé.');
+      pushPanelToast({
+        tone: 'success',
+        title: 'Réglages enregistrés',
+        description: editsActiveWorld
+          ? 'Les options sont enregistrées. Bedrock reste arrêté; les chunks et la seed n’ont pas été modifiés.'
+          : 'Les options seront appliquées lorsque tu reprendras ce monde. Bedrock reste inchangé.',
+      });
       await Promise.all([refreshWorlds(), ...(editsActiveWorld ? [refreshStatus(true)] : [])]);
     } catch (error) {
       setWorldManagerError((error as Error).message);
@@ -851,7 +917,6 @@ export function LivePanelView() {
   const handleRenameWorld = async (world: ManagedWorld) => {
     setWorldBusyId(world.id);
     setWorldManagerError('');
-    setWorldManagerNotice('');
     try {
       await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
         method: 'PATCH',
@@ -859,7 +924,7 @@ export function LivePanelView() {
       });
       setRenameWorldId(null);
       setRenameWorldValue('');
-      setWorldManagerNotice('Nom du monde mis à jour. Le dossier et les données n’ont pas été déplacés.');
+      pushPanelToast({ tone: 'success', title: 'Monde renommé', description: 'Le dossier et les données n’ont pas été déplacés.' });
       await refreshWorlds();
     } catch (error) {
       setWorldManagerError((error as Error).message);
@@ -876,13 +941,12 @@ export function LivePanelView() {
     }
     setWorldBusyId(world.id);
     setWorldManagerError('');
-    setWorldManagerNotice('');
     try {
       await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}/assign`, {
         method: 'POST',
         body: JSON.stringify({ version }),
       });
-      setWorldManagerNotice(`Version BDS ${version} associée. Elle ne sera pas modifiée automatiquement.`);
+      pushPanelToast({ tone: 'success', title: 'Version associée', description: `BDS ${version} est liée à ce monde et ne sera pas modifiée automatiquement.` });
       await refreshWorlds();
     } catch (error) {
       setWorldManagerError((error as Error).message);
@@ -891,7 +955,7 @@ export function LivePanelView() {
     }
   };
 
-  const handleDeleteWorld = async (world: ManagedWorld) => {
+  const handleDeleteWorld = async (world: ManagedWorld): Promise<boolean> => {
     const typedName = await dialogs.prompt({
       title: `Supprimer « ${world.name} » ?`,
       message: 'La suppression définitive de ce monde effacera ses chunks. Cette action est irréversible. Pour éviter une suppression accidentelle, saisis son nom exact ci-dessous.',
@@ -904,14 +968,13 @@ export function LivePanelView() {
       confirmLabel: 'Supprimer définitivement',
       cancelLabel: 'Conserver le monde',
     });
-    if (typedName === null) return;
+    if (typedName === null) return false;
     if (typedName !== world.name) {
       setWorldManagerError('Suppression annulée : le nom saisi ne correspond pas exactement.');
-      return;
+      return false;
     }
     setWorldBusyId(world.id);
     setWorldManagerError('');
-    setWorldManagerNotice('');
     try {
       await apiRequest(`/api/server/worlds/${encodeURIComponent(world.id)}`, {
         method: 'DELETE',
@@ -921,10 +984,12 @@ export function LivePanelView() {
         setSelectedWorldId(null);
         setWorldEditId(null);
       }
-      setWorldManagerNotice(`Monde « ${world.name} » supprimé.`);
+      pushPanelToast({ tone: 'success', title: 'Monde supprimé', description: `« ${world.name} » a été supprimé après confirmation du nom exact.` });
       await Promise.all([refreshWorlds(), refreshStatus(true)]);
+      return true;
     } catch (error) {
       setWorldManagerError((error as Error).message);
+      return false;
     } finally {
       setWorldBusyId(null);
     }
@@ -943,7 +1008,6 @@ export function LivePanelView() {
     });
     setWorldBusyId('import');
     setWorldManagerError('');
-    setWorldManagerNotice('');
     try {
       const response = await fetch(`/api/server/worlds/import?${query.toString()}`, {
         method: 'POST',
@@ -959,7 +1023,7 @@ export function LivePanelView() {
       if (worldImportInputRef.current) worldImportInputRef.current.value = '';
       const nextWorlds = await refreshWorlds();
       const imported = nextWorlds.find((world) => world.id === payload.world!.id) ?? payload.world;
-      setWorldManagerNotice(`Monde « ${imported.name} » importé sans remplacer aucun autre monde.`);
+      pushPanelToast({ tone: 'success', title: 'Import terminé', description: `« ${imported.name} » a été ajouté sans remplacer aucun autre monde.` });
       if (imported.status === 'ready') chooseWorld(imported, false);
     } catch (error) {
       setWorldManagerError((error as Error).message);
@@ -1079,6 +1143,7 @@ export function LivePanelView() {
       });
       updateChatbotSnapshot(result.chatbot);
       setChatbotFeedback('Profil Bedrock et jetons OAuth supprimés.');
+      pushPanelToast({ tone: 'success', title: 'Compte délié', description: 'Le profil Bedrock et son cache OAuth privé ont été supprimés.' });
     } catch (error) {
       setChatbotFeedback((error as Error).message);
     } finally {
@@ -1426,27 +1491,58 @@ export function LivePanelView() {
             </span>
           </a>
 
-          <nav className="ncraft-nav" role="tablist" aria-label="Sections du panneau" aria-orientation="horizontal">
-            {PANEL_TABS.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  id={`desktop-tab-${tab.id}`}
-                  role="tab"
-                  aria-controls={`panel-${tab.id}`}
-                  aria-selected={activeSection === tab.id}
-                  tabIndex={activeSection === tab.id ? 0 : -1}
-                  className={activeSection === tab.id ? 'is-current' : undefined}
-                  onClick={() => switchPanel(tab.id)}
-                  onKeyDown={(event) => handleTabKeyDown(event, tab.id, 'desktop')}
+          <div className="ncraft-nav-shell" ref={navMenuRef}>
+            <button
+              ref={navMenuButtonRef}
+              type="button"
+              className="ncraft-nav-trigger"
+              aria-label={`Ouvrir la navigation · ${PANEL_TABS.find((tab) => tab.id === activeSection)?.label ?? 'Panneau'}`}
+              aria-haspopup="true"
+              aria-expanded={navMenuOpen}
+              aria-controls="ncraft-branched-navigation"
+              onClick={() => setNavMenuOpen((open) => !open)}
+            >
+              <Layers size={16} aria-hidden="true" />
+              <span><small>SECTIONS</small><strong>{PANEL_TABS.find((tab) => tab.id === activeSection)?.label ?? 'Panneau'}</strong></span>
+              <ChevronRight className={navMenuOpen ? 'is-open' : undefined} size={15} aria-hidden="true" />
+            </button>
+            <AnimatePresence initial={false}>
+              {navMenuOpen && (
+                <motion.div
+                  key="branched-navigation"
+                  id="ncraft-branched-navigation"
+                  className="ncraft-nav-popover"
+                  initial={reduceMotion ? false : { opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -5, scale: 0.98 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
                 >
-                  <Icon size={15} aria-hidden="true" /> <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+                  <p className="ncraft-nav-popover__eyebrow">NAVIGATION DU PANNEAU</p>
+                  <BranchedMenu
+                    items={BRANCHED_NAV_ITEMS}
+                    active={activeSection}
+                    ariaLabel="Navigation du panneau"
+                    defaultOpen={0}
+                    onSelect={(value) => {
+                      switchPanel(value as PanelTabId);
+                      navMenuButtonRef.current?.focus({ preventScroll: true });
+                    }}
+                    width={260}
+                    rowHeight={34}
+                    indent={28}
+                    trunk={11}
+                    radius={7}
+                    fontSize={12}
+                    color="var(--nether-text)"
+                    accentColor="var(--nether-magma)"
+                    lineColor="rgba(234, 214, 245, 0.2)"
+                    className="ncraft-branched-menu"
+                  />
+                  <span className="sr-only">Appuie sur Échap pour fermer ce menu.</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="ncraft-header__actions">
             <StatusPill status={currentServerStatus} />
@@ -1527,7 +1623,23 @@ export function LivePanelView() {
 
               <div className="world-capsule">
                 <span className={`world-capsule__icon ${activeConfig ? 'world-capsule__icon--block' : ''}`} aria-hidden="true">
-                  {activeConfig ? <img src="/assets/minecraft/grass-block.webp" alt="" width="22" height="22" /> : <Globe size={19} />}
+                  {activeConfig ? (
+                    <RefineFrame
+                      status={isPipelineBusy ? 'refining' : 'complete'}
+                      width={34}
+                      aspectRatio="1"
+                      radius={10}
+                      background="rgba(20, 31, 24, 0.9)"
+                      color="var(--nether-moss)"
+                      labels={{ queued: 'En attente', generating: 'Préparation', refining: 'Déploiement', complete: 'Prêt', error: 'Échec' }}
+                      stageDuration={520}
+                      sweep={isPipelineBusy}
+                      showStatus={false}
+                      className="ncraft-world-frame"
+                    >
+                      <img src="/assets/minecraft/grass-block.webp" alt="" width="34" height="34" />
+                    </RefineFrame>
+                  ) : <Globe size={19} />}
                 </span>
                 <span className="world-capsule__copy">
                   <small>MONDE ACTIF</small>
@@ -1902,13 +2014,30 @@ export function LivePanelView() {
                 </div>
 
                 <div className="deploy-options-grid">
-                  <SquishSwitch
-                    checked={configuration.allowCheats}
-                    onChange={(checked) => changeField('allowCheats', checked)}
-                    label="Autoriser les commandes"
-                    description="Cheats et commandes de jeu"
-                    disabled={configurationLocked}
-                  />
+                  <div className="deploy-jelly-setting">
+                    <strong id="allow-cheats-label">Autoriser les commandes</strong>
+                    <JellyRadio
+                      items={[
+                        { value: false, label: 'Désactivées' },
+                        { value: true, label: 'Autorisées' },
+                      ]}
+                      value={configuration.allowCheats}
+                      onChange={(allowCheats) => changeField('allowCheats', allowCheats)}
+                      labelledBy="allow-cheats-label"
+                      describedBy="allow-cheats-help"
+                      ariaLabel="Autoriser les commandes de jeu"
+                      chipColor="rgba(38, 31, 42, 0.96)"
+                      activeColor="var(--nether-magma)"
+                      textColor="var(--nether-muted)"
+                      activeTextColor="#21160f"
+                      size="sm"
+                      gap={6}
+                      radius={12}
+                      disabled={configurationLocked}
+                      className="ncraft-cheats-radio"
+                    />
+                    <small id="allow-cheats-help">Cheats et commandes de jeu sur le serveur Bedrock.</small>
+                  </div>
                   <div className="security-badges">
                     <span><LockKeyhole size={13} /> Auth Bedrock</span>
                     <span><Wifi size={13} /> UDP 19132</span>
@@ -1978,7 +2107,6 @@ export function LivePanelView() {
             </div>
 
             {worldManagerError && <div role="alert" className="nether-callout nether-callout--danger world-manager-message"><AlertTriangle size={16} /><span>{worldManagerError}</span></div>}
-            {worldManagerNotice && <div role="status" className="nether-callout nether-callout--success world-manager-message"><CheckCircle2 size={16} /><span>{worldManagerNotice}</span><button type="button" onClick={() => setWorldManagerNotice('')} aria-label="Fermer le message"><X size={15} /></button></div>}
 
             <div className="world-import-panel">
               <div className="world-import-panel__heading"><span className="world-import-icon"><FileUp size={17} /></span><div><strong>Importer un monde</strong><small>.mcworld ou archive ZIP Bedrock · aucun écrasement</small></div></div>
@@ -2033,6 +2161,27 @@ export function LivePanelView() {
                   const statusTone = world.status === 'ready' ? 'running' : world.status === 'missing' || world.status === 'unsafe' ? 'failed' : 'starting';
                   return (
                     <article key={world.id} className={`managed-world ${isCurrent ? 'managed-world--current' : ''}`}>
+                      <SwipeRow
+                        key={`${world.id}-actions-${worldSwipeNonce[world.id] ?? 0}`}
+                        actions={[{ id: 'delete', label: 'Supprimer' }]}
+                        label={`Actions du monde ${world.name}`}
+                        actionColor="#a7373d"
+                        drawerColor="rgba(105, 37, 45, 0.96)"
+                        rowColor="rgba(18, 15, 21, 0.9)"
+                        textColor="var(--nether-text)"
+                        height={58}
+                        radius={10}
+                        actionWidth={96}
+                        fullSwipe
+                        disabled={configurationLocked || worldBusyId === world.id || renameWorldId === world.id}
+                        onCommit={(action) => {
+                          if (action.id !== 'delete') return;
+                          void handleDeleteWorld(world).then((deleted) => {
+                            if (!deleted) setWorldSwipeNonce((current) => ({ ...current, [world.id]: (current[world.id] ?? 0) + 1 }));
+                          });
+                        }}
+                        className="ncraft-world-swipe-row"
+                      >
                       <div className="managed-world__heading">
                         <span className="managed-world__icon"><img src="/assets/minecraft/grass-block.webp" alt="" width="22" height="22" /></span>
                         <div className="managed-world__identity">
@@ -2052,6 +2201,7 @@ export function LivePanelView() {
                         </div>
                         <StatusPill status={statusTone} label={statusLabelText} />
                       </div>
+                      </SwipeRow>
 
                       <div className="managed-world__details">
                         <span><small>Version dédiée</small><strong>{world.version ? `BDS ${world.version}` : 'Non associée'}</strong></span>
@@ -2177,9 +2327,27 @@ export function LivePanelView() {
                   </button>
                 )}
                 {chatbot?.accountLinked && !chatbot.userActionPending && (
-                  <button type="button" className="nether-btn nether-btn--danger" onClick={() => void handleChatbotUnlink()} disabled={chatbotBusy}>
-                    {chatbotBusy ? <Loader2 className="spin-soft" size={15} /> : <Trash2 size={15} />} Délier et effacer les jetons
-                  </button>
+                  <FuseButton
+                    label="Délier et effacer les jetons"
+                    undoLabel="Annuler la déliaison"
+                    doneLabel="Confirmation requise"
+                    icon={<Trash2 size={15} aria-hidden="true" />}
+                    color="#ffe8e0"
+                    background="rgba(91, 34, 39, 0.7)"
+                    fuseColor="var(--nether-magma)"
+                    size="sm"
+                    radius={12}
+                    undoWindow={4200}
+                    commitOn="fuseEnd"
+                    settle="reset"
+                    disabled={chatbotBusy}
+                    onCommit={(reason) => { if (reason === 'fuseEnd') void handleChatbotUnlink(); }}
+                    onUndo={() => {
+                      setChatbotFeedback('Déliaison annulée.');
+                      pushPanelToast({ tone: 'info', title: 'Déliaison annulée', description: 'Le compte Bedrock dédié et ses jetons restent inchangés.' });
+                    }}
+                    className="ncraft-fuse-unlink"
+                  />
                 )}
               </div>
             </NetherCard>
@@ -2335,6 +2503,34 @@ export function LivePanelView() {
           );
         })}
       </nav>
+
+      {panelToasts.length > 0 && (
+        <div className="ncraft-toast-stack" role="region" aria-label="Notifications du panneau">
+          {panelToasts.map((toast) => {
+            const look = PANEL_TOAST_LOOKS[toast.tone];
+            return (
+              <SwipeToast
+                key={toast.id}
+                title={toast.title}
+                description={toast.description}
+                icon={look.icon}
+                background={look.background}
+                color="#fff7f0"
+                fuseColor={look.fuse}
+                width={440}
+                radius={13}
+                duration={5200}
+                fuse="bottom"
+                closeButton
+                closeLabel="Fermer la notification"
+                inline
+                onClose={() => dismissPanelToast(toast.id)}
+                className="ncraft-panel-toast"
+              />
+            );
+          })}
+        </div>
+      )}
 
       <AnimatePresence initial={false}>
         {aboutOpen && <AboutModal key="about" onClose={() => setAboutOpen(false)} />}
