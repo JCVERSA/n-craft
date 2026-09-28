@@ -1790,6 +1790,7 @@ export function LivePanelView() {
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <PanelHeading
+            variant="worlds"
             eyebrow="SAUVEGARDES BEDROCK"
             title="Gérer les mondes"
             description="Chaque build BDS exacte garde sa propre sauvegarde. Importer, exporter, renommer ou supprimer un monde ne touche pas aux autres."
@@ -1948,6 +1949,7 @@ export function LivePanelView() {
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <PanelHeading
+            variant="diagnostics"
             eyebrow="ÉTAT DU CONTENEUR"
             title="Diagnostics"
             description="Contrôles réels du pipeline, des prérequis système et du binaire Bedrock."
@@ -2031,6 +2033,7 @@ export function LivePanelView() {
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <PanelHeading
+            variant="console"
             eyebrow="JOURNAL DU SERVEUR"
             title="Console Bedrock"
             description="Logs reçus du processus et commandes envoyées directement à son stdin; aucun shell n’est lancé."
@@ -2107,9 +2110,10 @@ export function LivePanelView() {
 }
 
 
-function PanelHeading({ eyebrow, title, description, variant }: { eyebrow: string; title: string; description: string; variant?: 'deployment' }) {
+function PanelHeading({ eyebrow, title, description, variant }: { eyebrow: string; title: string; description: string; variant?: 'deployment' | 'worlds' | 'diagnostics' | 'console' }) {
+  const variantClassName = variant ? ` ncraft-tab-heading--${variant}` : '';
   return (
-    <header className={`ncraft-tab-heading ${variant === 'deployment' ? 'ncraft-tab-heading--deployment' : ''}`}>
+    <header className={`ncraft-tab-heading${variantClassName}`}>
       <div className="ncraft-tab-heading__copy">
         <p className="nether-eyebrow">{eyebrow}</p>
         <h1>{title}</h1>

@@ -1009,17 +1009,43 @@ select:focus-visible {
     linear-gradient(120deg, rgba(33,26,34,.94), rgba(19,15,21,.94));
   box-shadow: inset 0 1px rgba(255,255,255,.045);
 }
-.ncraft-tab-heading--deployment {
+.ncraft-tab-heading--deployment,
+.ncraft-tab-heading--worlds,
+.ncraft-tab-heading--diagnostics,
+.ncraft-tab-heading--console {
   isolation: isolate;
   background-color: #171219;
+  background-size: auto, cover;
+  background-repeat: no-repeat;
+}
+.ncraft-tab-heading--deployment {
   background-image:
     linear-gradient(90deg, rgba(18,14,20,.97) 0%, rgba(18,14,20,.86) 47%, rgba(18,14,20,.58) 100%),
     url('/assets/minecraft/bedrock-world-deployer.webp');
-  background-size: auto, cover;
-  background-position: center, 58% center;
-  background-repeat: no-repeat;
+  background-position: center, 58% 58%;
 }
-.ncraft-tab-heading--deployment .ncraft-tab-heading__ornament { opacity: .45; }
+.ncraft-tab-heading--worlds {
+  background-image:
+    linear-gradient(90deg, rgba(18,14,20,.96) 0%, rgba(18,14,20,.82) 48%, rgba(18,14,20,.47) 100%),
+    url('/assets/minecraft/bedrock-worlds-header.webp');
+  background-position: center, 58% 58%;
+}
+.ncraft-tab-heading--diagnostics {
+  background-image:
+    linear-gradient(90deg, rgba(18,14,20,.96) 0%, rgba(18,14,20,.82) 48%, rgba(18,14,20,.48) 100%),
+    url('/assets/minecraft/bedrock-diagnostics-header.webp');
+  background-position: center, 58% 50%;
+}
+.ncraft-tab-heading--console {
+  background-image:
+    linear-gradient(90deg, rgba(18,14,20,.96) 0%, rgba(18,14,20,.82) 48%, rgba(18,14,20,.48) 100%),
+    url('/assets/minecraft/bedrock-console-header.webp');
+  background-position: center, 58% 62%;
+}
+.ncraft-tab-heading--deployment .ncraft-tab-heading__ornament,
+.ncraft-tab-heading--worlds .ncraft-tab-heading__ornament,
+.ncraft-tab-heading--diagnostics .ncraft-tab-heading__ornament,
+.ncraft-tab-heading--console .ncraft-tab-heading__ornament { opacity: .45; }
 .ncraft-tab-heading::after {
   position: absolute;
   right: 0;
@@ -1173,7 +1199,10 @@ select:focus-visible {
   .ncraft-tab-heading__copy h1 { font-size: clamp(24px, 7vw, 31px); }
   .ncraft-tab-heading__copy > p:last-child { max-width: 53ch; font-size: 12px; }
   .ncraft-tab-heading__ornament { right: -60px; width: 160px; opacity: .7; }
-  .ncraft-tab-heading--deployment { background-position: center, 64% center; }
+  .ncraft-tab-heading--deployment { background-position: center, 58% 56%; }
+  .ncraft-tab-heading--worlds { background-position: center, 58% 55%; }
+  .ncraft-tab-heading--diagnostics { background-position: center, 58% 52%; }
+  .ncraft-tab-heading--console { background-position: center, 58% 60%; }
   .ncraft-operations-stack--diagnostics { display: flex; }
   .ncraft-operations-stack--diagnostics > :last-child { grid-column: auto; }
   .ncraft-login-showcase { min-height: 275px; padding: 19px; border-radius: 17px; }
@@ -1184,7 +1213,6 @@ select:focus-visible {
   .login-showcase__title { font-size: clamp(27px, 7.8vw, 35px); }
   .login-showcase__description { max-width: 27ch; margin-top: 8px; font-size: 10px; line-height: 1.45; }
   .login-showcase__footer { gap: 8px 14px; padding-top: 11px; font-size: 10px; }
-  .ncraft-tab-heading--deployment { background-position: center, 68% center; }
   .ncraft-auth-shell { padding: 14px 12px; }
   .ncraft-login-layout { gap: 10px; }
   .ncraft-login-layout .ncraft-login-card { padding: 20px 17px; }
