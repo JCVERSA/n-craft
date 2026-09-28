@@ -1001,6 +1001,12 @@ select:focus-visible {
   outline: none;
 }
 .ncraft-tab-panel[hidden] { display: none !important; }
+.ncraft-tab-panel__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
 .ncraft-tab-heading {
   position: relative;
   display: flex;
@@ -1205,6 +1211,7 @@ select:focus-visible {
 
 @media (max-width: 700px) {
   .ncraft-tab-panel { gap: 14px; }
+  .ncraft-tab-panel__content { gap: 14px; }
   .ncraft-tab-heading { min-height: 108px; padding: 18px 16px; border-radius: 14px; }
   .ncraft-tab-heading__copy h1 { font-size: clamp(24px, 7vw, 31px); }
   .ncraft-tab-heading__copy > p:last-child { max-width: 53ch; font-size: 12px; }

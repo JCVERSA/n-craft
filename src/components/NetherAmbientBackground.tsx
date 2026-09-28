@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { memo, useEffect, useState, type CSSProperties } from 'react';
 import { useReducedMotion } from 'motion/react';
 
 const KANA = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ';
@@ -8,13 +8,41 @@ const GLYPHS = Array.from({ length: GLYPH_COUNT }, (_, index) => {
   return KANA[offset];
 });
 
-export function NetherAmbientBackground() {
+function visibleGlyphCount(): number {
+  if (typeof window === 'undefined') return GLYPH_COUNT;
+
+  const columns = Math.max(1, Math.floor((window.innerWidth - 16) / 40));
+  const rowHeight = Math.max(34, Math.min(46, window.innerHeight * 0.047));
+  const rows = Math.max(1, Math.ceil((window.innerHeight - 10) / rowHeight));
+  return Math.min(GLYPH_COUNT, columns * rows);
+}
+
+export const NetherAmbientBackground = memo(function NetherAmbientBackground() {
   const reduceMotion = useReducedMotion();
+  const [glyphCount, setGlyphCount] = useState(visibleGlyphCount);
+
+  useEffect(() => {
+    let resizeFrame = 0;
+    const handleResize = () => {
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0;
+        const nextCount = visibleGlyphCount();
+        setGlyphCount((currentCount) => currentCount === nextCount ? currentCount : nextCount);
+      });
+    };
+
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+    };
+  }, []);
 
   return (
     <div className={`ncraft-rune-field${reduceMotion ? ' ncraft-rune-field--static' : ''}`} aria-hidden="true">
       <div className="ncraft-rune-field__grid">
-        {GLYPHS.map((glyph, index) => (
+        {GLYPHS.slice(0, glyphCount).map((glyph, index) => (
           <span
             key={index}
             className={index % 29 === 4 ? 'ncraft-rune-field__glyph ncraft-rune-field__glyph--magma'
@@ -28,4 +56,4 @@ export function NetherAmbientBackground() {
       </div>
     </div>
   );
-}
+});

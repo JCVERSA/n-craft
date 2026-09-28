@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Activity, Cpu, MemoryStick } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import type { ServerLifecycle } from '../types/backend.ts';
@@ -5,7 +6,6 @@ import { BEDROCK_METRICS_WINDOW_MS, type BedrockMetricSample } from '../utils/me
 
 interface BedrockMetricsChartProps {
   samples: BedrockMetricSample[];
-  now: number;
   serverStatus: ServerLifecycle | undefined;
 }
 
@@ -62,8 +62,35 @@ function sampleTimeLabel(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export function BedrockMetricsChart({ samples, now, serverStatus }: BedrockMetricsChartProps) {
+export function BedrockMetricsChart({ samples, serverStatus }: BedrockMetricsChartProps) {
   const reduceMotion = useReducedMotion();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const stopClock = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const startClock = () => {
+      if (document.visibilityState !== 'visible' || timer !== undefined) return;
+      setNow(Date.now());
+      timer = window.setInterval(() => setNow(Date.now()), 10_000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startClock();
+      else stopClock();
+    };
+
+    startClock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopClock();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   const visibleSamples = samples.filter((sample) => sample.timestamp >= now - BEDROCK_METRICS_WINDOW_MS && sample.timestamp <= now + 30_000);
   const latest = visibleSamples.at(-1);
   const memoryValues = visibleSamples.flatMap((sample) => sample.memoryBytes === null ? [] : [sample.memoryBytes]);

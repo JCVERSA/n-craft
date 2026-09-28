@@ -301,6 +301,8 @@ export function LivePanelView() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<PanelTabId>(initialPanelTab);
+  const previousActiveSectionRef = useRef(activeSection);
+  const animatePanelEntry = previousActiveSectionRef.current !== activeSection;
   const [navMenuOpen, setNavMenuOpen] = useState(false);
   const navMenuRef = useRef<HTMLDivElement>(null);
   const navMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -309,7 +311,6 @@ export function LivePanelView() {
   const [loginError, setLoginError] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [clockNow, setClockNow] = useState(Date.now());
   const [metricHistory, setMetricHistory] = useState<BedrockMetricSample[]>(() => loadMetricHistory(getMetricStorage()));
   const reduceMotion = useReducedMotion();
   const [panelToasts, setPanelToasts] = useState<PanelToast[]>([]);
@@ -392,6 +393,10 @@ export function LivePanelView() {
   const logViewportRef = useRef<HTMLDivElement>(null);
   const worldImportInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    previousActiveSectionRef.current = activeSection;
+  }, [activeSection]);
+
   const isPipelineBusy = Boolean(status?.deployBusy || status?.state.pipeline.status === 'running' || busyAction === 'deploy' || busyAction === 'save-config' || busyAction === 'start');
   const currentStepIndex = useMemo(
     () => pipelineSteps.findIndex((step) => step.id === status?.state.pipeline.step),
@@ -428,31 +433,6 @@ export function LivePanelView() {
       }
     }
   }, [configTouched]);
-
-  useEffect(() => {
-    if (!authenticated) return;
-    let timer: number | undefined;
-    const stopClock = () => {
-      if (timer === undefined) return;
-      window.clearInterval(timer);
-      timer = undefined;
-    };
-    const startClock = () => {
-      if (document.visibilityState !== 'visible' || timer !== undefined) return;
-      setClockNow(Date.now());
-      timer = window.setInterval(() => setClockNow(Date.now()), 1000);
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') startClock();
-      else stopClock();
-    };
-    startClock();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      stopClock();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [authenticated]);
 
   useEffect(() => {
     saveMetricHistory(metricHistory, getMetricStorage());
@@ -644,7 +624,7 @@ export function LivePanelView() {
   useEffect(() => {
     const viewport = logViewportRef.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [consoleLogs]);
+  }, [consoleLogs, activeSection]);
 
   useEffect(() => {
     if (versions.length > 0 && !configuration.version && !status?.state.activeConfig) {
@@ -1433,9 +1413,6 @@ export function LivePanelView() {
                   : hasWorldChange
                     ? selectedWorld ? 'Reprendre ce monde & démarrer' : 'Créer & démarrer le monde'
                     : hasSettingsChanges ? 'Enregistrer les réglages' : 'Aucun changement';
-  const uptimeSeconds = server?.status === 'running' && server.startedAt
-    ? Math.floor((clockNow - Date.parse(server.startedAt)) / 1000)
-    : null;
   const providerName = tunnelProvider === 'portwarp' ? 'Portwarp' : tunnelProvider === 'localtonet' ? 'Localtonet' : 'Playit';
   const versionEntry = activeConfig?.version
     ? versions.find((version) => version.version === activeConfig.version)
@@ -1576,17 +1553,21 @@ export function LivePanelView() {
           )}
         </AnimatePresence>
 
-        <motion.section
+        <section
           id="panel-overview"
           className="ncraft-tab-panel"
           role="tabpanel"
           aria-label="Vue générale"
           tabIndex={0}
           hidden={activeSection !== 'overview'}
-          initial={false}
-          animate={activeSection === 'overview' ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {activeSection === 'overview' && (
+            <motion.div
+              className="ncraft-tab-panel__content"
+              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
           <section className="ncraft-overview-grid">
             <motion.section
               className="nether-hero"
@@ -1636,7 +1617,7 @@ export function LivePanelView() {
 
               <div className="hero-metrics-grid">
                 <MetricTile icon={Users} label="Joueurs" value={`${server?.playersOnline ?? '—'} / ${activeConfig?.maxPlayers ?? '—'}`} detail="connectés / maximum" accent="portal" />
-                <MetricTile icon={Clock3} label="Disponibilité" value={formatDuration(uptimeSeconds)} detail={uptimeSeconds === null ? 'serveur hors ligne' : 'depuis le démarrage'} accent="soul" />
+                <MetricTile icon={Clock3} label="Disponibilité" value={<LiveUptime startedAt={server?.status === 'running' ? server.startedAt : null} />} detail={server?.status === 'running' && server.startedAt ? 'depuis le démarrage' : 'serveur hors ligne'} accent="soul" />
               </div>
 
               <div className="nether-hero__actions">
@@ -1794,7 +1775,7 @@ export function LivePanelView() {
           </section>
 
           <section className="ncraft-telemetry-grid" aria-label="Mesures et configuration Bedrock">
-            <BedrockMetricsChart samples={metricHistory} now={clockNow} serverStatus={server?.status} />
+            <BedrockMetricsChart samples={metricHistory} serverStatus={server?.status} />
             <NetherCard title="Fiche du monde" eyebrow="CONFIGURATION ACTIVE" icon={Database} accent="moss">
               {activeConfig ? (
                 <dl className="world-details-list">
@@ -1810,19 +1791,25 @@ export function LivePanelView() {
               )}
             </NetherCard>
           </section>
-        </motion.section>
+            </motion.div>
+          )}
+        </section>
 
-        <motion.section
+        <section
           id="panel-deploy"
           className="ncraft-tab-panel"
           role="tabpanel"
           aria-label="Déploiement"
           tabIndex={0}
           hidden={activeSection !== 'deploy'}
-          initial={false}
-          animate={activeSection === 'deploy' ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {activeSection === 'deploy' && (
+            <motion.div
+              className="ncraft-tab-panel__content"
+              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
           <PanelHeading
             variant="deployment"
             eyebrow="DÉPLOIEMENT BEDROCK"
@@ -2055,19 +2042,25 @@ export function LivePanelView() {
               </form>
             </NetherCard>
           </section>
-        </motion.section>
+            </motion.div>
+          )}
+        </section>
 
-        <motion.section
+        <section
           id="panel-worlds"
           className="ncraft-tab-panel"
           role="tabpanel"
           aria-label="Mondes"
           tabIndex={0}
           hidden={activeSection !== 'worlds'}
-          initial={false}
-          animate={activeSection === 'worlds' ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {activeSection === 'worlds' && (
+            <motion.div
+              className="ncraft-tab-panel__content"
+              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
           <PanelHeading
             variant="worlds"
             eyebrow="SAUVEGARDES BEDROCK"
@@ -2235,19 +2228,25 @@ export function LivePanelView() {
               </div>
             )}
           </NetherCard>
-        </motion.section>
+            </motion.div>
+          )}
+        </section>
 
-        <motion.section
+        <section
           id="panel-diagnostics"
           className="ncraft-tab-panel"
           role="tabpanel"
           aria-label="Diagnostics"
           tabIndex={0}
           hidden={activeSection !== 'diagnostics'}
-          initial={false}
-          animate={activeSection === 'diagnostics' ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {activeSection === 'diagnostics' && (
+            <motion.div
+              className="ncraft-tab-panel__content"
+              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
           <PanelHeading
             variant="diagnostics"
             eyebrow="ÉTAT DU CONTENEUR"
@@ -2401,19 +2400,25 @@ export function LivePanelView() {
               </ul>
             </NetherCard>
           </aside>
-        </motion.section>
+            </motion.div>
+          )}
+        </section>
 
-        <motion.section
+        <section
           id="panel-console"
           className="ncraft-tab-panel"
           role="tabpanel"
           aria-label="Console"
           tabIndex={0}
           hidden={activeSection !== 'console'}
-          initial={false}
-          animate={activeSection === 'console' ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {activeSection === 'console' && (
+            <motion.div
+              className="ncraft-tab-panel__content"
+              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
           <PanelHeading
             variant="console"
             eyebrow="JOURNAL DU SERVEUR"
@@ -2458,7 +2463,9 @@ export function LivePanelView() {
             </form>
             <p className="console-footnote">Aucun shell n’est lancé : la commande est écrite directement sur stdin de bedrock_server.</p>
           </NetherCard>
-        </motion.section>
+            </motion.div>
+          )}
+        </section>
 
         <footer className="ncraft-footer">
           <span><Activity size={14} /> Panel mono-instance · pas de Docker imbriqué · aucune base de données</span>
@@ -2551,6 +2558,43 @@ function StatusPill({ status, label }: { status: string; label?: string }) {
   );
 }
 
+function LiveUptime({ startedAt }: { startedAt: string | null | undefined }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!startedAt) return undefined;
+    let timer: number | undefined;
+    const stopClock = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const startClock = () => {
+      if (document.visibilityState !== 'visible' || timer !== undefined) return;
+      setNow(Date.now());
+      timer = window.setInterval(() => setNow(Date.now()), 1000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startClock();
+      else stopClock();
+    };
+
+    startClock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopClock();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [startedAt]);
+
+  const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
+  const uptimeSeconds = startedAt && Number.isFinite(startedAtMs)
+    ? Math.floor((now - startedAtMs) / 1000)
+    : null;
+
+  return <>{formatDuration(uptimeSeconds)}</>;
+}
+
 function MetricTile({
   icon: Icon,
   label,
@@ -2560,7 +2604,7 @@ function MetricTile({
 }: {
   icon: LucideIcon;
   label: string;
-  value: string;
+  value: ReactNode;
   detail: string;
   accent: 'portal' | 'soul' | 'magma' | 'moss';
 }) {
