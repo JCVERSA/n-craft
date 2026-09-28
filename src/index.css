@@ -447,10 +447,10 @@ select:focus-visible {
 .ncraft-brand__copy small { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; letter-spacing: 0.13em; }
 
 .ncraft-nav { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(234,214,245,.07); border-radius: 13px; background: rgba(18,15,20,.74); }
-.ncraft-nav a { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; color: var(--nether-muted); font-size: 12px; font-weight: 600; transition: color .18s ease, background .18s ease; }
-.ncraft-nav a:hover, .ncraft-nav a.is-current, .ncraft-nav a:focus-visible { color: var(--nether-text); background: rgba(255,255,255,.055); }
-.ncraft-nav a.is-current { box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
-.ncraft-nav a.is-current svg { color: var(--nether-magma); }
+.ncraft-nav button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; color: var(--nether-muted); font-size: 12px; font-weight: 600; transition: color .18s ease, background .18s ease; }
+.ncraft-nav button:hover, .ncraft-nav button.is-current, .ncraft-nav button:focus-visible { color: var(--nether-text); background: rgba(255,255,255,.055); }
+.ncraft-nav button.is-current { box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
+.ncraft-nav button.is-current svg { color: var(--nether-magma); }
 .ncraft-header__actions { display: flex; align-items: center; justify-content: flex-end; gap: 11px; min-width: max-content; }
 
 .nether-eyebrow { margin: 0; color: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
@@ -675,7 +675,7 @@ select:focus-visible {
 .empty-state > svg { color: var(--nether-magma); }
 .empty-state strong { color: var(--nether-text); font-size: 13px; }
 .empty-state span { max-width: 260px; color: var(--nether-muted); font-size: 10px; line-height: 1.5; }
-.empty-state a { display: inline-flex; align-items: center; gap: 4px; color: var(--nether-soul); font-size: 10px; font-weight: 700; }
+.empty-state a, .empty-state__link { display: inline-flex; align-items: center; gap: 4px; color: var(--nether-soul); font-size: 10px; font-weight: 700; }
 
 .ncraft-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 16px 2px -5px; scroll-margin-top: 100px; }
 .ncraft-section-heading h2 { margin: 6px 0 0; color: var(--nether-text); font-size: 21px; letter-spacing: -.03em; }
@@ -857,14 +857,14 @@ select:focus-visible {
 .world-manager-empty > svg { color: var(--nether-moss); }
 .world-manager-empty strong { color: var(--nether-text); font-size: 12px; }
 .world-manager-empty span { color: var(--nether-muted); font-size: 10px; }
-.world-manager-empty a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--nether-soul); font-size: 10px; font-weight: 700; }
+.world-manager-empty a, .world-manager-empty__link { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--nether-soul); font-size: 10px; font-weight: 700; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 .mobile-dock { display: none; }
 
 @media (max-width: 1160px) {
   .ncraft-header__inner { gap: 13px; }
-  .ncraft-nav a { padding: 8px 9px; font-size: 11px; }
+  .ncraft-nav button { padding: 8px 9px; font-size: 11px; }
   .ncraft-overview-grid { grid-template-columns: minmax(0,1.12fr) minmax(320px,.88fr); }
   .hero-metrics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .ncraft-workspace-grid { grid-template-columns: minmax(0,1.1fr) minmax(300px,.9fr); }
@@ -881,9 +881,9 @@ select:focus-visible {
   .ncraft-operations-stack { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
   .ncraft-operations-stack > :last-child { grid-column: 1 / -1; }
   .ncraft-main { padding-bottom: 100px; }
-  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 3px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
-  .mobile-dock a { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
-  .mobile-dock a:hover, .mobile-dock a:focus-visible, .mobile-dock a[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
+  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding: 6px; border: 1px solid rgba(225,206,237,.12); border-radius: 15px; background: rgba(18,15,21,.94); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.05); backdrop-filter: blur(18px); }
+  .mobile-dock button { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
+  .mobile-dock button:hover, .mobile-dock button:focus-visible, .mobile-dock button[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
 
 @media (max-width: 700px) {
@@ -969,4 +969,205 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+
+/* Tabbed operator workspace */
+.ncraft-nav button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ncraft-nav button:active:not(.is-current) { transform: scale(.98); }
+.ncraft-nav button.is-current { color: #fff2e2; background: linear-gradient(145deg, rgba(255,184,117,.14), rgba(255,184,117,.055)); }
+.ncraft-nav button.is-current svg { color: var(--nether-magma); }
+.ncraft-nav button:focus-visible { outline-offset: 2px; }
+
+.ncraft-tab-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  outline: none;
+}
+.ncraft-tab-panel[hidden] { display: none !important; }
+.ncraft-tab-heading {
+  position: relative;
+  display: flex;
+  min-height: 122px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  overflow: hidden;
+  padding: 22px clamp(19px, 3vw, 34px);
+  border: 1px solid rgba(255,184,117,.15);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 94% 16%, rgba(255,152,87,.13), transparent 34%),
+    linear-gradient(120deg, rgba(33,26,34,.94), rgba(19,15,21,.94));
+  box-shadow: inset 0 1px rgba(255,255,255,.045);
+}
+.ncraft-tab-heading::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,184,117,.35), rgba(197,160,255,.12), transparent);
+  content: '';
+}
+.ncraft-tab-heading__copy { position: relative; z-index: 1; max-width: 760px; }
+.ncraft-tab-heading__copy h1 { margin: 6px 0 0; color: #fff8f1; font-size: clamp(25px, 3.4vw, 36px); font-weight: 700; letter-spacing: -.045em; line-height: 1.08; text-wrap: balance; }
+.ncraft-tab-heading__copy > p:last-child { max-width: 68ch; margin: 8px 0 0; color: var(--nether-muted); font-size: 13px; line-height: 1.55; }
+.ncraft-tab-heading__ornament { position: absolute; top: 50%; right: 35px; width: 185px; aspect-ratio: 1; transform: translateY(-50%); pointer-events: none; }
+.ncraft-tab-heading__ornament span { position: absolute; inset: 0; border: 1px solid rgba(255,184,117,.11); border-radius: 50%; }
+.ncraft-tab-heading__ornament span:nth-child(2) { inset: 16%; border-style: dashed; border-color: rgba(197,160,255,.13); }
+.ncraft-tab-heading__ornament span:nth-child(3) { inset: 32%; border-color: rgba(255,184,117,.16); box-shadow: 0 0 38px rgba(255,132,53,.08), inset 0 0 20px rgba(255,132,53,.05); }
+.ncraft-workspace-grid--single { grid-template-columns: minmax(0,1fr); }
+.ncraft-workspace-grid--single > .nether-card { width: 100%; max-width: 1080px; margin-inline: auto; }
+.ncraft-operations-stack--diagnostics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+.ncraft-operations-stack--diagnostics > :last-child { grid-column: 1 / -1; }
+
+.empty-state__link,
+.world-manager-empty__link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+.empty-state__link { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; color: var(--nether-soul); font-size: 11px; font-weight: 700; }
+.world-manager-empty__link { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; color: var(--nether-soul); font-size: 11px; font-weight: 700; }
+.empty-state__link:hover, .world-manager-empty__link:hover { text-decoration: underline; }
+
+/* Private access screen: the left panel is an original CSS illustration, not mock server data. */
+.ncraft-auth-shell { position: relative; overflow: visible; padding: clamp(18px, 4vw, 42px); }
+.ncraft-login-layout {
+  display: grid;
+  width: min(100%, 1080px);
+  grid-template-columns: minmax(0,1fr) minmax(380px,460px);
+  align-items: stretch;
+  gap: 16px;
+}
+.ncraft-login-showcase {
+  position: relative;
+  display: flex;
+  min-height: 560px;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(26px, 4vw, 44px);
+  border: 1px solid rgba(255,184,117,.2);
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 75% 28%, rgba(255,155,89,.2), transparent 30%),
+    radial-gradient(ellipse at 38% 90%, rgba(128,74,117,.12), transparent 44%),
+    linear-gradient(145deg, rgba(39,27,37,.98), rgba(17,13,19,.98) 72%);
+  box-shadow: 0 28px 80px rgba(7,4,9,.46), inset 0 1px rgba(255,255,255,.065);
+}
+.ncraft-login-showcase::before,
+.ncraft-login-showcase::after { position: absolute; inset: 0; z-index: 0; pointer-events: none; content: ''; }
+.ncraft-login-showcase::before {
+  opacity: .09;
+  background: url('/assets/minecraft/netherrack.png') 0 0 / 72px 72px repeat;
+  mask-image: linear-gradient(125deg, black, transparent 80%);
+}
+.ncraft-login-showcase::after {
+  opacity: .24;
+  background: repeating-linear-gradient(0deg, transparent 0 39px, rgba(255,255,255,.025) 40px), repeating-linear-gradient(90deg, transparent 0 39px, rgba(255,255,255,.02) 40px);
+  mask-image: linear-gradient(180deg, black, transparent 80%);
+}
+.login-showcase__texture { position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse at 70% 40%, rgba(255,184,117,.11), transparent 46%); pointer-events: none; }
+.login-showcase__brand,
+.login-showcase__content,
+.login-showcase__footer { position: relative; z-index: 1; }
+.login-showcase__brand { display: flex; align-items: center; gap: 11px; color: #f0d7ca; font: 700 10px 'JetBrains Mono',monospace; letter-spacing: .14em; }
+.login-showcase__brand .brand-mark { width: 38px; height: 38px; border-radius: 11px; }
+.login-showcase__portal { position: absolute; top: 17%; right: 8%; width: min(38vw, 300px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
+.login-showcase__portal span { position: absolute; inset: 0; border: 1px solid rgba(255,184,117,.13); border-radius: 50%; box-shadow: 0 0 46px rgba(255,135,82,.045), inset 0 0 28px rgba(197,160,255,.04); }
+.login-showcase__portal span:nth-child(2) { inset: 14%; border-style: dashed; border-color: rgba(197,160,255,.17); }
+.login-showcase__portal span:nth-child(3) { inset: 29%; border-color: rgba(255,184,117,.19); }
+.login-showcase__content { max-width: 510px; margin-top: auto; padding: 70px 0 54px; }
+.login-showcase__eyebrow { margin: 0 0 13px; color: var(--nether-magma); font: 700 10px 'JetBrains Mono',monospace; letter-spacing: .14em; }
+.login-showcase__title { margin: 0; color: #fff7f0; font-size: clamp(36px, 4.7vw, 58px); font-weight: 700; letter-spacing: -.055em; line-height: 1.02; text-wrap: balance; }
+.login-showcase__title span { color: var(--nether-magma); text-shadow: 0 0 32px rgba(255,153,64,.15); }
+.login-showcase__description { max-width: 43ch; margin: 18px 0 0; color: #c2b5c3; font-size: 14px; line-height: 1.7; }
+.login-showcase__footer { display: flex; flex-wrap: wrap; gap: 10px 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.09); color: #c5b9c8; font-size: 11px; }
+.login-showcase__footer span { display: inline-flex; align-items: center; gap: 7px; }
+.login-showcase__footer svg { color: var(--nether-magma); }
+.ncraft-login-layout .ncraft-login-card { align-self: center; width: 100%; }
+.login-token-field { position: relative; }
+.login-token-input { padding-right: 54px; }
+.login-token-toggle { position: absolute; top: 50%; right: 5px; display: grid; width: 40px; height: 40px; place-items: center; transform: translateY(-50%); border: 0; border-radius: 8px; color: var(--nether-muted); background: transparent; cursor: pointer; touch-action: manipulation; }
+.login-token-toggle:hover:not(:disabled) { color: var(--nether-magma); background: rgba(255,184,117,.08); }
+.login-token-toggle:disabled { cursor: not-allowed; opacity: .5; }
+.login-token-input[aria-invalid="true"] { border-color: rgba(255,143,146,.62); }
+
+.mobile-dock button {
+  min-height: 54px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+}
+.mobile-dock button span { display: flex; min-height: 20px; align-items: center; justify-content: center; overflow-wrap: anywhere; }
+.mobile-dock button[aria-selected="true"] { color: var(--nether-magma); background: linear-gradient(180deg, rgba(255,184,117,.12), rgba(255,184,117,.035)); box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
+.mobile-dock button:active { transform: scale(.97); }
+
+@media (max-width: 1160px) {
+  .ncraft-nav button { gap: 6px; padding: 8px 9px; font-size: 10px; }
+  .ncraft-nav { gap: 2px; }
+}
+
+@media (max-width: 980px) {
+  .ncraft-login-layout { width: min(100%, 540px); grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .ncraft-login-showcase { min-height: 280px; padding: 24px; }
+  .login-showcase__content { max-width: 440px; padding: 45px 0 34px; }
+  .login-showcase__title { font-size: clamp(32px, 7vw, 44px); }
+  .login-showcase__description { max-width: 52ch; margin-top: 11px; font-size: 12px; }
+  .login-showcase__portal { top: 7%; right: 7%; width: min(42vw, 210px); }
+  .ncraft-login-layout .ncraft-login-card { justify-self: center; }
+}
+
+@media (max-width: 700px) {
+  .ncraft-tab-panel { gap: 14px; }
+  .ncraft-tab-heading { min-height: 108px; padding: 18px 16px; border-radius: 14px; }
+  .ncraft-tab-heading__copy h1 { font-size: clamp(24px, 7vw, 31px); }
+  .ncraft-tab-heading__copy > p:last-child { max-width: 53ch; font-size: 12px; }
+  .ncraft-tab-heading__ornament { right: -60px; width: 160px; opacity: .7; }
+  .ncraft-operations-stack--diagnostics { display: flex; }
+  .ncraft-operations-stack--diagnostics > :last-child { grid-column: auto; }
+  .ncraft-login-showcase { min-height: 235px; padding: 19px; border-radius: 17px; }
+  .login-showcase__brand { font-size: 9px; }
+  .login-showcase__content { padding: 38px 0 24px; }
+  .login-showcase__eyebrow { font-size: 9px; }
+  .login-showcase__title { font-size: clamp(31px, 9vw, 42px); }
+  .login-showcase__description { max-width: 38ch; font-size: 11px; }
+  .login-showcase__footer { gap: 8px 14px; padding-top: 11px; font-size: 10px; }
+  .ncraft-auth-shell { padding: 14px 12px; }
+  .ncraft-login-layout { gap: 10px; }
+  .ncraft-login-layout .ncraft-login-card { padding: 20px 17px; }
+  .login-divider { margin: 18px 0; }
+  .login-security-copy { margin: 14px 0; font-size: 11px; }
+  .login-form { gap: 12px; }
+}
+
+@media (max-width: 380px) {
+  .mobile-dock { right: 6px; left: 6px; gap: 8px; padding: 5px 4px; }
+  .mobile-dock button { gap: 2px; padding-inline: 1px; font-size: 8px; }
+}
+
+.login-token-label { color: #c7bdcb; font-size: 12px; font-weight: 600; }
+.login-form .nether-btn--primary,
+.deploy-submit { color: #2b1710; border-color: rgba(255,213,174,.46); background: linear-gradient(135deg, #ffd39d, #ff9b68); box-shadow: 0 7px 22px rgba(255,132,74,.15), inset 0 1px rgba(255,255,255,.58); }
+.login-form .nether-btn--primary:hover:not(:disabled),
+.deploy-submit:hover:not(:disabled) { background: linear-gradient(135deg, #ffdfb5, #ffad7d); box-shadow: 0 10px 26px rgba(255,132,74,.2), inset 0 1px rgba(255,255,255,.72); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ncraft-nav button:active, .mobile-dock button:active { transform: none !important; }
 }
