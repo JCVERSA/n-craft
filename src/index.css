@@ -912,7 +912,7 @@ select:focus-visible {
   .ncraft-operations-stack { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
   .ncraft-operations-stack > :last-child { grid-column: 1 / -1; }
   .ncraft-main { padding-bottom: 100px; }
-  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 6px; padding: 6px; border: 1px solid rgba(225,206,237,.19); border-radius: 15px; background: linear-gradient(118deg, rgba(255,255,255,.09), rgba(255,255,255,.018) 36%, transparent 64%, rgba(197,160,255,.07)), rgba(18,15,21,.84); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.16), inset 0 -1px rgba(9,7,10,.28); backdrop-filter: blur(18px) saturate(145%); -webkit-backdrop-filter: blur(18px) saturate(145%); }
+  .mobile-dock { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 60; display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px; padding: 5px; border: 1px solid rgba(225,206,237,.19); border-radius: 15px; background: linear-gradient(118deg, rgba(255,255,255,.09), rgba(255,255,255,.018) 36%, transparent 64%, rgba(197,160,255,.07)), rgba(18,15,21,.84); box-shadow: 0 14px 38px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.16), inset 0 -1px rgba(9,7,10,.28); backdrop-filter: blur(18px) saturate(145%); -webkit-backdrop-filter: blur(18px) saturate(145%); }
   .mobile-dock button { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 7px 3px; border-radius: 9px; color: var(--nether-muted); font-size: 11px; font-weight: 600; touch-action: manipulation; transition: color .15s, background .15s; }
   .mobile-dock button:hover, .mobile-dock button:focus-visible, .mobile-dock button[aria-current="location"] { color: var(--nether-magma); background: rgba(255,184,117,.08); }
 }
@@ -1823,4 +1823,102 @@ select:focus-visible {
   .pixel-studio__fps-control { width: 100%; }
   .pixel-studio__fps-control input { flex: 1; }
   .pixel-studio__color-picker > span { max-width: 90px; line-height: 1.3; }
+}
+
+/* Bedrock operations: snapshots, role-aware controls, network probes and alerts. */
+.panel-role-pill { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; max-width: 190px; padding: 6px 9px; overflow: hidden; border: 1px solid rgba(197,160,255,.18); border-radius: 9px; color: #d6c2ef; background: rgba(197,160,255,.055); font: 9px 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.panel-role-pill svg { flex: 0 0 auto; color: var(--nether-soul); }
+.operations-view { display: grid; gap: 17px; }
+.operations-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; align-items: start; }
+.operations-card--wide { grid-column: 1 / -1; }
+.operations-grid .nether-card__body { display: flex; flex-direction: column; gap: 12px; }
+.operations-note, .operations-warning-copy { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 11px; border: 1px solid rgba(155,230,176,.12); border-radius: 9px; color: #b8d1bf; background: rgba(88,159,106,.045); font-size: 10px; line-height: 1.55; }
+.operations-note svg, .operations-warning-copy svg { flex: 0 0 auto; margin-top: 1px; color: var(--nether-moss); }
+.operations-note code { color: #f5d5a5; font: 10px 'JetBrains Mono', monospace; }
+.operations-warning-copy { border-color: rgba(255,184,117,.16); color: #d5b995; background: rgba(255,184,117,.045); }
+.operations-warning-copy svg { color: var(--nether-magma); }
+.operations-error { padding: 9px 10px; border: 1px solid rgba(255,127,121,.18); border-radius: 8px; color: #ffc0b9; background: rgba(143,43,48,.11); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.operations-storage-row, .operations-status-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 15px; color: var(--nether-muted); font-size: 10px; }
+.operations-storage-row strong, .operations-status-row strong { color: var(--nether-text); font-family: 'JetBrains Mono', monospace; }
+.operations-world-picker { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 10px; }
+.operations-world-picker > .nether-btn { min-height: 44px; }
+.operations-settings-form { display: grid; gap: 10px; padding-top: 13px; border-top: 1px solid rgba(255,255,255,.07); }
+.operations-settings-form h3, .operations-audit-list h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; color: var(--nether-text); font-size: 12px; }
+.operations-check { display: flex; min-height: 42px; align-items: center; gap: 9px; color: #d4c9dc; font-size: 11px; cursor: pointer; }
+.operations-check input { width: 17px; height: 17px; flex: 0 0 auto; accent-color: var(--nether-moss); }
+.operations-form-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+.operations-form-grid .nether-field { min-width: 0; }
+.operations-form-grid .nether-field > span, .operations-settings-form .nether-field > span { color: var(--nether-muted); font-size: 10px; }
+.operations-muted { margin: 0; color: var(--nether-dim); font-size: 10px; line-height: 1.55; }
+.operations-snapshot-list, .operations-player-list, .operations-user-list, .operations-audit-list { display: grid; gap: 7px; }
+.operations-snapshot-row, .operations-player-row, .operations-user-row, .operations-audit-row { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(255,255,255,.07); border-radius: 9px; background: rgba(7,6,9,.28); }
+.operations-snapshot-row__copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.operations-snapshot-row__copy strong { color: var(--nether-text); font-size: 11px; }
+.operations-snapshot-row__copy span, .operations-snapshot-row__copy small { color: var(--nether-muted); font-size: 9px; line-height: 1.4; }
+.operations-snapshot-row__copy small { color: var(--nether-dim); font-family: 'JetBrains Mono', monospace; }
+.operations-inline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.operations-inline-actions .nether-btn { min-height: 38px; padding: 7px 9px; font-size: 9px; text-decoration: none; }
+.operations-inline-actions .nether-btn--danger { min-width: 38px; }
+.operations-probe-grid { display: grid; gap: 9px; }
+.operations-probe-card { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 9px; padding: 11px; border: 1px solid rgba(255,255,255,.07); border-radius: 10px; background: rgba(7,6,9,.3); }
+.operations-probe-card > div:first-child { display: grid; gap: 4px; }
+.operations-probe-card > div:first-child strong { color: var(--nether-text); font-size: 11px; }
+.operations-probe-card > div:first-child span { color: var(--nether-dim); font-size: 9px; line-height: 1.45; }
+.operations-probe-result { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid rgba(255,184,117,.12); border-radius: 8px; color: var(--nether-magma); background: rgba(255,184,117,.035); }
+.operations-probe-result.is-good { border-color: rgba(155,230,176,.14); color: var(--nether-moss); background: rgba(88,159,106,.04); }
+.operations-probe-result.is-bad { border-color: rgba(255,127,121,.14); color: #ff9d98; background: rgba(143,43,48,.055); }
+.operations-probe-result > svg { flex: 0 0 auto; margin-top: 1px; }
+.operations-probe-result > div { display: grid; gap: 3px; min-width: 0; }
+.operations-probe-result strong { font-size: 10px; }
+.operations-probe-result span, .operations-probe-result small { color: var(--nether-muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.operations-alert-list { display: grid; gap: 7px; }
+.operations-alert { display: flex; align-items: flex-start; gap: 8px; padding: 9px; border: 1px solid rgba(255,184,117,.16); border-radius: 9px; color: var(--nether-magma); background: rgba(255,184,117,.045); }
+.operations-alert--error { border-color: rgba(255,127,121,.17); color: #ff918b; background: rgba(143,43,48,.08); }
+.operations-alert > svg { flex: 0 0 auto; margin-top: 1px; }
+.operations-alert > div { display: grid; gap: 3px; }
+.operations-alert strong { color: var(--nether-text); font-size: 10px; }
+.operations-alert span, .operations-alert small { color: var(--nether-muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.operations-clear-state { display: flex; align-items: center; gap: 8px; min-height: 36px; color: #abcdb4; font-size: 10px; }
+.operations-player-row { gap: 9px; }
+.operations-player-dot { width: 8px; height: 8px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; background: rgba(255,255,255,.12); }
+.operations-player-dot.is-online { border-color: var(--nether-moss); background: var(--nether-moss); box-shadow: 0 0 10px rgba(155,230,176,.5); }
+.operations-player-row > div, .operations-user-row > div { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.operations-player-row strong, .operations-user-row strong { overflow: hidden; color: var(--nether-text); font-size: 10px; text-overflow: ellipsis; }
+.operations-player-row span:not(.operations-player-dot), .operations-player-row small, .operations-user-row small { color: var(--nether-dim); font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
+.operations-role-badge { flex: 0 0 auto; padding: 4px 6px; border: 1px solid rgba(255,184,117,.17); border-radius: 5px; color: #f4c48e !important; background: rgba(255,184,117,.05); font: 8px 'JetBrains Mono', monospace; }
+.operations-textarea { min-height: 84px; resize: vertical; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.operations-role-legend { display: grid; gap: 5px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.07); border-radius: 9px; color: var(--nether-muted); background: rgba(7,6,9,.24); font-size: 9px; }
+.operations-role-legend b { display: inline-block; min-width: 58px; color: var(--nether-soul); font-family: 'JetBrains Mono', monospace; }
+.operations-user-form { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: end; gap: 9px; }
+.operations-user-form > .nether-btn { min-height: 44px; }
+.operations-user-row .nether-input { width: auto; min-width: 100px; min-height: 38px; padding: 6px 8px; font-size: 10px; }
+.operations-diagnostic-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px; border: 1px solid rgba(197,160,255,.13); border-radius: 10px; background: rgba(197,160,255,.035); }
+.operations-diagnostic-actions > div { display: grid; gap: 4px; }
+.operations-diagnostic-actions strong { color: var(--nether-text); font-size: 11px; }
+.operations-diagnostic-actions span { color: var(--nether-dim); font-size: 9px; line-height: 1.45; }
+.operations-diagnostic-actions .nether-btn { flex: 0 0 auto; text-decoration: none; }
+.operations-audit-list { padding-top: 13px; border-top: 1px solid rgba(255,255,255,.07); }
+.operations-audit-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 4px 9px; }
+.operations-audit-row time, .operations-audit-row strong, .operations-audit-row span { color: var(--nether-muted); font: 9px 'JetBrains Mono', monospace; }
+.operations-audit-row strong { color: var(--nether-text); }
+.operations-audit-row strong small { color: var(--nether-soul); }
+.operations-audit-row p { grid-column: 1 / -1; margin: 0; color: var(--nether-dim); font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
+.operations-view button:focus-visible, .operations-view a:focus-visible, .operations-view input:focus-visible, .operations-view select:focus-visible, .operations-view textarea:focus-visible { outline: 2px solid var(--nether-soul); outline-offset: 2px; }
+
+@media (max-width: 980px) {
+  .operations-grid { grid-template-columns: minmax(0,1fr); }
+  .operations-card--wide { grid-column: auto; }
+}
+@media (max-width: 700px) {
+  .panel-role-pill { max-width: 42px; width: 36px; padding: 8px; font-size: 0; }
+  .panel-role-pill svg { width: 17px; height: 17px; }
+  .operations-world-picker, .operations-user-form { grid-template-columns: minmax(0,1fr); }
+  .operations-form-grid { grid-template-columns: minmax(0,1fr); }
+  .operations-snapshot-row { align-items: flex-start; flex-direction: column; }
+  .operations-inline-actions { width: 100%; }
+  .operations-inline-actions .nether-btn:not(.nether-btn--danger) { flex: 1 1 auto; justify-content: center; }
+  .operations-diagnostic-actions { align-items: stretch; flex-direction: column; }
+  .operations-diagnostic-actions .nether-btn { justify-content: center; }
+  .operations-player-row { flex-wrap: wrap; }
+  .operations-player-row > small { margin-left: auto; }
 }

@@ -26,6 +26,7 @@ function initialState(): PersistentPanelState {
       status: 'stopped',
       pid: null,
       startedAt: null,
+      desiredRunning: false,
       error: null,
       playersOnline: null,
       cpuPercent: null,
@@ -118,6 +119,7 @@ function normalizeState(value: unknown): PersistentPanelState {
       status: serverStatus,
       pid: typeof server.pid === 'number' ? server.pid : null,
       startedAt: typeof server.startedAt === 'string' ? server.startedAt : null,
+      desiredRunning: server.desiredRunning === true,
       error: typeof server.error === 'string' ? server.error : null,
       playersOnline: typeof server.playersOnline === 'number' && Number.isFinite(server.playersOnline)
         ? Math.max(0, Math.floor(server.playersOnline))
@@ -182,6 +184,7 @@ export class StateStore extends EventEmitter {
   readonly filePath: string;
   private state: PersistentPanelState = initialState();
   private writeQueue: Promise<void> = Promise.resolve();
+  private startupDesiredRunning = false;
 
   constructor(dataDirectory: string) {
     super();
@@ -203,9 +206,10 @@ export class StateStore extends EventEmitter {
     }
 
     // A container restart normally kills its children, but a Node-only restart may
-    // leave an orphan process. Do not present persisted state as proof of liveness;
-    // graceful panel shutdown is responsible for stopping children before exit.
+    // leave an orphan process. Do not present persisted state as proof of liveness.
+    this.startupDesiredRunning = this.state.server.desiredRunning;
     this.state.server = {
+      ...this.state.server,
       status: 'stopped',
       pid: null,
       startedAt: null,
@@ -238,6 +242,10 @@ export class StateStore extends EventEmitter {
 
   getSnapshot(): PersistentPanelState {
     return structuredClone(this.state);
+  }
+
+  shouldStartAfterPanelRestart(): boolean {
+    return this.startupDesiredRunning;
   }
 
   async updatePipeline(patch: Partial<PersistentPanelState['pipeline']>): Promise<void> {

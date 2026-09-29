@@ -220,19 +220,46 @@ export class WorldManager {
   private records: StoredWorld[] = [];
   private mutationQueue: Promise<void> = Promise.resolve();
   private activeMutations = 0;
+  private queuedMutations = 0;
   private activeOperations = 0;
+  private queuedOperations = 0;
 
   constructor(private readonly dataDirectory: string, private readonly serverDirectory: string) {
     this.worldsDirectory = path.join(serverDirectory, 'worlds');
     this.manifestPath = path.join(dataDirectory, 'worlds.json');
   }
 
+  get serverDirectoryPath(): string {
+    return this.serverDirectory;
+  }
+
   get isBusy(): boolean {
-    return this.activeMutations > 0 || this.activeOperations > 0;
+    return this.activeMutations > 0 || this.queuedMutations > 0 || this.activeOperations > 0 || this.queuedOperations > 0;
+  }
+
+  /** Serializes a long-running world read/restore against metadata mutations and server starts. */
+  withExclusiveOperation<T>(operation: () => Promise<T>): Promise<T> {
+    this.queuedOperations += 1;
+    const execute = async () => {
+      this.queuedOperations -= 1;
+      if (this.activeOperations > 0) throw new WorldManagerError('Une autre opération protège déjà les mondes.', 409);
+      this.activeOperations += 1;
+      try {
+        return await operation();
+      } finally {
+        this.activeOperations -= 1;
+      }
+    };
+    const current = this.mutationQueue.then(execute, execute);
+    this.mutationQueue = current.then(() => undefined, () => undefined);
+    return current;
   }
 
   private withMutation<T>(operation: () => Promise<T>): Promise<T> {
+    this.queuedMutations += 1;
     const execute = async () => {
+      this.queuedMutations -= 1;
+      if (this.activeOperations > 0) throw new WorldManagerError('Un instant : une sauvegarde ou une exportation protège actuellement les données du monde.', 409);
       this.activeMutations += 1;
       try {
         return await operation();
@@ -692,6 +719,9 @@ export class WorldManager {
   }
 
   async createWorldArchive(id: string): Promise<{ fileName: string; stream: Readable }> {
+    if (this.isBusy) {
+      throw new WorldManagerError('Une autre opération protège actuellement les mondes.', 409);
+    }
     this.activeOperations += 1;
     let lockHeld = true;
     const releaseLock = () => {

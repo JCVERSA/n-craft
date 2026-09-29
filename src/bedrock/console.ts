@@ -12,7 +12,7 @@ import type { PanelAuthService } from '../auth.ts';
 import type { StateStore } from '../state.ts';
 import type { ConsoleLog, LogLevel } from '../types/backend.ts';
 import { isSameOriginRequest } from '../security.ts';
-import { parsePlayerLifecycleMessage } from './playerTracker.ts';
+import { parsePlayerLifecycleDetails } from './playerTracker.ts';
 
 const MAX_RECENT_LINES = 500;
 const MAX_LOG_FILE_BYTES = 10 * 1024 * 1024;
@@ -277,6 +277,61 @@ export class BedrockConsole extends EventEmitter {
     }
   }
 
+  /** Captures bounded Bedrock output for a command without exposing process stdin or shell access. */
+  waitForCommandOutput(
+    command: string,
+    complete: (lines: readonly string[]) => boolean,
+    timeoutMs = 4_000,
+    quietMs = 180,
+  ): Promise<string[] | null> {
+    return new Promise<string[] | null>((resolve, reject) => {
+      const lines: string[] = [];
+      let size = 0;
+      let settled = false;
+      let timeout: NodeJS.Timeout;
+      let quietTimer: NodeJS.Timeout | null = null;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (quietTimer) clearTimeout(quietTimer);
+        this.removeListener('line', onLine);
+        this.removeListener('exit', onExit);
+      };
+      const finish = (result: string[] | null, error?: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (error) reject(error);
+        else resolve(result);
+      };
+      const onLine = (line: ConsoleLog) => {
+        if (line.tag !== 'BDS' && line.tag !== 'BDS STDERR') return;
+        const message = line.message.slice(0, 4096);
+        size += Buffer.byteLength(message, 'utf8');
+        if (size > 96 * 1024 || lines.length >= 256) {
+          finish(null, new Error('La réponse de Bedrock est trop volumineuse pour être capturée en toute sécurité.'));
+          return;
+        }
+        lines.push(message);
+        try {
+          if (complete(lines)) {
+            if (quietTimer) clearTimeout(quietTimer);
+            quietTimer = setTimeout(() => finish([...lines]), quietMs);
+            quietTimer.unref?.();
+          }
+        } catch (error) {
+          finish(null, error as Error);
+        }
+      };
+      const onExit = () => finish(null);
+
+      timeout = setTimeout(() => finish(null), timeoutMs);
+      timeout.unref?.();
+      this.on('line', onLine);
+      this.once('exit', onExit);
+      if (!this.sendCommand(command)) finish(null);
+    });
+  }
+
   async stop(timeoutMs: number): Promise<void> {
     if (this.stopPromise) return this.stopPromise;
     const stopPromise = this.performStop(timeoutMs);
@@ -366,12 +421,13 @@ export class BedrockConsole extends EventEmitter {
     const message = rawLine.replace(/\0/g, '').trimEnd();
     if (!message.trim()) return;
 
-    const playerEvent = parsePlayerLifecycleMessage(message);
+    const playerEvent = parsePlayerLifecycleDetails(message);
     if (playerEvent) {
       const previousCount = this.onlinePlayerKeys.size;
       if (playerEvent.action === 'connected') this.onlinePlayerKeys.add(playerEvent.playerKey);
       else this.onlinePlayerKeys.delete(playerEvent.playerKey);
       if (previousCount !== this.onlinePlayerKeys.size) this.emit('players', this.onlinePlayerKeys.size);
+      this.emit('player', { ...playerEvent });
     }
 
     const level: LogLevel = /\b(error|fatal|failed|exception)\b/i.test(message)
@@ -429,7 +485,7 @@ export function attachConsoleWebSocket(
     // WebSocket upgrades do not pass through Express middleware. Re-check both
     // the HttpOnly session cookie and Origin before accepting the upgrade.
     const requestLike = request as unknown as import('express').Request;
-    if (!auth.isAuthenticated(requestLike)) return sendUpgradeError(socket, 401, 'Authentication required');
+    if (!auth.getPrincipal(requestLike)) return sendUpgradeError(socket, 401, 'Authentication required');
     if (!isSameOriginRequest(requestLike)) return sendUpgradeError(socket, 403, 'Invalid origin');
 
     webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
@@ -438,7 +494,8 @@ export function attachConsoleWebSocket(
   };
 
   httpServer.on('upgrade', onUpgrade);
-  webSocketServer.on('connection', (webSocket) => {
+  webSocketServer.on('connection', (webSocket, request) => {
+    const requestLike = request as unknown as import('express').Request;
     const send = (payload: unknown) => {
       if (webSocket.readyState === WebSocket.OPEN) webSocket.send(JSON.stringify(payload));
     };
@@ -459,6 +516,11 @@ export function attachConsoleWebSocket(
       }
       if (typeof message !== 'object' || message === null || (message as { type?: unknown }).type !== 'command') {
         send({ type: 'error', error: 'Type de message non pris en charge.' });
+        return;
+      }
+      const principal = auth.getPrincipal(requestLike);
+      if (!principal || !['owner', 'admin', 'operator'].includes(principal.role)) {
+        send({ type: 'error', error: 'Le rôle opérateur est requis pour envoyer des commandes Bedrock.' });
         return;
       }
       const command = (message as { command?: unknown }).command;

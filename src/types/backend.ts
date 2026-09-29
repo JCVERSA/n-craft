@@ -160,6 +160,8 @@ export interface PersistentPanelState {
     status: ServerLifecycle;
     pid: number | null;
     startedAt: string | null;
+    /** True when the operator expects Bedrock to return after a crash or panel restart. */
+    desiredRunning: boolean;
     error: string | null;
     playersOnline: number | null;
     cpuPercent: number | null;
@@ -267,7 +269,114 @@ export interface ChatbotSnapshot {
   occupiesPlayerSlot: boolean;
 }
 
+export type PanelRole = 'owner' | 'admin' | 'operator' | 'viewer';
+
 export interface AuthStatus {
   configured: boolean;
   authenticated: boolean;
+  role: PanelRole | null;
+  username: string | null;
+}
+
+export interface PanelUserSummary {
+  id: string;
+  username: string;
+  role: Exclude<PanelRole, 'owner'>;
+  createdAt: string;
+}
+
+export interface ManagedPlayer {
+  id: string;
+  xuid: string | null;
+  name: string;
+  online: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export type SnapshotReason = 'manual' | 'scheduled' | 'before-deploy' | 'before-restore';
+
+export interface WorldSnapshot {
+  id: string;
+  worldId: string;
+  worldName: string;
+  createdAt: string;
+  reason: SnapshotReason;
+  sizeBytes: number;
+}
+
+export interface SnapshotSettings {
+  enabled: boolean;
+  intervalHours: number;
+  retentionPerWorld: number;
+  maxStorageBytes: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastError: string | null;
+}
+
+export interface SnapshotManagerSnapshot {
+  settings: SnapshotSettings;
+  snapshots: WorldSnapshot[];
+  storageUsedBytes: number;
+  diskFreeBytes: number | null;
+  diskWarning: boolean;
+}
+
+export interface NetworkProbeResult {
+  status: 'reachable' | 'unreachable' | 'server-stopped' | 'unconfigured';
+  source: 'tunnel' | 'local' | null;
+  target: string | null;
+  latencyMs: number | null;
+  serverName: string | null;
+  checkedAt: string;
+  message: string;
+}
+
+export interface RecoverySettings {
+  restartAfterCrash: boolean;
+  startAfterPanelRestart: boolean;
+  maxAttempts: number;
+  delaySeconds: number;
+}
+
+export interface RecoverySnapshot {
+  settings: RecoverySettings;
+  phase: 'idle' | 'waiting' | 'starting' | 'exhausted';
+  attempts: number;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+  startupPending: boolean;
+}
+
+export interface MonitoringSettings {
+  lowDiskBytes: number;
+  highCpuPercent: number;
+  highMemoryBytes: number;
+}
+
+export interface MonitoringSample {
+  timestamp: string;
+  cpuPercent: number | null;
+  memoryBytes: number | null;
+  playersOnline: number | null;
+  dataDiskFreeBytes: number | null;
+  serverDiskFreeBytes: number | null;
+}
+
+export interface OperationAlert {
+  id: string;
+  severity: 'warning' | 'error';
+  title: string;
+  detail: string;
+  since: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  timestamp: string;
+  actor: string;
+  role: PanelRole;
+  action: string;
+  detail: string;
 }

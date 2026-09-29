@@ -19,6 +19,14 @@ import { normalizeWorldName, WorldManager, WorldManagerError } from '../bedrock/
 import type { PlayitRunner } from '../playit/playitRunner.ts';
 import type { PortwarpRunner } from '../portwarp/portwarpRunner.ts';
 import type { BedrockChatbotManager } from '../bedrock/chatbot/manager.ts';
+import type { BedrockSnapshotManager } from '../bedrock/snapshots.ts';
+import { SnapshotManagerError } from '../bedrock/snapshots.ts';
+import type { BedrockRecoveryManager } from '../bedrock/recovery.ts';
+import type { PlayerRoster } from '../bedrock/playerRoster.ts';
+import type { BedrockNetworkMonitor } from '../networkProbe.ts';
+import type { MonitoringService } from '../monitoring.ts';
+import type { AuditLog } from '../audit.ts';
+import { redactDiagnosticText, sanitizedAlerts, sanitizedLogLines, sanitizedSamples, sanitizedSystemReport } from '../diagnostics.ts';
 import type { TunnelProvider, WorldSelection } from '../types/backend.ts';
 
 function parseWorldSelection(value: unknown, fallbackName: string): WorldSelection {
@@ -34,7 +42,7 @@ function parseWorldSelection(value: unknown, fallbackName: string): WorldSelecti
 function stoppedForWorldMutation(dependencies: ServerRouteDependencies): string | null {
   const status = dependencies.state.getSnapshot().server;
   if (dependencies.bedrockConsole.isRunning || status.status === 'running' || (status.status === 'failed' && status.pid !== null)) return 'Arrête Bedrock avant de modifier, importer ou supprimer un monde.';
-  if (dependencies.pipeline.isRunning) return 'Attends la fin de l’opération Bedrock avant de gérer les mondes.';
+  if (dependencies.pipeline.isRunning || dependencies.worldManager.isBusy) return 'Attends la fin de l’opération Bedrock ou du snapshot avant de gérer les mondes.';
   return null;
 }
 
@@ -50,17 +58,37 @@ export interface ServerRouteDependencies {
   playitRunner: PlayitRunner;
   portwarpRunner: PortwarpRunner;
   chatbot: BedrockChatbotManager;
+  snapshots: BedrockSnapshotManager;
+  recovery: BedrockRecoveryManager;
+  players: PlayerRoster;
+  network: BedrockNetworkMonitor;
+  monitoring: MonitoringService;
+  audit: AuditLog;
   tunnelProvider: TunnelProvider;
 }
 
 export function createServerRouter(dependencies: ServerRouteDependencies): Router {
   const router = Router();
-  router.use(dependencies.auth.requireAuthentication());
+  const requireViewer = dependencies.auth.requireRole('viewer');
+  const requireOperator = dependencies.auth.requireRole('operator');
+  const requireAdmin = dependencies.auth.requireRole('admin');
+  router.use(requireViewer);
+  router.use((request, response, next) => {
+    if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') return next();
+    return requireOperator(request, response, next);
+  });
+
+  const audit = async (request: import('express').Request, action: string, detail = '') => {
+    await dependencies.audit.record(dependencies.auth.getPrincipal(request), action, detail).catch(() => undefined);
+  };
 
   router.get('/status', async (_request, response, next) => {
     try {
       response.setHeader('Cache-Control', 'no-store');
-      const [system] = await Promise.all([dependencies.inspector.inspect()]);
+      const [system, snapshots] = await Promise.all([
+        dependencies.inspector.inspect(),
+        dependencies.snapshots.getSnapshotWithDisk(),
+      ]);
       response.json({
         state: dependencies.state.getSnapshot(),
         tunnelProvider: dependencies.tunnelProvider,
@@ -71,6 +99,9 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         deployBusy: dependencies.pipeline.isRunning,
         scheduler: dependencies.scheduler.getSnapshot(),
         chatbot: dependencies.chatbot.getSnapshot(),
+        snapshots,
+        recovery: dependencies.recovery.getSnapshot(),
+        monitoring: dependencies.monitoring.getSnapshot(1),
       });
     } catch (error) {
       next(error);
@@ -86,6 +117,255 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     try {
       response.setHeader('Cache-Control', 'no-store');
       response.json({ worlds: await dependencies.worldManager.listWorlds() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/snapshots', async (_request, response, next) => {
+    try {
+      response.setHeader('Cache-Control', 'no-store');
+      response.json(await dependencies.snapshots.getSnapshotWithDisk());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/snapshots/settings', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      const snapshot = await dependencies.snapshots.updateSettings(request.body);
+      await audit(request, 'snapshot-settings-updated', `Planification ${snapshot.settings.enabled ? 'activée' : 'désactivée'}; intervalle ${snapshot.settings.intervalHours} h, rétention ${snapshot.settings.retentionPerWorld}.`);
+      response.json(snapshot);
+    } catch (error) {
+      if (error instanceof SnapshotManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(400).json({ error: (error as Error).message || 'Réglages de snapshots invalides.' });
+    }
+  });
+
+  router.get('/worlds/:id/snapshots', (request, response) => {
+    try {
+      const world = dependencies.worldManager.getWorld(request.params.id);
+      response.setHeader('Cache-Control', 'no-store');
+      response.json({ worldId: world.id, snapshots: dependencies.snapshots.listForWorld(world.id) });
+    } catch (error) {
+      if (error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: 'Impossible de lister les snapshots du monde.' });
+    }
+  });
+
+  router.post('/worlds/:id/snapshots', requireSameOrigin, async (request, response) => {
+    try {
+      const world = dependencies.worldManager.getWorld(request.params.id);
+      const snapshot = await dependencies.snapshots.createSnapshot(world.id, 'manual');
+      await audit(request, 'world-snapshot-created', `Snapshot manuel créé pour ${world.name} (${snapshot.sizeBytes} octets).`);
+      response.status(201).json({ snapshot, manager: await dependencies.snapshots.getSnapshotWithDisk() });
+    } catch (error) {
+      if (error instanceof SnapshotManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: (error as Error).message || 'Échec de la création du snapshot.' });
+    }
+  });
+
+  router.get('/snapshots/:id/download', async (request, response) => {
+    try {
+      const archive = await dependencies.snapshots.getArchive(request.params.id);
+      response.setHeader('Content-Type', 'application/zip');
+      response.attachment(archive.fileName);
+      await streamPipeline(archive.stream, response);
+    } catch (error) {
+      if (error instanceof SnapshotManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      if (!response.headersSent) response.status(500).json({ error: 'Échec du téléchargement du snapshot.' });
+      else response.destroy(error as Error);
+    }
+  });
+
+  router.post('/snapshots/:id/restore', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      const result = await dependencies.snapshots.restoreSnapshot(request.params.id);
+      await audit(request, 'world-snapshot-restored', `Snapshot ${result.restored.id} restauré; sauvegarde préalable ${result.beforeRestore?.id ?? 'non nécessaire (monde absent)'}.`);
+      response.json({ ...result, manager: await dependencies.snapshots.getSnapshotWithDisk() });
+    } catch (error) {
+      if (error instanceof SnapshotManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: (error as Error).message || 'Échec de la restauration du snapshot.' });
+    }
+  });
+
+  router.delete('/snapshots/:id', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      await dependencies.snapshots.deleteSnapshot(request.params.id);
+      await audit(request, 'world-snapshot-deleted', `Snapshot ${request.params.id} supprimé.`);
+      response.json({ deleted: true, id: request.params.id });
+    } catch (error) {
+      if (error instanceof SnapshotManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: 'Échec de la suppression du snapshot.' });
+    }
+  });
+
+  router.get('/players', (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json({
+      players: dependencies.players.list(),
+      admins: dependencies.state.getSnapshot().activeConfig?.adminXuids ?? [],
+    });
+  });
+
+  router.put('/access/admins', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      const current = dependencies.state.getSnapshot().activeConfig;
+      if (!current) throw new ServerNotInstalledError();
+      const entries = request.body?.adminXuids;
+      if (!Array.isArray(entries) || entries.length < 1 || entries.length > 3
+        || entries.some((entry: unknown) => typeof entry !== 'string' || !/^\d{1,20}$/.test(entry))) {
+        response.status(400).json({ error: 'Fournis de 1 à 3 XUID administrateur contenant uniquement des chiffres.' });
+        return;
+      }
+      const adminXuids = entries as string[];
+      if (new Set(adminXuids).size !== adminXuids.length) {
+        response.status(400).json({ error: 'Les XUID administrateur doivent être uniques.' });
+        return;
+      }
+      const next = { ...current, adminXuids: [...adminXuids] };
+      await dependencies.pipeline.saveConfiguration(next);
+      const activeWorld = dependencies.worldManager.findByVersionAndFolder(current.version, current.levelName);
+      if (activeWorld) await dependencies.worldManager.updateConfiguration(activeWorld.id, next);
+      await audit(request, 'bedrock-admins-updated', `${adminXuids.length} XUID administrateur enregistrés dans permissions.json.`);
+      response.json({ admins: adminXuids, state: dependencies.state.getSnapshot() });
+    } catch (error) {
+      if (error instanceof DeployInProgressError || error instanceof ServerNotInstalledError || error instanceof ServerRunningError) {
+        response.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: (error as Error).message || 'Échec de la mise à jour des administrateurs Bedrock.' });
+    }
+  });
+
+  router.get('/audit', dependencies.auth.requireRole('admin'), (request, response) => {
+    const limit = Number(request.query.limit ?? 100);
+    response.setHeader('Cache-Control', 'no-store');
+    response.json({ events: dependencies.audit.list(Number.isFinite(limit) ? limit : 100) });
+  });
+
+  router.get('/recovery', (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(dependencies.recovery.getSnapshot());
+  });
+
+  router.put('/recovery/settings', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      const recovery = await dependencies.recovery.updateSettings(request.body);
+      await audit(request, 'recovery-settings-updated', `Reprise crash ${recovery.settings.restartAfterCrash ? 'activée' : 'désactivée'}; démarrage après restart ${recovery.settings.startAfterPanelRestart ? 'activé' : 'désactivé'}.`);
+      response.json(recovery);
+    } catch (error) {
+      response.status(400).json({ error: (error as Error).message || 'Réglages de reprise invalides.' });
+    }
+  });
+
+  router.get('/monitoring', (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(dependencies.monitoring.getSnapshot());
+  });
+
+  router.put('/monitoring/settings', requireAdmin, requireSameOrigin, async (request, response) => {
+    try {
+      const monitoring = await dependencies.monitoring.updateSettings(request.body);
+      await audit(request, 'monitoring-settings-updated', 'Seuils d’alertes métriques mis à jour.');
+      response.json(monitoring);
+    } catch (error) {
+      response.status(400).json({ error: (error as Error).message || 'Réglages de supervision invalides.' });
+    }
+  });
+
+  router.get('/network-check', async (request, response) => {
+    const source = request.query.source;
+    if (source !== 'local' && source !== 'tunnel') {
+      response.status(400).json({ error: 'Choisis source=local ou source=tunnel.' });
+      return;
+    }
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(await dependencies.network.probe(source));
+  });
+
+  router.get('/diagnostics/export', async (_request, response, next) => {
+    try {
+      const [system, snapshots] = await Promise.all([
+        dependencies.inspector.inspect(true),
+        dependencies.snapshots.getSnapshotWithDisk(),
+      ]);
+      const state = dependencies.state.getSnapshot();
+      const monitoring = dependencies.monitoring.getSnapshot(240);
+      const recoverySnapshot = dependencies.recovery.getSnapshot();
+      const report = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        privacy: {
+          secretsIncluded: false,
+          environmentVariablesIncluded: false,
+          worldContentsIncluded: false,
+          panelPasswordsIncluded: false,
+          playerIdentitiesIncluded: false,
+          notes: 'Jetons, cookies, secrets d’intégration, seeds, noms/XUID de joueurs, adresses de tunnel et commandes console sont exclus ou expurgés.',
+        },
+        runtime: { nodeVersion: process.version, platform: process.platform, arch: process.arch },
+        server: {
+          status: state.server.status,
+          desiredRunning: state.server.desiredRunning,
+          playersOnline: state.server.playersOnline,
+          cpuPercent: state.server.cpuPercent,
+          memoryBytes: state.server.memoryBytes,
+          pipelineStatus: state.pipeline.status,
+          pipelineStep: state.pipeline.step,
+          pipelineError: state.pipeline.error ? redactDiagnosticText(state.pipeline.error) : null,
+          serverError: state.server.error ? redactDiagnosticText(state.server.error) : null,
+          activeBuild: state.activeConfig?.version ?? null,
+          tunnelProvider: dependencies.tunnelProvider,
+          tunnelLifecycle: dependencies.tunnelProvider === 'portwarp' ? state.portwarp.status
+            : dependencies.tunnelProvider === 'playit' ? state.playit.status : state.localtonet.status,
+          publicTunnelAddressPresent: Boolean(dependencies.tunnelProvider === 'portwarp' ? state.portwarp.address
+            : dependencies.tunnelProvider === 'playit' ? state.playit.address : state.localtonet.address),
+        },
+        system: sanitizedSystemReport(system),
+        recovery: {
+          ...recoverySnapshot,
+          lastError: recoverySnapshot.lastError ? redactDiagnosticText(recoverySnapshot.lastError) : null,
+        },
+        snapshots: {
+          settings: {
+            ...snapshots.settings,
+            lastError: snapshots.settings.lastError ? redactDiagnosticText(snapshots.settings.lastError) : null,
+          },
+          count: snapshots.snapshots.length,
+          storageUsedBytes: snapshots.storageUsedBytes,
+          diskFreeBytes: snapshots.diskFreeBytes,
+          diskWarning: snapshots.diskWarning,
+        },
+        monitoring: { settings: monitoring.settings, alerts: sanitizedAlerts(monitoring.alerts), samples: sanitizedSamples(monitoring.samples) },
+        recentLogs: sanitizedLogLines(dependencies.bedrockConsole.getRecentLines()),
+      };
+      const filename = `ncraft-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      response.setHeader('Content-Type', 'application/json; charset=utf-8');
+      response.attachment(filename);
+      response.send(`${JSON.stringify(report, null, 2)}\n`);
     } catch (error) {
       next(error);
     }
@@ -342,11 +622,16 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       const selection = parseWorldSelection(request.body?.world, config.levelName);
       const resolved = await dependencies.worldManager.resolveForDeployment(config, selection);
       const currentConfig = dependencies.state.getSnapshot().activeConfig;
+      if (selection.mode === 'existing') {
+        await dependencies.snapshots.createSnapshot(resolved.worldId, 'before-deploy');
+      }
+      await dependencies.recovery.prepareManualStart();
       if (currentConfig?.version === resolved.configuration.version) {
         dependencies.pipeline.startExisting(resolved.configuration);
       } else {
         dependencies.pipeline.start(resolved.configuration);
       }
+      await audit(request, 'bedrock-deploy-started', `Déploiement ${resolved.configuration.version}; monde ${resolved.worldId}.`);
       response.status(202).json({
         accepted: true,
         worldId: resolved.worldId,
@@ -361,7 +646,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         response.status(400).json({ error: error.message });
         return;
       }
-      if (error instanceof WorldManagerError) {
+      if (error instanceof WorldManagerError || error instanceof SnapshotManagerError) {
         response.status(error.statusCode).json({ error: error.message });
         return;
       }
@@ -412,7 +697,9 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       }
       const activeConfig = dependencies.state.getSnapshot().activeConfig;
       if (activeConfig) await dependencies.worldManager.ensureActiveWorld(activeConfig);
+      await dependencies.recovery.prepareManualStart();
       dependencies.pipeline.startExisting();
+      await audit(_request, 'bedrock-start-requested', 'Démarrage manuel demandé.');
       response.status(202).json({
         accepted: true,
         state: dependencies.state.getSnapshot(),
@@ -426,9 +713,11 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.post('/stop', requireSameOrigin, async (_request, response) => {
+  router.post('/stop', requireSameOrigin, async (request, response) => {
     try {
+      await dependencies.recovery.prepareManualStop();
       await dependencies.pipeline.stop();
+      await audit(request, 'bedrock-stop-requested', 'Arrêt manuel demandé; reprise automatique désactivée pour cet arrêt.');
       response.status(200).json({
         stopped: true,
         state: dependencies.state.getSnapshot(),

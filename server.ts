@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { PanelAuthService } from './src/auth.ts';
+import { AuditLog } from './src/audit.ts';
 import { buildChildEnvironment } from './src/childEnvironment.ts';
 import { BedrockConsole, attachConsoleWebSocket } from './src/bedrock/console.ts';
 import { BedrockChatbotManager } from './src/bedrock/chatbot/manager.ts';
@@ -13,6 +14,11 @@ import { DeployPipeline } from './src/bedrock/deployPipeline.ts';
 import { WorldManager } from './src/bedrock/worldManager.ts';
 import { BedrockRestartScheduler } from './src/bedrock/scheduler.ts';
 import { BedrockMetricsSampler } from './src/bedrock/processMetrics.ts';
+import { BedrockSnapshotManager } from './src/bedrock/snapshots.ts';
+import { BedrockRecoveryManager } from './src/bedrock/recovery.ts';
+import { PlayerRoster } from './src/bedrock/playerRoster.ts';
+import { BedrockNetworkMonitor } from './src/networkProbe.ts';
+import { MonitoringService } from './src/monitoring.ts';
 import { SystemInspector } from './src/preflight.ts';
 import { PlayitRunner } from './src/playit/playitRunner.ts';
 import { LocaltonetRunner } from './src/localtonet/localtonetRunner.ts';
@@ -62,7 +68,6 @@ const catalog = new VersionCatalog(dataDirectory);
 await catalog.load();
 const worldManager = new WorldManager(dataDirectory, serverDirectory);
 
-const auth = new PanelAuthService(process.env.PANEL_TOKEN);
 const pixelStudioAI = new PixelStudioAIService();
 const bedrockConsole = new BedrockConsole(dataDirectory);
 const inspector = new SystemInspector(
@@ -85,8 +90,21 @@ const pipeline = new DeployPipeline(
   worldManager,
 );
 await worldManager.initialize(state.getSnapshot().activeConfig);
+const auth = new PanelAuthService(process.env.PANEL_TOKEN, dataDirectory);
+await auth.initialize();
+const audit = new AuditLog(dataDirectory);
+await audit.initialize();
 const scheduler = new BedrockRestartScheduler(state, bedrockConsole, pipeline);
 const metricsSampler = new BedrockMetricsSampler(state);
+const snapshots = new BedrockSnapshotManager(dataDirectory, worldManager, bedrockConsole, state);
+await snapshots.initialize();
+const recovery = new BedrockRecoveryManager(dataDirectory, state, bedrockConsole, pipeline);
+await recovery.initialize();
+const players = new PlayerRoster(dataDirectory, bedrockConsole);
+await players.initialize();
+const monitoring = new MonitoringService(dataDirectory, state, inspector);
+await monitoring.initialize();
+const network = new BedrockNetworkMonitor(state, bedrockConsole, tunnelProvider);
 const playitRunner = new PlayitRunner(playitCommand, process.env.PLAYIT_SECRET_KEY, state, {
   cliCommand: process.env.PLAYIT_CLI_BIN || 'playit',
   dataDirectory,
@@ -127,9 +145,28 @@ app.get('/api/health', (_request, response) => {
 // Keep the non-sensitive health probe available to the container supervisor;
 // all interactive UI and authentication routes require a trusted HTTPS hop in production.
 app.use(requireHttpsInProduction);
-app.use('/api/auth', createAuthRouter(auth));
+app.use('/api/auth', createAuthRouter(auth, audit));
 app.use('/api/pixel-studio', createPixelStudioRouter(auth, pixelStudioAI));
-app.use('/api/server', createServerRouter({ auth, state, pipeline, bedrockConsole, scheduler, inspector, catalog, worldManager, playitRunner, portwarpRunner, chatbot, tunnelProvider }));
+app.use('/api/server', createServerRouter({
+  auth,
+  state,
+  pipeline,
+  bedrockConsole,
+  scheduler,
+  inspector,
+  catalog,
+  worldManager,
+  playitRunner,
+  portwarpRunner,
+  chatbot,
+  snapshots,
+  recovery,
+  players,
+  network,
+  monitoring,
+  audit,
+  tunnelProvider,
+}));
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Route API introuvable.' }));
 
 let viteServer: ViteDevServer | null = null;
@@ -182,6 +219,7 @@ bedrockConsole.on('players', (playersOnline: number) => {
 
 bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals | null; wasReady: boolean; intentional?: boolean }) => {
   void chatbot.onBedrockExit().catch(() => undefined);
+  void players.markAllOffline().catch((error) => console.warn(`[players] Could not mark the roster offline: ${(error as Error).message}`));
   if (event.intentional) {
     void state.updateServer({
       status: 'stopped', pid: null, startedAt: null, error: null,
@@ -209,7 +247,10 @@ bedrockConsole.on('exit', (event: { code: number | null; signal: NodeJS.Signals 
 httpServer.listen(port, '0.0.0.0', () => {
   console.info(`[Nebula Craft] Panel listening on 0.0.0.0:${port}`);
   metricsSampler.start();
+  monitoring.start();
+  snapshots.start();
   scheduler.start();
+  recovery.start();
   if (!auth.configured) console.warn('[Nebula Craft] PANEL_TOKEN absent : la connexion au panel est désactivée.');
   if (tunnelProvider === 'portwarp') {
     portwarpRunner.startOnce();
@@ -233,14 +274,19 @@ const shutdown = async (signal: NodeJS.Signals) => {
     chatbot.shutdown().catch(() => undefined),
     consoleGateway.close().catch((error) => console.error(`[server] WebSocket close: ${(error as Error).message}`)),
     scheduler.shutdown().catch((error) => console.error(`[server] Scheduler shutdown: ${(error as Error).message}`)),
+    recovery.shutdown().catch((error) => console.error(`[server] Recovery shutdown: ${(error as Error).message}`)),
+    snapshots.shutdown().catch((error) => console.error(`[server] Snapshots shutdown: ${(error as Error).message}`)),
+    monitoring.shutdown().catch((error) => console.error(`[server] Monitoring shutdown: ${(error as Error).message}`)),
+    players.shutdown().catch((error) => console.error(`[server] Player roster shutdown: ${(error as Error).message}`)),
     metricsSampler.shutdown().catch((error) => console.error(`[server] Metrics shutdown: ${(error as Error).message}`)),
-    pipeline.shutdown().catch((error) => console.error(`[server] Bedrock shutdown: ${(error as Error).message}`)),
     playitRunner.shutdown().catch((error) => console.error(`[server] Playit shutdown: ${(error as Error).message}`)),
     localtonetRunner.shutdown().catch((error) => console.error(`[server] Localtonet shutdown: ${(error as Error).message}`)),
     portwarpRunner.shutdown().catch((error) => console.error(`[server] Portwarp shutdown: ${(error as Error).message}`)),
   ]);
+  await pipeline.shutdown().catch((error) => console.error(`[server] Bedrock shutdown: ${(error as Error).message}`));
   await viteServer?.close().catch((error) => console.error(`[server] Vite close: ${(error as Error).message}`));
   await serverClosed;
+  await audit.flush().catch((error) => console.error(`[server] Audit flush: ${(error as Error).message}`));
   await bedrockConsole.close();
   await state.flush();
   process.exitCode = 0;

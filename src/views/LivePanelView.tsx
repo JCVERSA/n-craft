@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Save,
   Server,
+  Shield,
   ShieldCheck,
   Trash2,
   Terminal,
@@ -39,6 +40,8 @@ import {
   X,
 } from 'lucide-react';
 import { AboutModal } from '../components/AboutModal.tsx';
+import { OperationsView } from './OperationsView.tsx';
+import type { MonitoringSnapshot } from '../monitoring.ts';
 import { SeedTools } from '../components/SeedTools.tsx';
 import { XuidConverter } from '../components/XuidConverter.tsx';
 import { NebulaBrandMark } from '../components/NebulaBrandMark.tsx';
@@ -65,6 +68,9 @@ import {
 import type {
   AuthStatus,
   ConsoleLog,
+  PanelRole,
+  RecoverySnapshot,
+  SnapshotManagerSnapshot,
   ChatbotSnapshot,
   DeployConfiguration,
   PersistentPanelState,
@@ -88,11 +94,14 @@ interface StatusResponse {
   deployBusy: boolean;
   scheduler: ScheduledRestartSnapshot;
   chatbot: ChatbotSnapshot;
+  snapshots: SnapshotManagerSnapshot;
+  recovery: RecoverySnapshot;
+  monitoring: MonitoringSnapshot;
 }
 
 type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
 
-type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'console' | 'pixel-studio';
+type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'operations' | 'console' | 'pixel-studio';
 type TabNavigation = 'desktop' | 'mobile';
 
 const PixelStudioView = lazy(() => import('./PixelStudioView.tsx'));
@@ -102,6 +111,7 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string; compactLabel: string; i
   { id: 'deploy', label: 'Déploiement', compactLabel: 'Déployer', icon: Package },
   { id: 'worlds', label: 'Mondes', compactLabel: 'Mondes', icon: Globe },
   { id: 'diagnostics', label: 'Diagnostics', compactLabel: 'Diag.', icon: ShieldCheck },
+  { id: 'operations', label: 'Opérations', compactLabel: 'Ops', icon: Activity },
   { id: 'console', label: 'Console', compactLabel: 'Console', icon: Terminal },
   { id: 'pixel-studio', label: 'Pixel Studio', compactLabel: 'Studio', icon: Paintbrush },
 ];
@@ -120,6 +130,7 @@ const BRANCHED_NAV_ITEMS: BranchedMenuItem[] = [
   ] },
   { label: 'Supervision', children: [
     { value: 'diagnostics', label: 'Diagnostics système' },
+    { value: 'operations', label: 'Snapshots, accès et alertes' },
   ] },
   { label: 'Création', children: [
     { value: 'pixel-studio', label: 'Pixel Studio' },
@@ -327,6 +338,7 @@ export function LivePanelView() {
   const navMenuRef = useRef<HTMLDivElement>(null);
   const navMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [token, setToken] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [showToken, setShowToken] = useState(false);
@@ -767,14 +779,23 @@ export function LivePanelView() {
     setLoginBusy(true);
     setLoginError('');
     try {
-      await apiRequest<{ authenticated: boolean }>('/api/auth/login', {
+      const result = await apiRequest<AuthStatus>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ token }),
+        body: JSON.stringify(loginUsername.trim()
+          ? { username: loginUsername.trim(), password: token }
+          : { token }),
       });
       setToken('');
+      setLoginUsername('');
       setShowToken(false);
       setAuthenticated(true);
-      setAuthStatus((current) => current ? { ...current, authenticated: true } : current);
+      setAuthStatus((current) => current ? {
+        ...current,
+        configured: true,
+        authenticated: true,
+        role: result.role,
+        username: result.username,
+      } : result);
     } catch (error) {
       setLoginError((error as Error).message);
       setToken('');
@@ -789,7 +810,7 @@ export function LivePanelView() {
     try {
       await apiRequest<{ authenticated: boolean }>('/api/auth/logout', { method: 'POST', body: '{}' });
       setAuthenticated(false);
-      setAuthStatus((current) => current ? { ...current, authenticated: false } : current);
+      setAuthStatus((current) => current ? { ...current, authenticated: false, role: null, username: null } : current);
       setStatus(null);
       setConsoleLogs([]);
     } catch (error) {
@@ -1369,7 +1390,7 @@ export function LivePanelView() {
               </div>
             </div>
             <p className="login-security-copy">
-              Le jeton est échangé contre un cookie de session HttpOnly. Il n’est pas conservé dans le navigateur.
+              Utilise un compte de rôle ou laisse le nom vide pour te connecter avec PANEL_TOKEN. Le secret n’est pas conservé dans le navigateur.
             </p>
             {!authStatus?.configured && (
               <div role="alert" className="nether-callout nether-callout--danger">
@@ -1379,7 +1400,21 @@ export function LivePanelView() {
             )}
             <form onSubmit={handleLogin} className="login-form">
               <div className="nether-field">
-                <label className="login-token-label" htmlFor="panel-token">Jeton du panneau</label>
+                <label className="login-token-label" htmlFor="panel-username">Nom du compte <span>(laisser vide pour PANEL_TOKEN)</span></label>
+                <input
+                  id="panel-username"
+                  type="text"
+                  autoComplete="username"
+                  value={loginUsername}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  disabled={!authStatus?.configured || loginBusy}
+                  className="nether-input"
+                  placeholder="owner"
+                  maxLength={32}
+                />
+              </div>
+              <div className="nether-field">
+                <label className="login-token-label" htmlFor="panel-token">{loginUsername.trim() ? 'Mot de passe du compte' : 'Jeton du panneau'}</label>
                 <div className="login-token-field">
                   <input
                     id="panel-token"
@@ -1389,7 +1424,7 @@ export function LivePanelView() {
                     onChange={(event) => setToken(event.target.value)}
                     disabled={!authStatus?.configured || loginBusy}
                     className="nether-input login-token-input"
-                    placeholder="Saisis le jeton du panneau"
+                    placeholder={loginUsername.trim() ? 'Saisis le mot de passe du compte' : 'Saisis le jeton propriétaire'}
                     aria-invalid={Boolean(loginError)}
                     aria-describedby={loginError ? 'login-error' : undefined}
                   />
@@ -1398,9 +1433,9 @@ export function LivePanelView() {
                     className="login-token-toggle"
                     onClick={() => setShowToken((visible) => !visible)}
                     disabled={!authStatus?.configured || loginBusy}
-                    aria-label={showToken ? 'Masquer le jeton' : 'Afficher le jeton'}
+                    aria-label={showToken ? 'Masquer le secret de connexion' : 'Afficher le secret de connexion'}
                     aria-pressed={showToken}
-                    title={showToken ? 'Masquer le jeton' : 'Afficher le jeton'}
+                    title={showToken ? 'Masquer le secret de connexion' : 'Afficher le secret de connexion'}
                   >
                     {showToken ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
@@ -1417,7 +1452,7 @@ export function LivePanelView() {
                 {loginBusy ? 'Vérification…' : 'Ouvrir le panneau'}
               </motion.button>
             </form>
-            <p className="login-footer"><ShieldCheck size={14} /> Session HttpOnly · jeton non conservé</p>
+            <p className="login-footer"><ShieldCheck size={14} /> Session HttpOnly · secret non conservé</p>
           </motion.section>
         </motion.div>
       </main>
@@ -1438,6 +1473,8 @@ export function LivePanelView() {
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
   const activeConfig = status?.state.activeConfig;
+  const panelRole: PanelRole | null = authStatus?.role ?? null;
+  const canOperate = panelRole === 'owner' || panelRole === 'admin' || panelRole === 'operator';
   const activeWorld = activeConfig
     ? worlds.find((world) => world.version === activeConfig.version && world.folder === activeConfig.levelName)
     : undefined;
@@ -1445,7 +1482,7 @@ export function LivePanelView() {
   const editingWorld = worldEditId ? worlds.find((world) => world.id === worldEditId) : undefined;
   const selectedVersion = versions.find((version) => version.version === configuration.version);
   const isExistingDeployment = Boolean(activeConfig);
-  const configurationLocked = isPipelineBusy || !server
+  const configurationLocked = !canOperate || isPipelineBusy || !server
     || server.status === 'running'
     || server.status === 'starting'
     || server.status === 'stopping'
@@ -1502,8 +1539,8 @@ export function LivePanelView() {
   const currentServerStatus = server?.status ?? 'stopped';
   const tunnelStatus = activeTunnel?.status ?? 'starting';
   const bedrockMayBeRunning = server?.status === 'running' || (server?.status === 'failed' && server.pid !== null);
-  const startDisabled = isPipelineBusy || !activeConfig || !system?.bedrockBinary.ok || bedrockMayBeRunning || busyAction === 'stop';
-  const stopDisabled = isPipelineBusy || busyAction === 'stop' || !bedrockMayBeRunning;
+  const startDisabled = !canOperate || isPipelineBusy || !activeConfig || !system?.bedrockBinary.ok || bedrockMayBeRunning || busyAction === 'stop';
+  const stopDisabled = !canOperate || isPipelineBusy || busyAction === 'stop' || !bedrockMayBeRunning;
   const chatbot = status?.chatbot;
   const chatbotPillStatus = chatbot?.status === 'online' ? 'running'
     : chatbot?.status === 'failed' ? 'failed'
@@ -1589,6 +1626,9 @@ export function LivePanelView() {
 
           <div className="ncraft-header__actions">
             <StatusPill status={currentServerStatus} />
+            <span className="panel-role-pill" title={`Compte ${authStatus?.username ?? 'inconnu'} · rôle ${panelRole ?? 'inconnu'}`}>
+              <Shield size={14} aria-hidden="true" /> {authStatus?.username ?? 'Compte'} · {panelRole ?? '—'}
+            </span>
             <motion.button
               type="button"
               onClick={() => setAboutOpen(true)}
@@ -1834,7 +1874,7 @@ export function LivePanelView() {
               {tunnelProvider === 'playit' && playitSetup?.error && <p role="status" className="inline-error">{playitSetup.error}</p>}
               {tunnelProvider === 'playit' && playit?.error && <p role="status" className="inline-error">{playit.error}</p>}
               {tunnelProvider === 'playit' && (playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
-                <motion.button type="button" onClick={() => void handlePlayitSetup()} disabled={busyAction === 'playit'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--quiet nether-btn--wide">
+                <motion.button type="button" onClick={() => void handlePlayitSetup()} disabled={!canOperate || busyAction === 'playit'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--quiet nether-btn--wide">
                   {busyAction === 'playit' ? <Loader2 className="spin-soft" size={16} /> : <RefreshCw size={16} />}
                   {busyAction === 'playit' ? 'Démarrage…' : 'Réessayer le claim'}
                 </motion.button>
@@ -1844,7 +1884,7 @@ export function LivePanelView() {
                 <motion.button
                   type="button"
                   onClick={() => void handlePortwarpRetry()}
-                  disabled={busyAction === 'portwarp'}
+                  disabled={!canOperate || busyAction === 'portwarp'}
                   whileTap={reduceMotion ? undefined : { scale: 0.97 }}
                   className="nether-btn nether-btn--quiet nether-btn--wide"
                 >
@@ -2383,13 +2423,13 @@ export function LivePanelView() {
               {chatbotFeedback && <p className="nether-inline-note" role="status">{chatbotFeedback}</p>}
               <div className="chatbot-actions">
                 {chatbot?.canLink && !chatbot.userActionPending && (
-                  <button type="button" className="nether-btn nether-btn--primary" onClick={() => void handleChatbotLink()} disabled={chatbotBusy}>
+                  <button type="button" className="nether-btn nether-btn--primary" onClick={() => void handleChatbotLink()} disabled={!canOperate || chatbotBusy}>
                     {chatbotBusy ? <Loader2 className="spin-soft" size={15} /> : <LockKeyhole size={15} />}
                     {chatbot.accountLinked ? 'Réautoriser le compte dédié' : 'Lier un compte dédié'}
                   </button>
                 )}
                 {chatbot?.userActionPending && (
-                  <button type="button" className="nether-btn nether-btn--quiet" onClick={() => void handleChatbotCancel()} disabled={chatbotBusy}>
+                  <button type="button" className="nether-btn nether-btn--quiet" onClick={() => void handleChatbotCancel()} disabled={!canOperate || chatbotBusy}>
                     {chatbotBusy ? <Loader2 className="spin-soft" size={15} /> : <X size={15} />} Annuler l’autorisation
                   </button>
                 )}
@@ -2407,7 +2447,7 @@ export function LivePanelView() {
                     undoWindow={4200}
                     commitOn="fuseEnd"
                     settle="reset"
-                    disabled={chatbotBusy}
+                    disabled={!canOperate || chatbotBusy}
                     onCommit={(reason) => { if (reason === 'fuseEnd') void handleChatbotUnlink(); }}
                     onUndo={() => {
                       setChatbotFeedback('Déliaison annulée.');
@@ -2489,6 +2529,30 @@ export function LivePanelView() {
         </section>
 
         <section
+          id="panel-operations"
+          className="ncraft-tab-panel"
+          role="tabpanel"
+          aria-label="Opérations"
+          tabIndex={0}
+          hidden={activeSection !== 'operations'}
+        >
+          {activeSection === 'operations' && (
+            <OperationsView
+              role={panelRole}
+              authStatus={authStatus}
+              worlds={worlds}
+              state={status?.state ?? null}
+              system={status?.system ?? null}
+              snapshots={status?.snapshots ?? null}
+              recovery={status?.recovery ?? null}
+              monitoring={status?.monitoring ?? null}
+              refreshStatus={refreshStatus}
+              onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })}
+            />
+          )}
+        </section>
+
+        <section
           id="panel-console"
           className="ncraft-tab-panel"
           role="tabpanel"
@@ -2536,12 +2600,12 @@ export function LivePanelView() {
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
                   maxLength={1000}
-                  disabled={server?.status !== 'running'}
+                  disabled={!canOperate || server?.status !== 'running'}
                   aria-label="Commande Bedrock"
                   placeholder={server?.status === 'running' ? 'Commande Bedrock (sans /)' : 'Le serveur doit être en ligne pour envoyer une commande'}
                 />
               </label>
-              <motion.button type="submit" disabled={server?.status !== 'running' || !command.trim()} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--primary">
+              <motion.button type="submit" disabled={!canOperate || server?.status !== 'running' || !command.trim()} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--primary">
                 <ArrowRight size={16} /> Envoyer
               </motion.button>
             </form>

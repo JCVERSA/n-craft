@@ -19,5 +19,16 @@ data/state.json.*.tmp
 data/state.json.corrupt-*
 data/server.log*
 data/runtime/
+data/snapshots/
+data/recovery.json
+data/recovery.json.*.tmp
+data/monitoring.json
+data/monitoring.json.*.tmp
+data/players.json
+data/players.json.*.tmp
+data/audit.json
+data/audit.json.*.tmp
+data/panel-users.json
+data/panel-users.json.*.tmp
 data/*.zip
 bedrock/server/
