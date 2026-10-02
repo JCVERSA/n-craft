@@ -82,23 +82,30 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     await dependencies.audit.record(dependencies.auth.getPrincipal(request), action, detail).catch(() => undefined);
   };
 
-  router.get('/status', async (_request, response, next) => {
+  router.get('/status', async (request, response, next) => {
     try {
       response.setHeader('Cache-Control', 'no-store');
       const [system, snapshots] = await Promise.all([
         dependencies.inspector.inspect(),
         dependencies.snapshots.getSnapshotWithDisk(),
       ]);
+      const principal = dependencies.auth.getPrincipal(request);
+      const canViewSetupCredentials = principal !== null && principal.role !== 'viewer';
+      const playitSetup = dependencies.playitRunner.getSetupSnapshot();
+      const portwarpSetup = dependencies.portwarpRunner.getSetupSnapshot();
+      const chatbot = dependencies.chatbot.getSnapshot();
       response.json({
         state: dependencies.state.getSnapshot(),
         tunnelProvider: dependencies.tunnelProvider,
-        playitSetup: dependencies.playitRunner.getSetupSnapshot(),
-        portwarpSetup: dependencies.portwarpRunner.getSetupSnapshot(),
+        playitSetup: canViewSetupCredentials ? playitSetup : { ...playitSetup, claimUrl: null },
+        portwarpSetup: canViewSetupCredentials
+          ? portwarpSetup
+          : { ...portwarpSetup, verificationUrl: null, userCode: null },
         system,
         serverDirectory: dependencies.pipeline.serverDirectoryPath,
         deployBusy: dependencies.pipeline.isRunning,
         scheduler: dependencies.scheduler.getSnapshot(),
-        chatbot: dependencies.chatbot.getSnapshot(),
+        chatbot: canViewSetupCredentials ? chatbot : { ...chatbot, deviceCode: null },
         snapshots,
         recovery: dependencies.recovery.getSnapshot(),
         monitoring: dependencies.monitoring.getSnapshot(1),

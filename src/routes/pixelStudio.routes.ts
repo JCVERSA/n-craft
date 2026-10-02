@@ -52,6 +52,7 @@ function sendAIError(error: unknown, response: Response): void {
 
 export function createPixelStudioRouter(auth: PanelAuthService, ai: PixelStudioAIService): Router {
   const router = Router();
+  const requireOperator = auth.requireRole('operator');
   const generationRateLimit = createGenerationRateLimit();
   router.use(auth.requireAuthentication());
 
@@ -60,7 +61,7 @@ export function createPixelStudioRouter(auth: PanelAuthService, ai: PixelStudioA
     response.json(ai.getStatus());
   });
 
-  router.post('/generate', requireSameOrigin, generationRateLimit, async (request, response) => {
+  router.post('/generate', requireOperator, requireSameOrigin, generationRateLimit, async (request, response) => {
     try {
       const result = await ai.generateMatrix({ prompt: request.body?.prompt });
       response.setHeader('Cache-Control', 'no-store');
@@ -70,7 +71,7 @@ export function createPixelStudioRouter(auth: PanelAuthService, ai: PixelStudioA
     }
   });
 
-  router.post('/animate', requireSameOrigin, generationRateLimit, async (request, response) => {
+  router.post('/animate', requireOperator, requireSameOrigin, generationRateLimit, async (request, response) => {
     try {
       const result = await ai.generateAnimation({
         prompt: request.body?.prompt,

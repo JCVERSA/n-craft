@@ -1842,6 +1842,9 @@ export function LivePanelView() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  {portwarpSetup?.phase === 'waiting_for_approval' && !portwarpSetup.userCode && !canOperate && (
+                    <p className="nether-inline-note" role="status">Un compte operator ou supérieur doit consulter le code temporaire et terminer l’autorisation Portwarp.</p>
+                  )}
                   {portwarpSetup?.phase === 'starting' && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Démarrage de l’autorisation Portwarp…</p>}
                   {portwarpSetup?.phase === 'failed' && portwarpSetup.error && <p role="alert" className="inline-error">{portwarpSetup.error}</p>}
                   {portwarp.status === 'tunnel_missing' && (
@@ -1868,6 +1871,9 @@ export function LivePanelView() {
               {tunnelProvider === 'localtonet' && localtonet?.error && <p role="status" className="inline-error">{localtonet.error}</p>}
               {tunnelProvider === 'playit' && playitSetup?.claimUrl && (
                 <a href={playitSetup.claimUrl} target="_blank" rel="noreferrer" className="nether-btn nether-btn--primary nether-btn--wide"><ExternalLink size={16} /> Ouvrir le lien Playit</a>
+              )}
+              {tunnelProvider === 'playit' && playitSetup?.phase === 'claim_pending' && !playitSetup.claimUrl && !canOperate && (
+                <p className="nether-inline-note" role="status">Un compte operator ou supérieur doit ouvrir le lien temporaire de rattachement Playit.</p>
               )}
               {tunnelProvider === 'playit' && playitSetup?.phase === 'configured' && !playit?.address && <p className="nether-inline-note">Agent approuvé. Crée un tunnel Bedrock UDP dans ton compte Playit.</p>}
               {tunnelProvider === 'playit' && (playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Préparation du lien de claim…</p>}
@@ -2406,6 +2412,9 @@ export function LivePanelView() {
                 />
               </div>
               {chatbot?.message && <p className="nether-inline-note"><ShieldCheck size={14} />{chatbot.message}</p>}
+              {chatbot?.userActionPending && !chatbot.deviceCode && !canOperate && (
+                <p className="nether-inline-note" role="status">Une autorisation de compte est en attente. Un compte operator ou supérieur est requis pour afficher son code temporaire.</p>
+              )}
               {chatbot?.deviceCode && chatbot.userActionPending && (
                 <div className="nether-callout nether-callout--portal" role="status">
                   <LockKeyhole size={17} />
@@ -2623,11 +2632,16 @@ export function LivePanelView() {
           tabIndex={0}
           hidden={activeSection !== 'pixel-studio'}
         >
-          {activeSection === 'pixel-studio' && (
+          {activeSection === 'pixel-studio' && (canOperate ? (
             <Suspense fallback={<div className="pixel-studio-loading" role="status" aria-live="polite"><Loader2 className="spin-soft" size={20} /> Chargement de Pixel Studio…</div>}>
               <PixelStudioView onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })} />
             </Suspense>
-          )}
+          ) : (
+            <div className="nether-callout nether-callout--warning" role="status">
+              <ShieldCheck size={17} />
+              <span>La génération d’images et d’animations est réservée aux comptes operator, admin ou owner.</span>
+            </div>
+          ))}
         </section>
 
         <footer className="ncraft-footer">
