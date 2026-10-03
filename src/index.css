@@ -413,15 +413,14 @@ select:focus-visible {
   flex: 0 0 auto;
   overflow: hidden;
   place-items: center;
-  border: 1px solid rgba(69, 205, 244, 0.48);
+  border: 1px solid rgba(155, 230, 176, 0.28);
   border-radius: 13px;
-  color: #d9f8ff;
-  background: #08152b;
-  box-shadow: 0 5px 20px rgba(28, 163, 231, 0.2), inset 0 1px rgba(255,255,255,.18);
+  color: #f0eaf2;
+  background: #141216;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.18), inset 0 1px rgba(255,255,255,.08);
 }
 
-.nebula-brand-mark { display: block; width: 100%; height: 100%; flex: 0 0 auto; overflow: hidden; }
-.nebula-brand-mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nebula-brand-mark { display: block; width: 100%; height: 100%; flex: 0 0 auto; object-fit: contain; }
 .nebula-brand-mark--header { width: 40px; height: 40px; }
 @media (min-width: 640px) { .nebula-brand-mark--header { width: 44px; height: 44px; } }
 .brand-mark--large { width: 56px; height: 56px; border-radius: 17px; }
@@ -1459,7 +1458,7 @@ select:focus-visible {
 .ncraft-about-card__dot--moss { color: #9be6b0; background: #9be6b0; }
 .ncraft-about-card__chrome-label { margin-left: auto; color: var(--nether-dim); font: 8px 'JetBrains Mono', monospace; letter-spacing: .13em; }
 .ncraft-about-card__intro { display: grid; grid-template-columns: 52px minmax(0,1fr); align-items: start; gap: 14px; padding: 20px 0 17px; }
-.ncraft-about-card__mark { position: relative; display: grid; width: 52px; height: 52px; flex: 0 0 auto; overflow: hidden; place-items: center; border: 1px solid rgba(69,205,244,.42); border-radius: 15px; background: #08152b; box-shadow: 0 9px 24px rgba(28,163,231,.16), inset 0 1px rgba(255,255,255,.16); }
+.ncraft-about-card__mark { position: relative; display: grid; width: 52px; height: 52px; flex: 0 0 auto; overflow: hidden; place-items: center; border: 1px solid rgba(155,230,176,.28); border-radius: 15px; background: #141216; box-shadow: 0 9px 24px rgba(0,0,0,.2), inset 0 1px rgba(255,255,255,.08); }
 .ncraft-about-card__intro .nether-eyebrow { margin: 2px 0 5px; font-size: 9px; }
 .ncraft-about-card__intro h3 { margin: 0; color: var(--nether-text); font-size: 25px; letter-spacing: -.035em; line-height: 1.15; }
 .ncraft-about-card__intro p:last-child { max-width: 58ch; margin: 8px 0 0; color: var(--nether-muted); font-size: 12px; line-height: 1.65; }

@@ -7,18 +7,13 @@ export function NebulaBrandMark({ alt = '', className = '' }: NebulaBrandMarkPro
   const classes = ['nebula-brand-mark', className].filter(Boolean).join(' ');
 
   return (
-    <picture className={classes}>
-      <source
-        media="(prefers-reduced-motion: reduce)"
-        srcSet="/assets/noto-logo-mark-static.svg"
-      />
-      <img
-        src="/assets/noto-logo-mark.svg"
-        alt={alt}
-        width="660"
-        height="660"
-        decoding="async"
-      />
-    </picture>
+    <img
+      className={classes}
+      src="/assets/nebula-craft-mark.svg"
+      alt={alt}
+      width="256"
+      height="256"
+      decoding="async"
+    />
   );
 }
