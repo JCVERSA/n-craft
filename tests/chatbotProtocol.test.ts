@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { assessChatbotProtocol, getTestedProtocolFamilies } from '../src/bedrock/chatbot/protocolSupport.ts';
-import { parseChatbotTrigger } from '../src/bedrock/chatbot/manager.ts';
+import { parseChatbotCommand, parseChatbotTrigger } from '../src/bedrock/chatbot/manager.ts';
 import type { VersionEntry } from '../src/types/backend.ts';
 
 const catalogPath = path.resolve(process.cwd(), 'data', 'versions.json');
@@ -24,7 +24,7 @@ test('only the RakNet 11 / protocol 898 client family is enabled', () => {
   assert.equal(unsupported.protocolVersion, null, 'the pinned protocol library has no 1.21.131 mapping');
 });
 
-test('chatbot command prefix is exact and requires a non-empty single-line message', () => {
+test('chatbot question prefix is exact and requires a non-empty single-line message', () => {
   assert.equal(parseChatbotTrigger('.. bonjour'), 'bonjour');
   assert.equal(parseChatbotTrigger('..  bonjour  '), 'bonjour');
   assert.equal(parseChatbotTrigger('. bonjour'), null);
@@ -33,4 +33,16 @@ test('chatbot command prefix is exact and requires a non-empty single-line messa
   assert.equal(parseChatbotTrigger('..   '), null);
   assert.equal(parseChatbotTrigger('.. question\nextra'), null);
   assert.equal(parseChatbotTrigger({ message: '.. hello' }), null);
+});
+
+test('all ! messages are consumed as local chatbot commands', () => {
+  assert.equal(parseChatbotCommand('!aide'), 'help');
+  assert.equal(parseChatbotCommand('!AIDE'), 'help');
+  assert.equal(parseChatbotCommand('!joueurs'), 'players');
+  assert.equal(parseChatbotCommand('!seed'), 'unknown');
+  assert.equal(parseChatbotCommand('! aide'), 'unknown');
+  assert.equal(parseChatbotCommand('!aide\n.. question'), 'unknown');
+  assert.equal(parseChatbotCommand(' .. question'), null);
+  assert.equal(parseChatbotCommand('.. question'), null);
+  assert.equal(parseChatbotCommand({ message: '!aide' }), null);
 });

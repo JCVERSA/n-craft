@@ -14,6 +14,9 @@ const DEVICE_CODE_FALLBACK_MS = 10 * 60 * 1000;
 const CHATBOT_CLIENT_TIMEOUT_MS = 12_000;
 const BUSY_NOTICE_INTERVAL_MS = 8_000;
 const MAX_CHATBOT_INPUT_CHARACTERS = 400;
+const COMMAND_PLAYER_COOLDOWN_MS = 5_000;
+const COMMAND_GLOBAL_COOLDOWN_MS = 1_000;
+const MAX_COMMAND_RATE_LIMIT_ENTRIES = 1_000;
 const BOT_CLIENT_NAME = 'N-Craft assistant';
 
 interface DeviceCodeData {
@@ -134,6 +137,26 @@ export function parseChatbotTrigger(message: unknown): string | null {
   return question ? question : null;
 }
 
+export type ChatbotCommand = 'help' | 'players' | 'unknown';
+
+/** Every message starting with ! is consumed locally, including unrecognized commands. */
+export function parseChatbotCommand(message: unknown): ChatbotCommand | null {
+  if (typeof message !== 'string' || !message.startsWith('!')) return null;
+  if (/[\r\n\0]/.test(message)) return 'unknown';
+  switch (message.trim().toLowerCase()) {
+    case '!aide': return 'help';
+    case '!joueurs': return 'players';
+    default: return 'unknown';
+  }
+}
+
+function commandPlayerKey(packet: ProtocolTextPacket): string {
+  const xuid = packet.xuid?.trim();
+  if (xuid && /^\d{1,20}$/.test(xuid)) return `xuid:${xuid}`;
+  const name = packet.source_name?.trim().slice(0, 80).toLowerCase();
+  return name ? `name:${name}` : 'anonymous';
+}
+
 function isReauthenticationRequired(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && (error as { name?: unknown }).name === 'ChatbotReauthenticationRequired');
 }
@@ -157,7 +180,7 @@ function safeDeviceCode(value: string): string | null {
   return /^[A-Za-z0-9-]{4,32}$/.test(code) ? code : null;
 }
 
-/** Owns one authenticated Bedrock client, with no console, command, or world-control tools. */
+/** Owns one authenticated Bedrock client that can chat but cannot execute server commands or control the world. */
 export class BedrockChatbotManager {
   private readonly chatbotDataDirectory: string;
   private readonly authCache: ChatbotAuthCacheStore;
@@ -183,6 +206,8 @@ export class BedrockChatbotManager {
   private reconnectAttempt = 0;
   private lastBusyNoticeAt = 0;
   private quotaNoticeDay = '';
+  private readonly lastCommandResponseByPlayer = new Map<string, number>();
+  private lastCommandResponseAt: number | null = null;
   private syncQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: ChatbotManagerOptions) {
@@ -266,6 +291,7 @@ export class BedrockChatbotManager {
 
   async onBedrockExit(): Promise<void> {
     this.ai.clearMemory();
+    this.clearCommandRateLimits();
     await this.syncState(this.options.state.getSnapshot());
   }
 
@@ -319,6 +345,7 @@ export class BedrockChatbotManager {
 
   async unlinkAccount(): Promise<void> {
     this.clearReconnectTimer();
+    this.clearCommandRateLimits();
     this.userInitiatedFlow = false;
     this.mayStartDeviceFlow = false;
     this.deviceCode = null;
@@ -334,6 +361,7 @@ export class BedrockChatbotManager {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
     this.clearReconnectTimer();
+    this.clearCommandRateLimits();
     this.clearDeviceCodeTimer();
     this.deviceCode = null;
     this.userInitiatedFlow = false;
@@ -350,6 +378,7 @@ export class BedrockChatbotManager {
     if (!this.initialized || this.shuttingDown) return;
     if (!this.isServerOnline(snapshot)) {
       this.clearReconnectTimer();
+      this.clearCommandRateLimits();
       if (this.userInitiatedFlow) await this.cancelUserApprovedLink();
       else this.closeCurrentClient('Serveur Bedrock arrêté.');
       this.status = this.linked ? 'linked' : 'server_stopped';
@@ -574,7 +603,7 @@ export class BedrockChatbotManager {
     this.clearDeviceCodeTimer();
     this.reconnectAttempt = 0;
     this.status = 'online';
-    this.message = 'Le chatbot est en ligne dans le chat Bedrock. Il occupe un emplacement et ne traite que les messages « .. <message> ». ';
+    this.message = 'Le chatbot est en ligne dans le chat Bedrock. Il occupe un emplacement; commandes : « !aide », « !joueurs » et questions « .. <question> ».';
   }
 
   private handleTextPacket(client: BedrockProtocolClient, generation: number, rawPacket: unknown): void {
@@ -586,6 +615,12 @@ export class BedrockChatbotManager {
     const ownXuid = client.profile?.xuid === undefined ? '' : String(client.profile.xuid);
     if ((ownName && packet.source_name === ownName) || (ownXuid && packet.xuid === ownXuid)) return;
 
+    const command = parseChatbotCommand(packet.message);
+    if (command) {
+      this.answerCommand(client, packet, command);
+      return;
+    }
+
     const question = parseChatbotTrigger(packet.message);
     if (!question) return;
     if (Array.from(question).length > MAX_CHATBOT_INPUT_CHARACTERS) {
@@ -593,6 +628,55 @@ export class BedrockChatbotManager {
       return;
     }
     void this.answerInGame(client, generation, question);
+  }
+
+  private answerCommand(client: BedrockProtocolClient, packet: ProtocolTextPacket, command: ChatbotCommand): void {
+    if (!this.reserveCommandResponse(commandPlayerKey(packet), this.now())) return;
+
+    if (command === 'help') {
+      this.sendChat(client, 'Commandes : !aide, !joueurs (nombre en ligne). Pour une question : .. <question>.');
+      return;
+    }
+    if (command === 'players') {
+      const onlinePlayers = this.options.bedrockConsole.onlinePlayersCount;
+      const online = Number.isSafeInteger(onlinePlayers) && onlinePlayers >= 0 ? onlinePlayers : 0;
+      const maxPlayers = this.latestState.activeConfig?.maxPlayers;
+      const response = typeof maxPlayers === 'number' && Number.isSafeInteger(maxPlayers) && maxPlayers > 0
+        ? `Joueurs en ligne : ${online} / ${maxPlayers}.`
+        : `Joueurs en ligne : ${online}.`;
+      this.sendChat(client, response);
+      return;
+    }
+    this.sendChat(client, 'Commande inconnue. Utilise !aide.');
+  }
+
+  private clearCommandRateLimits(): void {
+    this.lastCommandResponseByPlayer.clear();
+    this.lastCommandResponseAt = null;
+  }
+
+  private reserveCommandResponse(playerKey: string, timestamp: number): boolean {
+    if (!Number.isFinite(timestamp)) return false;
+    for (const [key, lastResponseAt] of this.lastCommandResponseByPlayer) {
+      if (timestamp - lastResponseAt >= COMMAND_PLAYER_COOLDOWN_MS) {
+        this.lastCommandResponseByPlayer.delete(key);
+      }
+    }
+
+    const lastPlayerResponseAt = this.lastCommandResponseByPlayer.get(playerKey);
+    if (lastPlayerResponseAt !== undefined
+      && timestamp - lastPlayerResponseAt < COMMAND_PLAYER_COOLDOWN_MS) return false;
+    if (this.lastCommandResponseAt !== null
+      && timestamp - this.lastCommandResponseAt < COMMAND_GLOBAL_COOLDOWN_MS) return false;
+
+    this.lastCommandResponseByPlayer.delete(playerKey);
+    this.lastCommandResponseByPlayer.set(playerKey, timestamp);
+    this.lastCommandResponseAt = timestamp;
+    if (this.lastCommandResponseByPlayer.size > MAX_COMMAND_RATE_LIMIT_ENTRIES) {
+      const oldestPlayerKey = this.lastCommandResponseByPlayer.keys().next().value;
+      if (oldestPlayerKey !== undefined) this.lastCommandResponseByPlayer.delete(oldestPlayerKey);
+    }
+    return true;
   }
 
   private async answerInGame(client: BedrockProtocolClient, generation: number, question: string): Promise<void> {

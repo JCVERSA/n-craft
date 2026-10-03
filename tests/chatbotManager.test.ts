@@ -51,7 +51,12 @@ class FakeBedrockClient extends EventEmitter {
       .catch((error: Error) => this.emit('error', error));
   }
 
-  queue(): void {}
+  readonly queuedPackets: Array<{ name: string; parameters: Record<string, unknown> }> = [];
+
+  queue(name: string, parameters: Record<string, unknown>): void {
+    this.queuedPackets.push({ name, parameters });
+  }
+
   disconnect(): void { this.emit('close'); }
   close(): void { this.emit('close'); }
 }
@@ -62,8 +67,10 @@ async function createHarness(t: test.TestContext, linked = false) {
   const serverDirectory = path.join(root, 'server');
   const state = new StateStore(dataDirectory);
   await state.initialize();
-  await state.setActiveConfig({ version: VERSION.version } as DeployConfiguration);
+  await state.setActiveConfig({ version: VERSION.version, maxPlayers: 20 } as DeployConfiguration);
   await state.updateServer({ status: 'running', pid: 1234, startedAt: new Date().toISOString() });
+  let now = Date.now();
+  const bedrockConsole = { isReady: true, onlinePlayersCount: 3 } as BedrockConsole;
 
   if (linked) {
     const cache = new ChatbotAuthCacheStore(path.join(dataDirectory, 'bedrock-chatbot'));
@@ -77,10 +84,11 @@ async function createHarness(t: test.TestContext, linked = false) {
   const manager = new BedrockChatbotManager({
     dataDirectory,
     serverDirectory,
-    bedrockConsole: { isReady: true } as BedrockConsole,
+    bedrockConsole,
     state,
     findVersion: (version) => version === VERSION.version ? VERSION : undefined,
     environment: { GEMINI_API_KEY: 'test-only-fake-key', CHATBOT_DAILY_LIMIT: '5' },
+    now: () => now,
     authFlowFactory: (_username, _cache, _options, callback) => {
       managerCallback = callback;
       return {
@@ -118,9 +126,28 @@ async function createHarness(t: test.TestContext, linked = false) {
     state,
     dataDirectory,
     serverDirectory,
+    advanceTime(milliseconds: number) { now += milliseconds; },
     get deviceCodeRequests() { return deviceCodeRequests; },
     get latestClient() { return latestClient; },
   };
+}
+
+async function connectChatbot(harness: Awaited<ReturnType<typeof createHarness>>): Promise<FakeBedrockClient> {
+  await harness.manager.startUserApprovedLink();
+  const client = harness.latestClient!;
+  client.profile = { name: 'N-Craft assistant', xuid: '99999999999999999' };
+  client.emit('spawn');
+  for (let attempt = 0; attempt < 20 && harness.manager.getSnapshot().status !== 'online'; attempt += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  assert.equal(harness.manager.getSnapshot().status, 'online');
+  return client;
+}
+
+function outgoingChatMessages(client: FakeBedrockClient): string[] {
+  return client.queuedPackets
+    .filter(({ name }) => name === 'text')
+    .map(({ parameters }) => String(parameters.message));
 }
 
 test('an unlinked account never starts a client or Microsoft device flow automatically', async (t) => {
@@ -190,4 +217,49 @@ test('a linked profile may reconnect silently but never requests a new device co
   assert.equal(harness.deviceCodeRequests, 0);
   assert.equal(harness.manager.getSnapshot().status, 'reauth_required');
   assert.equal(harness.manager.getSnapshot().accountLinked, true);
+});
+
+test('local commands report help and anonymous player counts; unknown commands never use AI', async (t) => {
+  const harness = await createHarness(t);
+  const client = await connectChatbot(harness);
+  const send = (message: string, sourceName: string, xuid: string) => {
+    client.emit('text', { type: 'chat', message, source_name: sourceName, xuid });
+  };
+
+  send('!aide', 'PlayerOne', '1234567890123456');
+  assert.deepEqual(outgoingChatMessages(client), [
+    'Commandes : !aide, !joueurs (nombre en ligne). Pour une question : .. <question>.',
+  ]);
+
+  send('!joueurs', 'PlayerTwo', '2234567890123456');
+  assert.equal(outgoingChatMessages(client).length, 1, 'only one command response is sent globally per second');
+  harness.advanceTime(1_000);
+  send('!joueurs', 'PlayerTwo', '2234567890123456');
+  assert.equal(outgoingChatMessages(client).at(-1), 'Joueurs en ligne : 3 / 20.');
+  assert.doesNotMatch(outgoingChatMessages(client).at(-1)!, /PlayerTwo|2234567890123456/);
+
+  harness.advanceTime(1_000);
+  send('!seed', 'PlayerThree', '3234567890123456');
+  assert.equal(outgoingChatMessages(client).at(-1), 'Commande inconnue. Utilise !aide.');
+  assert.equal(harness.manager.getSnapshot().dailyUsed, 0, 'local commands do not consume AI quota');
+});
+
+test('each player can receive at most one local command reply every five seconds', async (t) => {
+  const harness = await createHarness(t);
+  const client = await connectChatbot(harness);
+  const send = (message: string) => client.emit('text', {
+    type: 'chat',
+    message,
+    source_name: 'PlayerOne',
+    xuid: '1234567890123456',
+  });
+
+  send('!aide');
+  harness.advanceTime(1_000);
+  send('!joueurs');
+  assert.equal(outgoingChatMessages(client).length, 1, 'the same sender remains throttled even after the global interval');
+  harness.advanceTime(4_000);
+  send('!joueurs');
+  assert.equal(outgoingChatMessages(client).length, 2, 'the sender is allowed again at five seconds');
+  assert.equal(outgoingChatMessages(client).at(-1), 'Joueurs en ligne : 3 / 20.');
 });

@@ -2384,8 +2384,8 @@ export function LivePanelView() {
           <aside className="ncraft-operations-stack ncraft-operations-stack--diagnostics">
             <NetherCard
               title="Chatbot conversationnel"
-              eyebrow="DANS LE CHAT MINECRAFT · .. <message>"
-              description="Conversation partagée entre joueurs, limitée aux 10 derniers échanges. Seuls les messages « .. » sont transmis aux fournisseurs IA; aucun outil ni action Bedrock n’est accessible."
+              eyebrow="DANS LE CHAT MINECRAFT · !AIDE · !JOUEURS · .. <question>"
+              description="Mémoire conversationnelle partagée limitée aux 10 derniers échanges. !aide et !joueurs (compteur seul, sans noms ni XUID) sont traitées localement; seuls les messages « .. » sont transmis à l’IA, sans outil ni commande Bedrock."
               icon={MessageCircle}
               accent="portal"
               action={<StatusPill status={chatbotPillStatus} label={chatbotPillLabel} />}

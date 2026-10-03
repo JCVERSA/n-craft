@@ -30,7 +30,7 @@ Deploy and operate Bedrock from the Linux container you already have — without
 - **Runs in your existing Linux container.** No Docker daemon, nested container, Dockerfile, or database is added. Configuration, state, logs, and tunnel data use local files; persist `DATA_DIR`.
 - **Non-destructive deployment.** Deploy verifies and stages the server archive before applying it. Worlds, backups, custom packs, structures, and files not supplied by the archive are preserved.
 - **A public UDP tunnel is optional.** Portwarp is the default provider; Localtonet and Playit remain explicit alternatives. Tunnels are created and approved by the operator, not silently provisioned by Nebula Craft.
-- **An optional, tightly scoped in-game assistant.** It only reacts to messages beginning with `.. ` in Bedrock chat. It has no tools, world access, or server-command capability; replies are public to players.
+- **An optional, tightly scoped in-game assistant.** `!aide` and `!joueurs` are local read-only commands; the latter exposes only the online count, never names or XUIDs. Only `.. ` questions go to AI providers. Unknown `!` commands stay local. The assistant has no tools or server-command capability; replies are public to players.
 - **Explicit security boundaries.** Secrets stay on the server, sensitive flows require operator action, HTTPS is required in production, and automated operations do not silently change Bedrock permissions or delete worlds.
 
 > **Compatibility note:** The chatbot is currently restricted to the Bedrock client `1.21.130` family (protocol 898 / RakNet 11), mapped to BDS `1.21.130.3` and `1.21.130.4`. Its automated protocol test is offline and does **not** prove connectivity to the official BDS binary or real Microsoft authentication. See [In-Game Chat Assistant](#in-game-chat-assistant) before enabling it.
@@ -186,7 +186,9 @@ When selected, the dashboard launches the official `playit` CLI (`PLAYIT_CLI_BIN
 
 ## In-Game Chat Assistant
 
-The assistant replies **in Bedrock server chat**, never in a dashboard conversation window. Its only trigger is `.. <message>` (two periods, one space, then text). Messages without this prefix are ignored and are not sent to AI providers. Prefixed messages go to Google Gemini first; NVIDIA NIM is tried only if Gemini fails. Nebula Craft does not persist chat history. V1 is conversational only: no tools, Bedrock commands, world reading, or other actions. Replies are public in server chat.
+The assistant replies **in Bedrock server chat**, never in a dashboard conversation window. It has two built-in read-only commands: `!aide` lists the commands and reminds players how to ask a question; `!joueurs` reports only the online count and configured maximum, without names or XUIDs. Unknown `!` commands receive a local help hint and are never sent to an AI provider. These commands do not execute Bedrock commands or change server state.
+
+AI questions use `.. <message>` (two periods, one space, then text). Only messages with this prefix go to Google Gemini first; NVIDIA NIM is tried only if Gemini fails. Other chat messages are ignored. Nebula Craft does not persist chat history. The AI has no tools, world access, or server-command capability. Replies are public in server chat.
 
 ### Supported build and validation boundary
 
@@ -194,7 +196,7 @@ Support is strictly limited to the `1.21.130` client family (Bedrock protocol 89
 
 ### Provider setup and limits
 
-Configure AI secrets **on the server**, through the masked `ncraft env` menu. Running `ncraft env set GEMINI_API_KEY` with no value opens a masked prompt; the same works for `NVIDIA_NIM_API_KEY`. Do not pass a key as a command-line argument, paste it into the dashboard or chat, or add it to Git. Gemini is primary; NVIDIA NIM is fallback only. Defaults are `gemini-3.8-flash` and `meta/llama-3.3-70b-instruct`; set `CHATBOT_GEMINI_MODEL` or `CHATBOT_NIM_MODEL` to change them. `CHATBOT_DAILY_LIMIT` caps accepted requests per UTC day (100 by default; `0` disables requests). Only one AI request can run at a time.
+Configure AI secrets **on the server**, through the masked `ncraft env` menu. Running `ncraft env set GEMINI_API_KEY` with no value opens a masked prompt; the same works for `NVIDIA_NIM_API_KEY`. Do not pass a key as a command-line argument, paste it into the dashboard or chat, or add it to Git. Gemini is primary; NVIDIA NIM is fallback only. Defaults are `gemini-3.8-flash` and `meta/llama-3.3-70b-instruct`; set `CHATBOT_GEMINI_MODEL` or `CHATBOT_NIM_MODEL` to change them. `CHATBOT_DAILY_LIMIT` caps accepted AI requests per UTC day (100 by default; `0` disables requests). Only one AI request can run at a time. Local `!` commands are limited to one reply per player every five seconds and one command reply per second server-wide; cooldown keys exist only in memory.
 
 ### Bedrock account linking
 
@@ -206,7 +208,7 @@ A reconnect using an already-linked profile may happen silently, but Nebula Craf
 
 The OAuth cache stays server-side in `DATA_DIR/bedrock-chatbot/auth` (directory mode `0700`, files `0600`, atomic writes). It is never stored in `.env`, Git, JSON state, the browser, or application logs. Gemini/NIM keys remain in `.env` mode `0600` and are removed from child-process environments.
 
-Shared player conversation memory contains only the 10 most recent exchanges that began with `..`; it expires after 30 minutes without a request and is never written to disk. It is cleared whenever Bedrock stops/restarts and whenever the panel restarts. `DATA_DIR/bedrock-chatbot/quota.json` stores only the UTC day and an aggregate count — no messages, replies, player names, or XUIDs. The dashboard does not display chat history.
+Shared player conversation memory contains only the 10 most recent exchanges that began with `..`; it expires after 30 minutes without a request and is never written to disk. It is cleared whenever Bedrock stops/restarts and whenever the panel restarts. Command cooldowns temporarily keep a sender key (XUID when available, otherwise a player name or anonymous fallback) in memory for rate limiting; these keys are never persisted. `DATA_DIR/bedrock-chatbot/quota.json` stores only the UTC day and an aggregate AI-request count — no messages, replies, player names, or XUIDs. The dashboard does not display chat history.
 
 ## Server Lifecycle and Non-Destructive Deploy
 
