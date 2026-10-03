@@ -74,7 +74,7 @@ function DialogWindow({ request, onResolve }: { request: DialogRequest; onResolv
   return (
     <NebulaModal
       title={options.title}
-      eyebrow={options.eyebrow ?? 'CONFIRMATION · NEBULA CRAFT'}
+      eyebrow={options.eyebrow ?? <>CONFIRMATION · <span translate="no">NEBULA CRAFT</span></>}
       icon={messageIcon}
       tone={tone}
       role="alertdialog"

@@ -61,6 +61,18 @@ Le mot-symbole est tracé à partir de **Space Grotesk Bold 700**. Les lettres s
 
 `index.html` référence le favicon SVG, les PNG 16/32/48 px, le fichier ICO et l’icône Apple touch. `NebulaBrandMark` utilise le symbole couleur sur le fond charbon de l’interface. Les icônes fonctionnelles de l’application restent inchangées.
 
+## Décision d’intégration — Design Mode v2.3
+
+- **Produit et surface :** panneau privé d’exploitation Minecraft Bedrock; l’interface principale est une surface **OPERATE**, utilisée pour surveiller et piloter un serveur.
+- **Objectif :** rendre la marque reconnaissable entre l’onglet, l’accès opérateur, l’en-tête et la fenêtre « À propos », sans déguiser les signaux opérationnels en décoration.
+- **Principe :** garder l’identité de marque distincte du design system existant. La palette, la typographie, les contrôles et les états de service de l’application restent en place; les icônes fonctionnelles et la politique d’accès ne changent pas.
+- **Périmètre touché :** masters et favicons; `NebulaBrandMark`; wordmark de connexion et d’en-tête; titre de la fenêtre « À propos » et libellés de marque dans les dialogues.
+- **Accessibilité et langue :** le symbole est décoratif lorsque le nom adjacent identifie déjà le produit; le contraste des accents sur charbon est documenté plus haut. `Nebula Craft` est marqué `translate="no"` sur ses libellés de marque afin de préserver le nom; le bouton « À propos » garde son libellé visible comme nom accessible, sans redondance.
+- **Responsive et performance :** le format carré existant s’adapte aux emplacements prévus; aucun nouveau breakpoint, script, chargement de police ou dépendance n’est ajouté. Le mot-symbole reste vectoriel et ne charge pas Space Grotesk séparément.
+- **Risque de régression :** faible; la surface modifiée est limitée à l’identité et à ses libellés, sans effet attendu sur les commandes serveur, les données ou les autorisations. Ne pas réutiliser les accents de marque pour changer la signification des états.
+
+**DESIGN STATUS: IMPLEMENTED — NOT FULLY VERIFIED.** Le kit et son intégration source ont été soumis aux tests, au lint et au build; les exports d’icône et le rendu du symbole à plusieurs tailles sont documentés ci-dessus. Une inspection navigateur réelle des écrans, aux formats mobile et bureau, n’a pas été réalisée : ne pas traiter cette note comme une validation visuelle complète du produit.
+
 Voir la planche [`nebula-craft-brand-board.png`](nebula-craft-brand-board.png) et sa version vectorielle [`nebula-craft-brand-board.svg`](nebula-craft-brand-board.svg). Les mises en situation dans `nebula-craft-identity.html` illustrent des supports de marque et ne décrivent pas de nouvelles fonctions. La provenance des assets est consignée dans [`../../ASSET-CREDITS.md`](../../ASSET-CREDITS.md).
 
 *Les conversions CMJN sont indicatives; faire valider une épreuve par l’imprimeur avant toute production physique.*

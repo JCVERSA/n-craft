@@ -1377,7 +1377,7 @@ export function LivePanelView() {
               <span className="brand-mark brand-mark--large"><NebulaBrandMark /></span>
               <div>
                 <p className="nether-eyebrow">BEDROCK CONTROL DECK</p>
-                <h1 className="login-wordmark">Nebula Craft</h1>
+                <h1 className="login-wordmark" translate="no">Nebula Craft</h1>
                 <p className="login-subtitle">Panneau privé · instance Bedrock</p>
               </div>
             </div>
@@ -1561,12 +1561,12 @@ export function LivePanelView() {
 
       <header className="ncraft-header">
         <div className="ncraft-header__inner">
-          <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
+          <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil" translate="no" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
             <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { rotate: 8, scale: 1.04 }}>
               <NebulaBrandMark />
             </motion.span>
             <span className="ncraft-brand__copy">
-              <strong className="ncraft-brand__name">Nebula Craft</strong>
+              <strong className="ncraft-brand__name" translate="no">Nebula Craft</strong>
               <small>BEDROCK CONTROL DECK</small>
             </span>
           </a>
@@ -1634,8 +1634,6 @@ export function LivePanelView() {
               onClick={() => setAboutOpen(true)}
               whileTap={reduceMotion ? undefined : { scale: 0.95 }}
               className="icon-button about-trigger"
-              aria-label="À propos de Nebula Craft"
-              title="À propos de Nebula Craft"
             >
               <Info size={17} aria-hidden="true" />
               <span>À propos</span>

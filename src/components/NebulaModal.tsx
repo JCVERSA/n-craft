@@ -7,8 +7,8 @@ export type NebulaModalTone = 'neutral' | 'magma' | 'warning' | 'danger';
 export type NebulaModalFocus = 'close' | 'primary' | 'cancel' | 'input';
 
 interface NebulaModalProps {
-  title: string;
-  eyebrow?: string;
+  title: ReactNode;
+  eyebrow?: ReactNode;
   icon?: LucideIcon;
   tone?: NebulaModalTone;
   size?: 'compact' | 'regular' | 'wide';
@@ -28,7 +28,7 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
 
 export function NebulaModal({
   title,
-  eyebrow = 'NEBULA CRAFT · CONTROL DECK',
+  eyebrow = <><span translate="no">NEBULA CRAFT</span> · CONTROL DECK</>,
   icon: Icon = Info,
   tone = 'neutral',
   size = 'regular',

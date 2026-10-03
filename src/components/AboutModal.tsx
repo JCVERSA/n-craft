@@ -8,8 +8,8 @@ const UI_REFERENCE_REPOSITORY = 'https://github.com/JCVERSA/noto';
 export function AboutModal({ onClose }: { onClose: () => void }) {
   return (
     <NebulaModal
-      title="À propos de Nebula Craft"
-      eyebrow="NEBULA CRAFT · CONTROL DECK"
+      title={<>À propos de <span translate="no">Nebula Craft</span></>}
+      eyebrow={<><span translate="no">NEBULA CRAFT</span> · CONTROL DECK</>}
       icon={Sparkles}
       tone="magma"
       size="wide"
@@ -30,7 +30,7 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
             <span className="ncraft-about-card__mark" aria-hidden="true"><NebulaBrandMark /></span>
             <div>
               <p className="nether-eyebrow">MONO-INSTANCE · LINUX</p>
-              <h3 id="ncraft-about-product-name">Nebula Craft</h3>
+              <h3 id="ncraft-about-product-name" translate="no">Nebula Craft</h3>
               <p id="ncraft-about-description">
                 Un panneau privé pour déployer et piloter Minecraft Bedrock Dedicated Server : mondes,
                 console, diagnostics et tunnels, sans Docker imbriqué ni base de données.
@@ -68,10 +68,10 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
 
           <p className="ncraft-about-credit">
             Les motifs de dialogue, de carte et de matrice s’inspirent des exemples publiés dans
-            JCVERSA/noto; ils ont été retravaillés pour l’interface et les couleurs de Nebula Craft.
+            JCVERSA/noto; ils ont été retravaillés pour l’interface et les couleurs de <span translate="no">Nebula Craft</span>.
           </p>
         </section>
-        <p className="ncraft-about-footnote">Minecraft Bedrock est un produit de Microsoft. Nebula Craft est un panneau indépendant.</p>
+        <p className="ncraft-about-footnote">Minecraft Bedrock est un produit de Microsoft. <span translate="no">Nebula Craft</span> est un panneau indépendant.</p>
       </div>
     </NebulaModal>
   );
