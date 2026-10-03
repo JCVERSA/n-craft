@@ -1,144 +1,243 @@
-# Nebula Craft — panel Bedrock mono-instance
+<div align="center">
 
-Panneau privé pour **une seule instance Bedrock Dedicated Server** dans le conteneur Linux déjà fourni. L’installation et l’exécution ne lancent pas Docker, n’ajoutent pas de Dockerfile et n’utilisent pas de base de données. Les réglages, l’état, les journaux et les fichiers des fournisseurs de tunnel sont gardés dans des fichiers locaux ; le dossier `DATA_DIR` doit donc être persistant dans le conteneur.
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/assets/nebula-craft-lockup-horizontal-white.svg">
+    <img src="public/assets/nebula-craft-lockup-horizontal-black.svg" alt="Nebula Craft" width="560">
+  </picture>
+</h1>
 
-## Installation dans le conteneur existant
+<strong>A private, single-instance control panel for Minecraft Bedrock Dedicated Server.</strong><br>
+Deploy and operate Bedrock from the Linux container you already have — without Docker-in-Docker or a database.
 
-Sur un conteneur Debian/Ubuntu amd64 avec accès root, l’installateur vérifie les prérequis, installe les paquets système manquants utilisés par N-Craft (dont `dpkg-deb` et `ldd`) ainsi que Node.js 22 si nécessaire, récupère/actualise le clone Git, installe toutes les dépendances verrouillées avec `npm ci --ignore-scripts` et construit le panneau. Les scripts natifs optionnels sont désactivés pour éviter la compilation de `raknet-native`; le backend RakNet utilisé par le chatbot repose sur `raknet-node` précompilé, que le setup vérifie après installation. La vérification OpenPGP des métadonnées Ubuntu est fournie par la dépendance Node installée automatiquement ; `gpgv` n’est pas requis. Portwarp est le fournisseur par défaut : `pwrp` v0.3.7 est téléchargé depuis le domaine officiel et accepté uniquement si son SHA-256 correspond à la somme officielle épinglée. Playit reste une option de secours avec ses binaires officiels v1.0.10 vérifiés ; Localtonet est conservé comme alternative inactive par défaut. Aucun script Portwarp n’est exécuté à l’aveugle en root. Pour lancer l’installateur depuis GitHub :
+[![CI](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml/badge.svg?branch=arena%2F01a0e06a-n-craft)](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-20.19%2B%20%7C%2022.12%2B-339933.svg?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20x86_64-5E6AD2.svg?style=for-the-badge&logo=linux&logoColor=white)](#runtime-requirements)
+[![Target](https://img.shields.io/badge/Target-Bedrock%20Dedicated%20Server-65449B.svg?style=for-the-badge)](https://www.minecraft.net/en-us/download/server/bedrock)
+[![No Docker](https://img.shields.io/badge/No-Docker%20or%20database-2E7D32.svg?style=for-the-badge)](#what-you-get)
+
+[What You Get](#what-you-get) · [Quick Start](#quick-start) · [Install & Requirements](#installation-and-runtime-requirements) · [Tunnels](#network-https-and-tunnels) · [In-Game Assistant](#in-game-chat-assistant) · [Data & Safety](#persistent-data-and-security) · [Development](#development-and-validation)
+
+</div>
+
+<p align="center">
+  <em>Nebula Craft is an independent community project. It is not affiliated with or endorsed by Microsoft or Mojang. Minecraft is a trademark of Microsoft.</em>
+</p>
+
+## What You Get
+
+- **One control panel for one Bedrock instance.** Manage deployment, settings, server lifecycle, diagnostics, logs, and tunnel status from a browser dashboard.
+- **Runs in your existing Linux container.** No Docker daemon, nested container, Dockerfile, or database is added. Configuration, state, logs, and tunnel data use local files; persist `DATA_DIR`.
+- **Non-destructive deployment.** Deploy verifies and stages the server archive before applying it. Worlds, backups, custom packs, structures, and files not supplied by the archive are preserved.
+- **A public UDP tunnel is optional.** Portwarp is the default provider; Localtonet and Playit remain explicit alternatives. Tunnels are created and approved by the operator, not silently provisioned by Nebula Craft.
+- **An optional, tightly scoped in-game assistant.** It only reacts to messages beginning with `.. ` in Bedrock chat. It has no tools, world access, or server-command capability; replies are public to players.
+- **Explicit security boundaries.** Secrets stay on the server, sensitive flows require operator action, HTTPS is required in production, and automated operations do not silently change Bedrock permissions or delete worlds.
+
+> **Compatibility note:** The chatbot is currently restricted to the Bedrock client `1.21.130` family (protocol 898 / RakNet 11), mapped to BDS `1.21.130.3` and `1.21.130.4`. Its automated protocol test is offline and does **not** prove connectivity to the official BDS binary or real Microsoft authentication. See [In-Game Chat Assistant](#in-game-chat-assistant) before enabling it.
+
+## Quick Start
+
+These steps install Nebula Craft into an **existing Debian/Ubuntu Linux x86_64 container**. They do not install or start Bedrock automatically. Run the installer as root if you want it to install missing system packages; non-root containers must already have the prerequisites below.
+
+### 1. Download and inspect the installer
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JCVERSA/n-craft/arena/01a0e06a-n-craft/scripts/install.sh -o /tmp/ncraft-install.sh
-less /tmp/ncraft-install.sh   # inspecter avant exécution, surtout en root
+less /tmp/ncraft-install.sh
 bash /tmp/ncraft-install.sh
 ```
 
-Par défaut, l’installateur réutilise le clone courant s’il s’agit de `JCVERSA/n-craft`, sinon `/root/n-craft` (root) ou `~/n-craft`. Pour choisir un emplacement :
+The script intentionally installs or updates the `arena/01a0e06a-n-craft` branch, not `main`. Review the script before running it, especially as root. It does not start the panel or Bedrock when installation finishes.
+
+### 2. Start the panel and retrieve its token
+
+```bash
+ncraft start
+ncraft env get PANEL_TOKEN --reveal
+```
+
+Open the public **HTTPS URL** configured for your container and sign in with the token. Run the second command locally in the container only: never paste the token into chat, a dashboard field, Git, or a public issue.
+
+### 3. Deploy and operate Bedrock
+
+Use the authenticated dashboard to select and deploy a Bedrock build, then manage the server with **Start** and **Stop**. A successful Deploy starts Bedrock again after applying the update. Starting the panel alone does not start the game server.
+
+Check the installation from the container with:
+
+```bash
+ncraft status
+ncraft doctor
+ncraft logs
+```
+
+## Installation and Runtime Requirements
+
+### Existing-container installer
+
+On Debian/Ubuntu amd64, the installer checks prerequisites and, when run as root with `apt`, can install missing system packages and Node.js 22. It clones or fast-forward-updates the repository, runs `npm ci --ignore-scripts`, verifies the prebuilt `raknet-node` binding used by the chatbot, and builds the panel. Optional native install scripts are skipped so `raknet-native` is not compiled. OpenPGP.js verifies Ubuntu metadata; a separate `gpgv` package is not required.
+
+The installer installs the official Portwarp `pwrp` CLI v0.3.7 only after its pinned SHA-256 is verified. It also offers the official Playit v1.0.10 binaries as a fallback, verified by SHA-256. Localtonet is retained as an inactive alternative. The installer does not run an unreviewed Portwarp script as root.
+
+By default, the installer reuses the current directory if it is already a clone of `JCVERSA/n-craft`; otherwise it uses `/root/n-craft` as root or `~/n-craft` as a regular user. Choose another location with:
 
 ```bash
 bash /tmp/ncraft-install.sh --dir /opt/n-craft
 ```
 
-L’installateur et `ncraft update` ciblent volontairement la branche `arena/01a0e06a-n-craft` (pas `main`, même après une longue période). Ils sont relançables : ils utilisent `git pull --ff-only` sur cette branche, refusent un dépôt sale ou un dossier non vide étranger, et ne remplacent jamais les secrets de `.env`, le catalogue de versions ni les données Bedrock. Le premier passage crée `.env` avec un `PANEL_TOKEN` aléatoire (droits `0600`) ; si un `.env` régulier existe sans jeton, seul le jeton manquant est ajouté. La migration du fournisseur ne change que l’ancien défaut `TUNNEL_PROVIDER=localtonet` en `portwarp` et conserve une marque afin qu’un choix Localtonet explicite ultérieur soit respecté. Un `.env` symbolique n’est jamais réécrit automatiquement : configure son fichier cible manuellement. Un build/dependency failure n’efface pas le monde. Le script ne démarre ni le panneau ni Bedrock automatiquement.
+The installer and `ncraft update` deliberately target `arena/01a0e06a-n-craft`, even after a long period. They use `git pull --ff-only`, refuse a dirty clone or a non-empty unrelated directory, and never replace `.env` secrets, the version catalog, or Bedrock data. The first setup creates `.env` with a random `PANEL_TOKEN` and mode `0600`; if a regular `.env` exists without a token, only that missing token is added. Migration changes the old default `TUNNEL_PROVIDER=localtonet` to `portwarp` once, recording a marker so a later explicit Localtonet choice is respected. A symlinked `.env` is never rewritten automatically: configure its target manually. A build or dependency failure does not delete the world. The installer does not start the panel or Bedrock.
 
-Pour une installation manuelle dans un clone propre :
+For a manual installation into a clean clone:
 
 ```bash
-bash scripts/install.sh --dir /chemin/vers/n-craft
-# ou, dans le clone :
+bash scripts/install.sh --dir /path/to/n-craft
+# or, from the clone:
 ncraft setup
 ncraft start
 ```
 
-Prérequis runtime : Linux x86_64, glibc 2.29+, `libcurl.so.4`, `dpkg-deb`, `ldd`, Node.js 20.19+ ou 22.12+ (Node 22 recommandé), et npm. `scripts/install.sh`, lorsqu’il est lancé en root avec apt, installe Node 22, `libcurl4` et les outils système de base si nécessaire, puis lance `ncraft setup`. `ncraft setup` installe aussi `dpkg` et `libc-bin` si `dpkg-deb` ou `ldd` manque, dès qu’il a les privilèges root et apt. Sur un conteneur non-root, Node/npm et les paquets système doivent être disponibles ; en leur absence, le setup affiche le prérequis exact et s’arrête sans toucher aux mondes. `OpenPGP.js` et le binding précompilé `raknet-node` sont installés par `npm ci --ignore-scripts` puis vérifiés ; aucun paquet `gpgv` séparé ni compilateur natif n’est nécessaire pour l’installation. L’architecture ARM n’est pas prise en charge par le binaire Bedrock de ce projet.
+### Runtime requirements
 
-Certaines anciennes versions BDS exigent OpenSSL 1.1, désormais en fin de vie. N-Craft inspecte le binaire avant de démarrer ou d’arrêter un serveur existant ; si ces bibliothèques manquent, il ne les prépare que pour cette version, dans `DATA_DIR/runtime/`, après validation de la signature Ubuntu `InRelease`, du hash de l’index et du paquet focal. Il n’installe pas de paquet global, ne crée pas de lien vers OpenSSL 3 et n’écrase pas un runtime local incomplet. Le contrôle et le téléchargement se font avant l’arrêt du serveur actuellement en ligne.
+- Linux x86_64 / amd64; the Bedrock binary used by this project does not support ARM.
+- glibc 2.29 or newer, `libcurl.so.4`, `dpkg-deb`, and `ldd`.
+- Node.js 20.19+ or 22.12+; Node.js 22 LTS is recommended; npm is required.
 
-La mémoire disponible inférieure à **4 Gio** est un avertissement, pas un blocage. Le panneau reste essayable, mais le build, le client de tunnel et Bedrock partagent la mémoire du conteneur ; une terminaison OOM est possible. Vérifie également l’espace libre avant un Deploy.
+When run as root with `apt`, `scripts/install.sh` installs Node.js 22, `libcurl4`, and basic system tools when needed. `ncraft setup` can install `dpkg` and `libc-bin` if `dpkg-deb` or `ldd` is missing and it has root privileges plus `apt`. In a non-root container, Node/npm and the system packages must already be available; otherwise setup reports the missing prerequisite and stops without touching worlds. `npm ci --ignore-scripts` installs and verifies OpenPGP.js and the prebuilt `raknet-node` binding; a separate `gpgv` package and a native compiler are not required for installation.
 
-## Gestionnaire `ncraft`
+### Legacy OpenSSL runtime
 
-L’installateur crée un lien `ncraft` vers `manage.sh` (`/usr/local/bin` pour root ou `~/.local/bin` pour un utilisateur standard). Commandes disponibles :
+Some older BDS releases require OpenSSL 1.1, which is end-of-life. Before starting or stopping an existing server, Nebula Craft inspects the binary. If those libraries are missing, it prepares them only for that BDS version in `DATA_DIR/runtime/`, after verifying the Ubuntu `InRelease` signature, index hash, and focal package. It does not install a global package, link to OpenSSL 3, or overwrite an incomplete local runtime. Checks and downloads happen before the currently running server is stopped.
 
-```text
-ncraft setup       npm ci --ignore-scripts + vérifications natives + build
-ncraft start       démarre le panneau en arrière-plan dans le conteneur
-ncraft stop        arrête gracieusement le panneau et ses processus enfants
-ncraft restart     redémarre le panneau
-ncraft status      état du panneau, health HTTP, mémoire et variables masquées
-ncraft logs        suit les journaux du panneau
-ncraft update      met à jour arena/01a0e06a-n-craft, npm ci --ignore-scripts et build sans Deploy
-ncraft doctor      diagnostic Node, OpenPGP, outils système, tunnel sélectionné, build, .env, libcurl et mémoire
-ncraft env         menu interactif .env ; les secrets sont masqués
-ncraft env list    affiche la configuration sans révéler les secrets
-ncraft env get CLE lit une valeur ; --reveal est nécessaire pour un secret
-ncraft env set CLE VALEUR
-ncraft env set PANEL_TOKEN  saisie masquée interactive, sans valeur dans l’historique
-ncraft env unset CLE
-ncraft env edit    ouvre .env dans $EDITOR (ou vi)
-```
+### Memory and disk
 
-`ncraft start` ne lance que le dashboard : Bedrock se démarre avec **Start** dans le dashboard. Le panneau est un processus enfant du processus Node : fermer l’onglet ne l’arrête pas ; arrêter le conteneur arrête le panneau et ses enfants. Bedrock n’est pas relancé automatiquement après redémarrage du conteneur : ouvre le dashboard et utilise Start.
+Available memory below **4 GiB** is a warning, not a hard block. The build, tunnel client, and Bedrock share the container memory limit, so an out-of-memory termination is possible. Check free disk space before Deploy as well.
 
-Le token du panneau n’est jamais imprimé par `setup`, `status`, `doctor` ou `env list`. Pour le consulter localement sur le conteneur :
+## `ncraft` Command Reference
+
+The installer creates an `ncraft` link to `manage.sh`: `/usr/local/bin` for root or `~/.local/bin` for a regular user.
+
+| Command | Behavior |
+| --- | --- |
+| `ncraft setup` | Runs `npm ci --ignore-scripts`, native-binding checks, and the production build. |
+| `ncraft start` | Starts the panel in the background inside the container. |
+| `ncraft stop` | Gracefully stops the panel and its child processes. |
+| `ncraft restart` | Restarts the panel. |
+| `ncraft status` | Shows panel state, HTTP health, memory, and masked variables. |
+| `ncraft logs` | Follows panel logs. |
+| `ncraft update` | Fast-forward-updates `arena/01a0e06a-n-craft`, runs `npm ci --ignore-scripts`, and builds without deploying Bedrock. |
+| `ncraft doctor` | Checks Node, OpenPGP, system tools, selected tunnel, build, `.env`, `libcurl`, and memory. |
+| `ncraft env` | Opens the interactive `.env` menu; secrets are masked. |
+| `ncraft env list` | Lists configuration without revealing secrets. |
+| `ncraft env get KEY` | Reads a value; `--reveal` is required for a secret. |
+| `ncraft env set KEY VALUE` | Updates one value without replacing unrelated lines. |
+| `ncraft env set PANEL_TOKEN` | Opens a masked prompt; the value is not placed in shell history. |
+| `ncraft env unset KEY` | Removes one key. |
+| `ncraft env edit` | Opens `.env` with `$EDITOR` or `vi`. |
+
+`ncraft start` starts only the dashboard. Start Bedrock with **Start** in the dashboard. Closing a browser tab does not stop the panel; stopping the container stops the panel and its children. Bedrock does not automatically start after a container restart: open the dashboard and start it yourself.
+
+The panel token is never printed by `setup`, `status`, `doctor`, or `env list`. To reveal it locally in the container:
 
 ```bash
 ncraft env get PANEL_TOKEN --reveal
 ```
 
-Ne publie pas cette sortie et ne la partage pas dans un chat. `ncraft env set` met à jour une valeur sans remplacer les autres lignes ; un ancien `PLAYIT_SECRET_KEY` peut être retiré avec `ncraft env unset PLAYIT_SECRET_KEY`.
+Do not publish or share that output. `ncraft env set` preserves unrelated `.env` values; remove an old `PLAYIT_SECRET_KEY` with `ncraft env unset PLAYIT_SECRET_KEY` if needed.
 
-## Configuration réseau, HTTPS et tunnels
+## Network, HTTPS, and Tunnels
 
-Le panneau écoute sur `0.0.0.0:${PORT}` (`3000` par défaut). En production, publie-le derrière une terminaison TLS : les routes interactives refusent HTTP et les cookies de session sont `Secure`. Si le panneau est derrière un reverse proxy, configure `PANEL_TRUST_PROXY` uniquement pour les proxies réellement de confiance ; configure `PANEL_ORIGIN` lorsque l’origine publique exacte ne peut pas être déduite. Le frontend et l’API utilisent la même origine.
+The panel listens on `0.0.0.0:${PORT}` (`3000` by default). In production, publish it behind TLS: interactive routes reject plain HTTP and session cookies are `Secure`. If a reverse proxy is used, set `PANEL_TRUST_PROXY` only for proxies you actually trust; set `PANEL_ORIGIN` if the exact public origin cannot be inferred. The frontend and API use the same origin.
 
-### Portwarp (fournisseur par défaut)
+<details>
+<summary><strong>Portwarp — default provider</strong></summary>
 
-À l’installation, N-Craft installe `pwrp` depuis `https://portwarp.com/download/` et compare l’archive Linux amd64 à son SHA-256 officiel épinglé avant extraction et installation. Il n’exécute pas de `curl | bash` en root. Si un CLI fonctionnel existe déjà, il est conservé ; les identifiants restent dans le profil Portwarp privé de l’utilisateur Linux qui exécute le panneau (`~/.portwarp`), jamais dans `.env`, Git, les logs ou `data/state.json`.
+At setup, Nebula Craft installs `pwrp` from `https://portwarp.com/download/` and checks the official pinned SHA-256 before extracting it. It does not run `curl | bash` as root. A working existing CLI is kept. Credentials stay in the private Portwarp profile of the Linux user running the panel (`~/.portwarp`), never in `.env`, Git, logs, or `data/state.json`.
 
-Au démarrage/redémarrage du panneau, N-Craft vérifie l’authentification du CLI. Si le conteneur n’est pas lié, il lance `pwrp login` et affiche dans la section tunnel du dashboard le lien officiel et le code d’appareil temporaire. Termine toi-même l’approbation depuis ta session Portwarp authentifiée. Le code n’existe qu’en mémoire du runner et dans la réponse protégée du dashboard ; il est effacé dès la fin du flux. Il ne faut pas le copier dans le chat ni dans `.env`.
+On panel start or restart, Nebula Craft checks CLI authentication. If the container is not linked, it runs `pwrp login` and shows the official link and temporary device code in the dashboard tunnel section. Approve the link yourself from your authenticated Portwarp session. The code exists only in runner memory and the protected dashboard response, and is cleared when the flow ends. Do not copy it into chat or `.env`.
 
-Le tunnel doit déjà exister dans ton compte et porter le nom exact `Minecraft Bedrock` (modifiable avec `PORTWARP_TUNNEL_NAME`). S’il manque ou est désactivé, crée/active-le **manuellement** dans [Portwarp Tunnels](https://portwarp.com/tunnels) : type UDP, cible locale `127.0.0.1:19132`. N-Craft n’en crée, ne modifie ni n’efface aucun. Après sa création, le panneau le détecte et lance `pwrp connect "Minecraft Bedrock" --save --detach`; la sélection est enregistrée par le CLI et N-Craft la vérifie/reconnecte à chaque démarrage/redémarrage du panneau. Stop/Start de Bedrock, Deploy et l’arrêt gracieux du panneau ne lancent jamais `pwrp stop` et ne coupent pas le tunnel. En revanche, N-Craft ne configure pas un démarrage automatique du conteneur après un reboot complet de l’hôte.
+The tunnel must already exist in your account and have the exact name `Minecraft Bedrock` (change it with `PORTWARP_TUNNEL_NAME`). If it is missing or disabled, create or enable it **manually** in [Portwarp Tunnels](https://portwarp.com/tunnels): UDP, local target `127.0.0.1:19132`. Nebula Craft does not create, modify, or delete it. Once available, the panel detects it and runs `pwrp connect "Minecraft Bedrock" --save --detach`; the CLI saves the selection, and Nebula Craft checks/reconnects it whenever the panel starts or restarts. Bedrock Stop/Start, Deploy, and graceful panel shutdown never run `pwrp stop` or disconnect the tunnel. Nebula Craft does not configure the container to start automatically after a full host reboot.
 
-Le dashboard affiche l’adresse publique et le statut de session du relais. Cela **ne prouve pas** que Bedrock UDP est joignable : le contrôle local de Portwarp est TCP, alors que Bedrock utilise UDP. Valide la connexion depuis un client Bedrock. Le forfait Free de Portwarp annonce actuellement un tunnel actif et UDP sans SLA ; ses conditions, disponibilité et limites peuvent changer, donc aucune durée d’uptime n’est garantie.
+The dashboard shows the public address and relay session status. This **does not prove** that Bedrock UDP is reachable: Portwarp's local check uses TCP, while Bedrock uses UDP. Validate the connection from a Bedrock client. Portwarp's Free plan currently advertises one active tunnel and UDP without an SLA; terms, availability, and limits may change, so no uptime is guaranteed.
 
-### Localtonet (alternative inactive par défaut)
+</details>
 
-Le code Localtonet est conservé, mais le fournisseur par défaut est désormais Portwarp. Pour activer volontairement Localtonet, choisis `TUNNEL_PROVIDER=localtonet` dans `.env` puis redémarre le panneau. N-Craft ne télécharge pas et ne remplace pas son binaire : installe le client Linux officiel depuis la [documentation Linux](https://localtonet.com/documents/linux) ou la [page de téléchargement](https://localtonet.com/download), puis vérifie sa présence avec `ncraft doctor`. Le runner utilise `--headless --authtoken-file <fichier>`.
+<details>
+<summary><strong>Localtonet — inactive alternative</strong></summary>
 
-Configure `LOCALTONET_AUTH_TOKEN` et `LOCALTONET_API_KEY` depuis `ncraft env` si tu actives ce fallback. La saisie est masquée ; les secrets Localtonet ne sont pas renvoyés au navigateur, inscrits dans les logs applicatifs ni persistés dans `data/state.json`. Le tunnel UDP `19132` reste à créer manuellement. Le statut d’API n’affirme pas que le tunnel est joignable depuis Internet.
+Localtonet code is retained, but Portwarp is the default. To deliberately enable Localtonet, set `TUNNEL_PROVIDER=localtonet` in `.env` and restart the panel. Nebula Craft does not download or replace its binary: install the official Linux client from the [Linux documentation](https://localtonet.com/documents/linux) or [downloads page](https://localtonet.com/download), then check it with `ncraft doctor`. The runner uses `--headless --authtoken-file <file>`.
 
-### Playit (option de secours)
+If enabled, configure `LOCALTONET_AUTH_TOKEN` and `LOCALTONET_API_KEY` through `ncraft env`. Input is masked. Localtonet secrets are not returned to the browser, written to application logs, or persisted in `data/state.json`. Create the UDP `19132` tunnel manually. API status does not claim that the tunnel is reachable from the Internet.
 
-Portwarp est utilisé par défaut. Pour sélectionner Playit, change `TUNNEL_PROVIDER=playit` dans `.env`, puis redémarre le panneau. L’installateur fournit les binaires Playit officiels v1.0.10 vérifiés par SHA-256 ; un binaire préexistant n’est pas remplacé automatiquement.
+</details>
 
-Avec Playit sélectionné, le dashboard lance le CLI officiel `playit` (`PLAYIT_CLI_BIN`) pour générer un lien de claim ; le daemon configuré dans `PLAYIT_BIN` est attaché/démarré sans lancer un second daemon à l’aveugle. Le parcours est :
+<details>
+<summary><strong>Playit — fallback option</strong></summary>
 
-1. ouvrir le lien de claim et approuver l’agent sur le site Playit ;
-2. créer/configurer manuellement un tunnel **Minecraft Bedrock / UDP / port local 19132** dans Playit ;
-3. attendre que l’adresse publique soit détectée et affichée dans le dashboard.
+Portwarp is the default. To select Playit, set `TUNNEL_PROVIDER=playit` in `.env` and restart the panel. The installer provides official Playit v1.0.10 binaries verified by SHA-256; an existing binary is not automatically replaced.
 
-Aucune valeur `PLAYIT_SECRET_KEY` n’est requise dans `.env` pour ce parcours. Le daemon stocke le secret dans un fichier local privé ; il n’est pas exposé à l’API ni enregistré dans l’état JSON. Si le claim ou le tunnel n’est pas prêt, le dashboard permet par défaut de démarrer Bedrock avec un avertissement. La disponibilité réelle dépend du binaire installé, de l’approbation du claim et de la configuration manuelle du tunnel ; valide chaque étape dans ton environnement. Un ancien agent/CLI incompatible (par exemple Playit 0.17.x) doit être remplacé ou configuré manuellement en v1.x compatible IPC v2. Le test local simule le protocole IPC et ne prouve pas l’accès au service Playit réel.
+When selected, the dashboard launches the official `playit` CLI (`PLAYIT_CLI_BIN`) to generate a claim link; the configured daemon in `PLAYIT_BIN` is attached or started without blindly launching a second daemon. Then:
 
-## Chatbot conversationnel dans le chat Minecraft Bedrock
+1. Open the claim link and approve the agent on the Playit website.
+2. Manually create/configure a **Minecraft Bedrock / UDP / local port 19132** tunnel in Playit.
+3. Wait for the public address to be detected and shown in the dashboard.
 
-Le chatbot répond **dans le chat du serveur**, jamais dans une fenêtre de conversation du dashboard. Son seul déclencheur est `.. <message>` (deux points, une espace, puis un texte). Les messages sans ce préfixe sont ignorés et ne sont pas envoyés aux fournisseurs IA. Les messages préfixés sont transmis à Google Gemini; NVIDIA NIM ne reçoit la requête que si Gemini échoue. L’historique de chat n’est pas enregistré par N-Craft. V1 est conversationnelle uniquement : pas d’outils, commandes Bedrock, lecture du monde ou autre action. Les réponses sont publiques dans le chat du serveur.
+`PLAYIT_SECRET_KEY` is not required in `.env` for this flow. The daemon stores its secret in a private local file; it is not exposed through the API or stored in JSON state. If the claim or tunnel is not ready, the dashboard allows Bedrock to start with a warning by default. Availability depends on the installed binary, approved claim, and manual tunnel configuration; validate every step in your environment. An incompatible older agent/CLI (for example, Playit 0.17.x) must be replaced or manually configured with a v1.x build compatible with IPC v2. The local test simulates the IPC protocol and does not prove access to the real Playit service.
 
-Le support est strictement limité à la famille client `1.21.130` (protocole Bedrock 898, RakNet 11), actuellement associée dans le catalogue à BDS `1.21.130.3` et `1.21.130.4`. Les autres builds — dont `1.21.131.1` — restent désactivés tant que leur famille n’est pas validée. Le test automatique est un aller-retour RakNet 11/protocole/chat en boucle locale avec le client et le serveur de test `bedrock-protocol`, en mode hors ligne; il ne prouve pas encore une connexion au binaire BDS officiel ni une authentification Microsoft réelle. L’interface Diagnostics indique explicitement ce niveau de validation; vérifie chaque build BDS en environnement cible avant d’élargir la liste.
+</details>
 
-Pour activer le service IA, configure les secrets **sur le serveur**, depuis le menu masqué `ncraft env`. La commande `ncraft env set GEMINI_API_KEY` (sans valeur en argument) ouvre aussi une saisie masquée; même chose pour `NVIDIA_NIM_API_KEY`. Ne passe pas une clé dans les arguments de commande, ne la colle pas dans le dashboard ou le chat et ne l’ajoute pas à Git. Gemini est prioritaire; NVIDIA NIM est tenté uniquement en secours. Les modèles par défaut sont `gemini-3.8-flash` et `meta/llama-3.3-70b-instruct`, modifiables avec `CHATBOT_GEMINI_MODEL` et `CHATBOT_NIM_MODEL`. `CHATBOT_DAILY_LIMIT` plafonne les requêtes acceptées par jour UTC (100 par défaut, `0` pour désactiver). Une seule requête IA peut être active à la fois.
+## In-Game Chat Assistant
 
-Le lien Bedrock est une action distincte, disponible dans **Diagnostics**, quand Bedrock tourne avec un build compatible et qu’au moins un fournisseur IA est configuré. Utilise un compte Microsoft/Bedrock dédié, non opérateur. Le flux ne démarre pas à l’installation ou au redémarrage : un bouton puis une confirmation explicite lancent le code appareil officiel; tu approuves toi-même sur Microsoft, sans donner de mot de passe à N-Craft. Une reconnexion utilisant un profil déjà lié n’ouvre jamais silencieusement un nouveau flux; si Microsoft exige un nouveau code, une nouvelle confirmation est nécessaire. N-Craft refuse le compte si son XUID est dans `permissions.json` comme opérateur. Le bot occupe un emplacement de joueur; si `allow-list=true`, ajoute manuellement le compte dans l’allowlist Bedrock. N-Craft ne modifie pas `permissions.json`, `allowlist.json` ou les réglages globaux du serveur pour le chatbot.
+The assistant replies **in Bedrock server chat**, never in a dashboard conversation window. Its only trigger is `.. <message>` (two periods, one space, then text). Messages without this prefix are ignored and are not sent to AI providers. Prefixed messages go to Google Gemini first; NVIDIA NIM is tried only if Gemini fails. Nebula Craft does not persist chat history. V1 is conversational only: no tools, Bedrock commands, world reading, or other actions. Replies are public in server chat.
 
-Le cache OAuth est conservé côté serveur dans `DATA_DIR/bedrock-chatbot/auth` (dossier `0700`, fichiers `0600`, écritures atomiques), jamais dans `.env`, Git, l’état JSON, le navigateur ou les logs applicatifs. Les clés Gemini/NIM restent également dans `.env` mode `0600` et sont retirées de l’environnement des processus enfants. La mémoire partagée entre les joueurs contient seulement les 10 derniers échanges ayant commencé par `..`; elle expire après 30 minutes sans requête et n’est jamais écrite sur disque. Elle est vidée à chaque arrêt/redémarrage de Bedrock et au redémarrage du panneau. `DATA_DIR/bedrock-chatbot/quota.json` ne conserve que le jour UTC et un compteur agrégé, sans message, réponse, pseudo ou XUID. Le dashboard n’affiche aucun historique de conversation.
+### Supported build and validation boundary
 
-## Deploy non destructif, Start/Stop et données
+Support is strictly limited to the `1.21.130` client family (Bedrock protocol 898, RakNet 11), currently mapped in the catalog to BDS `1.21.130.3` and `1.21.130.4`. Other builds — including `1.21.131.1` — remain disabled until their protocol family is validated. Automated tests perform an offline local RakNet 11/protocol/chat round trip using the `bedrock-protocol` test client and server. They do **not** prove a connection to the official BDS binary or real Microsoft authentication. Diagnostics states this validation level; verify each BDS build in the target environment before expanding support.
 
-- **Deploy** nécessite que Bedrock soit arrêté. Le ZIP est vérifié et extrait dans un dossier temporaire, puis fusionné sans supprimer `BEDROCK_SERVER_DIR`; après une mise à jour, Bedrock redémarre automatiquement. Le tunnel n’est pas interrompu.
-- Quand Bedrock est en ligne, les réglages et le choix de version sont verrouillés. Une fois Bedrock arrêté, les champs peuvent être personnalisés. **Enregistrer les réglages** écrit uniquement les changements dans `server.properties`/`permissions.json`, sans ZIP ni démarrage; Bedrock reste arrêté jusqu’à un démarrage manuel. Si la version change, **Mettre à jour & démarrer** applique aussi les réglages modifiés et lance le déploiement.
-- Lors d’une mise à jour, les mondes (`worlds`), sauvegardes, packs personnalisés, structures et fichiers non fournis par l’archive — y compris les permissions et réglages — sont conservés. Les packs globaux officiels présents dans l’archive sont rafraîchis uniquement lorsque l’UUID du manifeste correspond; un pack personnalisé portant le même nom mais un autre UUID n’est pas remplacé. Les permissions Bedrock qui ne sont pas gérées par la liste d’administrateurs du panneau restent intactes. Changer le nom du monde sélectionne un autre dossier ou en crée un nouveau si le dossier n’existe pas; l’ancien reste intact. La seed ne s’applique qu’à la génération d’un nouveau monde.
-- Si le précontrôle, le téléchargement, l’extraction ou la vérification des dépendances échoue avant l’étape d’arrêt, un serveur déjà en ligne continue de tourner ; un serveur déjà arrêté reste arrêté. Les mondes ou packs ne sont pas supprimés. Une erreur pendant la copie est signalée afin que l’opérateur puisse relancer Deploy.
-- **Start** démarre le binaire installé sans effacer ni réécrire le monde. **Stop** demande un arrêt gracieux au serveur. Ces opérations ne démarrent, n’arrêtent ni ne suppriment le tunnel Portwarp, Localtonet ou Playit.
-- Le dashboard affiche le nombre de joueurs à partir des événements de connexion/déconnexion Bedrock, l’uptime depuis le dernier démarrage et l’usage CPU/RAM du processus Bedrock dans le conteneur. L’usage CPU/RAM est mesuré pour le processus enfant, pas pour le panneau ni l’hôte.
-- Par défaut, Bedrock annonce le compte à rebours de **03:55 à 04:00**, puis redémarre quotidiennement à **04:00 Africa/Douala**. Les annonces sont répétées chaque minute ; l’arrêt gracieux et le redémarrage ont lieu même si des joueurs sont connectés. Heure, fuseau, durée et activation sont configurables avec `BDS_RESTART_TIME`, `BDS_RESTART_TIMEZONE`, `BDS_RESTART_WARNING_MINUTES` et `BDS_RESTART_ENABLED` dans `.env` (redémarre le panneau après modification). À l’arrêt/redémarrage du conteneur, Bedrock lui-même reste arrêté jusqu’à Start ; l’horaire redémarre uniquement une instance déjà en ligne.
-- Le panneau garde sous son contrôle `server-port=19132`, `server-portv6=19133`, `online-mode=false` et `allow-list=false`. L’enregistrement des réglages ne modifie que les clés demandées et conserve les propriétés inconnues, les permissions non gérées et les données du monde.
+### Provider setup and limits
 
-| Chemin | Rôle / durée de vie |
-|---|---|
-| `.env` | Secrets et configuration (dont les clés Gemini/NIM côté serveur) ; conservé par l’installateur, mode `0600` pour un fichier régulier. |
-| `data/state.json` | État du panneau, pipeline, serveur et tunnel sélectionné (adresse/statut uniquement) ; aucun code Portwarp, secret de tunnel, clé IA, profil Bedrock ou historique de chat. |
-| `data/bedrock-chatbot/auth/` | Cache OAuth Microsoft privé `0700/0600` du compte Bedrock dédié, utilisé uniquement après une approbation explicite. |
-| `data/bedrock-chatbot/quota.json` | Jour UTC et compteur agrégé du plafond quotidien; aucun message, réponse ou identifiant de joueur. |
-| `~/.portwarp/` | Profil CLI Portwarp privé de l’utilisateur Linux courant ; géré uniquement par `pwrp`, jamais copié dans `.env` ni déplacé par N-Craft. |
-| `data/server.log` | Journal Bedrock tournant, limité à 10 Mio avec copie `.1`. |
-| `data/panel.log`, `data/panel.pid` | Journal et PID du gestionnaire `ncraft`. |
-| `data/playit/` | Fichier secret privé par défaut de l’agent ; une configuration Playit déjà existante dans `~/.local/share/playit/secret.toml` peut aussi être réutilisée. |
-| `data/versions.json` | Catalogue édité manuellement ; il n’est jamais remplacé par `.env` ou une opération Deploy. |
-| `data/runtime/` | Dépendances OpenSSL 1.1 locales, conditionnelles aux anciennes versions BDS et ignorées par Git. |
-| `bedrock/server/` | Dossier persistant du binaire, monde, packs et configurations Bedrock ; Deploy le met à jour sans l’effacer. |
+Configure AI secrets **on the server**, through the masked `ncraft env` menu. Running `ncraft env set GEMINI_API_KEY` with no value opens a masked prompt; the same works for `NVIDIA_NIM_API_KEY`. Do not pass a key as a command-line argument, paste it into the dashboard or chat, or add it to Git. Gemini is primary; NVIDIA NIM is fallback only. Defaults are `gemini-3.8-flash` and `meta/llama-3.3-70b-instruct`; set `CHATBOT_GEMINI_MODEL` or `CHATBOT_NIM_MODEL` to change them. `CHATBOT_DAILY_LIMIT` caps accepted requests per UTC day (100 by default; `0` disables requests). Only one AI request can run at a time.
 
-Monte `DATA_DIR` et, si nécessaire, `BEDROCK_SERVER_DIR` en volumes persistants selon l’environnement d’hébergement. Un arrêt forcé du conteneur peut encore interrompre une sauvegarde en cours ; laisse l’arrêt gracieux se terminer.
+### Bedrock account linking
 
-## Développement, build et tests
+Linking is a separate action in **Diagnostics**, available only while Bedrock is running a compatible build and at least one AI provider is configured. Use a dedicated Microsoft/Bedrock account that is **not** an operator. Linking never begins during installation or restart: a button followed by an explicit confirmation starts the official device-code flow, which you approve yourself with Microsoft. Nebula Craft never asks for your Microsoft password.
+
+A reconnect using an already-linked profile may happen silently, but Nebula Craft never silently requests a new device code. If Microsoft requires a new code, confirmation is required again. Nebula Craft rejects an account whose XUID appears as an operator in `permissions.json`. The bot occupies a player slot; if `allow-list=true`, add the account to the Bedrock allowlist manually. Nebula Craft does not modify `permissions.json`, `allowlist.json`, or global server settings for the assistant.
+
+### Chatbot data and privacy
+
+The OAuth cache stays server-side in `DATA_DIR/bedrock-chatbot/auth` (directory mode `0700`, files `0600`, atomic writes). It is never stored in `.env`, Git, JSON state, the browser, or application logs. Gemini/NIM keys remain in `.env` mode `0600` and are removed from child-process environments.
+
+Shared player conversation memory contains only the 10 most recent exchanges that began with `..`; it expires after 30 minutes without a request and is never written to disk. It is cleared whenever Bedrock stops/restarts and whenever the panel restarts. `DATA_DIR/bedrock-chatbot/quota.json` stores only the UTC day and an aggregate count — no messages, replies, player names, or XUIDs. The dashboard does not display chat history.
+
+## Server Lifecycle and Non-Destructive Deploy
+
+- **Deploy requires Bedrock to be stopped.** The ZIP is verified and extracted to a temporary directory, then merged without deleting `BEDROCK_SERVER_DIR`. After an update, Bedrock starts again automatically. The tunnel is not interrupted.
+- While Bedrock is online, settings and version selection are locked. After Bedrock stops, settings can be edited. **Save Settings** writes only changed values to `server.properties`/`permissions.json`, without downloading a ZIP or starting Bedrock; the server remains stopped until manually started. If the version changes, **Update & Start** applies edited settings and deploys.
+- Updates preserve worlds (`worlds`), backups, custom packs, structures, and files not provided by the archive — including permissions and settings. Official global packs in the archive are refreshed only when manifest UUIDs match; a custom pack with the same name but a different UUID is not replaced. Bedrock permissions outside the panel's admin list remain intact. Changing the world name selects another directory or creates it if absent; the previous world remains untouched. The seed applies only when a new world is generated.
+- If preflight, download, extraction, or dependency verification fails before shutdown, an already-running server keeps running and a stopped server stays stopped. Worlds and packs are not deleted. Copy failures are reported so the operator can retry Deploy.
+- **Start** launches the installed binary without deleting or rewriting the world. **Stop** requests a graceful server shutdown. These actions do not start, stop, or delete Portwarp, Localtonet, or Playit tunnels.
+- The dashboard reports player counts from Bedrock join/leave events, uptime since the last server start, and CPU/RAM for the Bedrock child process inside the container. CPU/RAM readings do not include the panel or host.
+- By default, Bedrock announces a countdown from **03:55 to 04:00** and gracefully restarts every day at **04:00 Africa/Douala**. It announces once per minute and restarts even if players are connected. Configure time, timezone, warning duration, and enablement with `BDS_RESTART_TIME`, `BDS_RESTART_TIMEZONE`, `BDS_RESTART_WARNING_MINUTES`, and `BDS_RESTART_ENABLED` in `.env`, then restart the panel. After a container stop/restart, Bedrock itself remains stopped until Start; the schedule only restarts an instance that is already running.
+- Nebula Craft keeps `server-port=19132`, `server-portv6=19133`, `online-mode=false`, and `allow-list=false` under panel control. Saving settings changes only requested keys and preserves unknown properties, unmanaged permissions, and world data.
+
+## Persistent Data and Security
+
+Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for your hosting environment. A forced container stop can still interrupt an in-progress save; allow graceful shutdown to finish.
+
+| Path | Purpose and lifetime |
+| --- | --- |
+| `.env` | Secrets and configuration, including server-side Gemini/NIM keys. Kept by the installer; regular files use mode `0600`. |
+| `data/state.json` | Panel, pipeline, server, and selected-tunnel state (address/status only). No Portwarp code, tunnel secret, AI key, Bedrock profile, or chat history. |
+| `data/bedrock-chatbot/auth/` | Private `0700`/`0600` Microsoft OAuth cache for the dedicated Bedrock account, used only after explicit approval. |
+| `data/bedrock-chatbot/quota.json` | UTC day and aggregate daily quota count; no message, reply, or player identifier. |
+| `~/.portwarp/` | Private Portwarp CLI profile for the current Linux user; managed only by `pwrp`, never copied to `.env` or moved by Nebula Craft. |
+| `data/server.log` | Rotating Bedrock log, limited to 10 MiB with a `.1` copy. |
+| `data/panel.log`, `data/panel.pid` | `ncraft` manager log and PID. |
+| `data/playit/` | Private default agent secret file; an existing Playit configuration at `~/.local/share/playit/secret.toml` may also be reused. |
+| `data/versions.json` | Manually maintained catalog; never replaced by `.env` or a Deploy operation. |
+| `data/runtime/` | Local OpenSSL 1.1 dependencies for older BDS versions; ignored by Git. |
+| `bedrock/server/` | Persistent server binary, world, packs, and Bedrock configuration; Deploy updates it without deleting it. |
+
+## Development and Validation
 
 ```bash
 npm ci --ignore-scripts
@@ -148,6 +247,17 @@ npm run build
 npm start
 ```
 
-`data/versions.json` est un catalogue édité manuellement. Il contient 160 builds stables, de BDS `1.6.1.0` à `1.21.131.1` (versions clientes strictement antérieures à `1.21.132`), dont `1.19.50.02`. Les liens suivent le format HTTPS officiel Minecraft ; une archive historique peut toutefois devenir indisponible. Au Deploy, le backend refuse les hôtes non autorisés, contrôle la réponse, la taille, la signature de format ZIP et extrait sans zip-slip ni lien symbolique. Une URL indisponible fait échouer le pipeline avant l’arrêt du serveur en ligne ; le catalogue n’est pas amputé automatiquement.
+`data/versions.json` is a manually maintained catalog of **160 stable builds**, from BDS `1.6.1.0` through `1.21.131.1` (client versions strictly below `1.21.132`), including `1.19.50.02`. URLs use the official Minecraft HTTPS format, though historical archives may become unavailable. During Deploy, the backend rejects unapproved hosts, checks the response, size, and ZIP format, then extracts without zip-slip or symbolic links. An unavailable URL fails before stopping a running server; the catalog is not automatically trimmed.
 
-Les tests automatiques couvrent le démarrage non destructif, la vérification conditionnelle des dépendances ELF/OpenSSL, le rafraîchissement des packs globaux sans remplacer les packs personnalisés, les runners Portwarp/Localtonet/Playit simulés, le cache OAuth privé, le quota/mémoire IA, le filtrage des environnements enfants et une boucle locale RakNet 11 sans compte Microsoft. Ils ne remplacent pas un essai contre le binaire BDS officiel `1.21.130.x`, un flux Microsoft approuvé par l’opérateur, les vrais clients de tunnel, les archives BDS live ou le téléchargement/signature Ubuntu en environnement cible.
+The automated suite covers non-destructive startup, conditional ELF/OpenSSL dependency checks, global-pack refresh without replacing custom packs, simulated Portwarp/Localtonet/Playit runners, the private OAuth cache, AI quota/memory, child-process environment filtering, and an offline RakNet 11 loop. These tests do not replace testing against the official BDS `1.21.130.x` binary, a Microsoft flow approved by an operator, real tunnel clients, live BDS archives, or Ubuntu download/signature verification in the target environment.
+
+The GitHub Actions workflow runs TypeScript typechecking, tests, and a production build on Ubuntu with Node.js 22. The native `raknet-native` addon is intentionally not built or exercised by CI; the chatbot uses the prebuilt `raknet-node` binding.
+
+## Project Links
+
+- [Report a bug or request a feature](https://github.com/JCVERSA/n-craft/issues)
+- [CI workflow](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
+- [Nebula Craft brand guidelines](docs/branding/nebula-craft-guidelines.md)
+- [Install script](scripts/install.sh)
+
+No `LICENSE` file is currently included in this repository, so no license badge is shown.
