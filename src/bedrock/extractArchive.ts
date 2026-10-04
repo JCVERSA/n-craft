@@ -27,8 +27,24 @@ function safeTargetPath(rootDirectory: string, fileName: string): { target: stri
   };
 }
 
-/** Extracts an official archive without zip-slip paths, ZIP symlinks, or unbounded expansion. */
-export async function extractZipSafely(zipPath: string, destination: string, signal?: AbortSignal): Promise<void> {
+export interface SafeZipExtractionLimits {
+  maxEntries?: number;
+  maxUnpackedBytes?: number;
+}
+
+/** Extracts an archive without zip-slip paths, ZIP symlinks, or unbounded expansion. */
+export async function extractZipSafely(
+  zipPath: string,
+  destination: string,
+  signal?: AbortSignal,
+  limits: SafeZipExtractionLimits = {},
+): Promise<void> {
+  const maxEntries = limits.maxEntries ?? MAX_ARCHIVE_ENTRIES;
+  const maxUnpackedBytes = limits.maxUnpackedBytes ?? MAX_UNPACKED_BYTES;
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1
+    || !Number.isSafeInteger(maxUnpackedBytes) || maxUnpackedBytes < 1) {
+    throw new Error('Limites d’extraction ZIP invalides.');
+  }
   signal?.throwIfAborted();
   const root = path.resolve(destination);
   await mkdir(root, { recursive: true });
@@ -92,10 +108,15 @@ export async function extractZipSafely(zipPath: string, destination: string, sig
     zipFile.on('entry', (entry) => {
       if (finished) return;
       if (signal?.aborted) return onAbort();
+      if (!Number.isSafeInteger(entry.uncompressedSize) || entry.uncompressedSize < 0) {
+        return fail(new Error('Archive ZIP refusée : taille d’entrée invalide.'));
+      }
       entryCount += 1;
+      if (entryCount > maxEntries) return fail(new Error('Archive refusée : nombre d’entrées excessif.'));
+      if (entry.uncompressedSize > maxUnpackedBytes - totalUnpackedBytes) {
+        return fail(new Error('Archive refusée : taille décompressée excessive.'));
+      }
       totalUnpackedBytes += entry.uncompressedSize;
-      if (entryCount > MAX_ARCHIVE_ENTRIES) return fail(new Error('Archive refusée : nombre d’entrées excessif.'));
-      if (totalUnpackedBytes > MAX_UNPACKED_BYTES) return fail(new Error('Archive refusée : taille décompressée excessive.'));
       if ((entry.generalPurposeBitFlag & 0x1) !== 0) return fail(new Error('Archive ZIP chiffrée non prise en charge.'));
 
       let target: string;

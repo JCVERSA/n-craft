@@ -294,6 +294,28 @@ export interface ManagedPlayer {
   lastSeenAt: string;
 }
 
+export type BedrockPackKind = 'resource' | 'behavior';
+export type BedrockPackVersion = [number, number, number];
+export type BedrockPackDependency =
+  | { type: 'pack'; uuid: string; version: BedrockPackVersion }
+  | { type: 'module'; moduleName: string; version: string };
+
+export interface ManagedBedrockPack {
+  uuid: string;
+  name: string;
+  description: string;
+  kind: BedrockPackKind;
+  version: BedrockPackVersion;
+  dependencies: BedrockPackDependency[];
+  active: boolean;
+}
+
+export interface WorldBedrockPacksSnapshot {
+  worldId: string;
+  worldName: string;
+  packs: ManagedBedrockPack[];
+}
+
 export type SnapshotReason = 'manual' | 'scheduled' | 'before-deploy' | 'before-restore';
 
 export interface WorldSnapshot {

@@ -16,6 +16,7 @@ import { SystemInspector } from '../preflight.ts';
 import { VersionCatalog } from '../versionCatalog.ts';
 import { getMaxArchiveBytes } from '../bedrock/limits.ts';
 import { normalizeWorldName, WorldManager, WorldManagerError } from '../bedrock/worldManager.ts';
+import { BedrockPackManager, BedrockPackManagerError, MAX_PACK_ARCHIVE_BYTES } from '../bedrock/packManager.ts';
 import type { PlayitRunner } from '../playit/playitRunner.ts';
 import type { PortwarpRunner } from '../portwarp/portwarpRunner.ts';
 import type { BedrockChatbotManager } from '../bedrock/chatbot/manager.ts';
@@ -41,7 +42,7 @@ function parseWorldSelection(value: unknown, fallbackName: string): WorldSelecti
 
 function stoppedForWorldMutation(dependencies: ServerRouteDependencies): string | null {
   const status = dependencies.state.getSnapshot().server;
-  if (dependencies.bedrockConsole.isRunning || status.status === 'running' || (status.status === 'failed' && status.pid !== null)) return 'Arrête Bedrock avant de modifier, importer ou supprimer un monde.';
+  if (dependencies.bedrockConsole.isRunning || status.status === 'running' || (status.status === 'failed' && status.pid !== null)) return 'Arrête Bedrock avant de modifier, importer ou supprimer un monde ou ses packs.';
   if (dependencies.pipeline.isRunning || dependencies.worldManager.isBusy) return 'Attends la fin de l’opération Bedrock ou du snapshot avant de gérer les mondes.';
   return null;
 }
@@ -69,6 +70,7 @@ export interface ServerRouteDependencies {
 
 export function createServerRouter(dependencies: ServerRouteDependencies): Router {
   const router = Router();
+  const packManager = new BedrockPackManager(dependencies.worldManager);
   const requireViewer = dependencies.auth.requireRole('viewer');
   const requireOperator = dependencies.auth.requireRole('operator');
   const requireAdmin = dependencies.auth.requireRole('admin');
@@ -126,6 +128,88 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       response.json({ worlds: await dependencies.worldManager.listWorlds() });
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.get('/worlds/:id/packs', async (request, response) => {
+    try {
+      response.setHeader('Cache-Control', 'no-store');
+      response.json(await packManager.listForWorld(request.params.id));
+    } catch (error) {
+      if (error instanceof BedrockPackManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: 'Impossible de lire les packs du monde.' });
+    }
+  });
+
+  router.post('/packs/import', requireAdmin, requireSameOrigin, async (request, response) => {
+    const unavailable = stoppedForWorldMutation(dependencies);
+    if (unavailable) {
+      response.status(409).json({ error: unavailable });
+      return;
+    }
+    const rawFileName = (typeof request.query.fileName === 'string' ? request.query.fileName : '').trim();
+    if (!/\.(mcpack|mcaddon|zip)$/i.test(rawFileName)) {
+      response.status(400).json({ error: 'Sélectionne un fichier .mcpack ou une archive .zip/.mcaddon contenant un seul pack.' });
+      return;
+    }
+    const declaredLength = Number(request.header('content-length') ?? 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PACK_ARCHIVE_BYTES) {
+      response.status(413).json({ error: 'Archive de pack trop volumineuse (limite : 256 Mio).' });
+      return;
+    }
+
+    const uploadPath = path.join(path.dirname(dependencies.worldManager.manifestPath), `.pack-upload-${randomUUID()}.zip`);
+    let receivedBytes = 0;
+    const limiter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        receivedBytes += chunk.length;
+        if (receivedBytes > MAX_PACK_ARCHIVE_BYTES) callback(new BedrockPackManagerError('Archive de pack trop volumineuse (limite : 256 Mio).', 413));
+        else callback(null, chunk);
+      },
+    });
+
+    try {
+      await streamPipeline(request, limiter, createWriteStream(uploadPath, { flags: 'wx', mode: 0o600 }));
+      const unavailableAfterUpload = stoppedForWorldMutation(dependencies);
+      if (unavailableAfterUpload) {
+        response.status(409).json({ error: unavailableAfterUpload });
+        return;
+      }
+      if (receivedBytes === 0) throw new BedrockPackManagerError('Le fichier importé est vide.');
+      const pack = await packManager.importArchive(uploadPath);
+      await audit(request, 'bedrock-pack-imported', `${pack.kind === 'resource' ? 'Resource pack' : 'Behavior pack'} « ${pack.name} » (${pack.uuid}) importé.`);
+      response.status(201).json({ pack });
+    } catch (error) {
+      if (error instanceof BedrockPackManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(400).json({ error: (error as Error).message || 'Archive de pack Bedrock invalide.' });
+    } finally {
+      await rm(uploadPath, { force: true }).catch(() => undefined);
+    }
+  });
+
+  router.put('/worlds/:id/packs/:uuid', requireAdmin, requireSameOrigin, async (request, response) => {
+    const unavailable = stoppedForWorldMutation(dependencies);
+    if (unavailable) {
+      response.status(409).json({ error: unavailable });
+      return;
+    }
+    try {
+      const snapshot = await packManager.setActive(request.params.id, request.params.uuid, request.body?.enabled);
+      const pack = snapshot.packs.find((candidate) => candidate.uuid === request.params.uuid.toLowerCase());
+      await audit(request, 'world-pack-activation-changed', `${pack?.kind === 'resource' ? 'Resource pack' : 'Behavior pack'} « ${pack?.name ?? request.params.uuid} » ${request.body?.enabled ? 'activé' : 'désactivé'} dans « ${snapshot.worldName} ».`);
+      response.json(snapshot);
+    } catch (error) {
+      if (error instanceof BedrockPackManagerError || error instanceof WorldManagerError) {
+        response.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: (error as Error).message || 'Impossible de modifier les packs du monde.' });
     }
   });
 

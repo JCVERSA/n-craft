@@ -16,7 +16,7 @@ Deploy and operate Bedrock from the Linux container you already have — without
 [![Target](https://img.shields.io/badge/Target-Bedrock%20Dedicated%20Server-65449B.svg?style=for-the-badge)](https://www.minecraft.net/en-us/download/server/bedrock)
 [![No Docker](https://img.shields.io/badge/No-Docker%20or%20database-2E7D32.svg?style=for-the-badge)](#what-you-get)
 
-[What You Get](#what-you-get) · [Quick Start](#quick-start) · [Install & Requirements](#installation-and-runtime-requirements) · [Tunnels](#network-https-and-tunnels) · [In-Game Assistant](#in-game-chat-assistant) · [Data & Safety](#persistent-data-and-security) · [Development](#development-and-validation)
+[What You Get](#what-you-get) · [Quick Start](#quick-start) · [Install & Requirements](#installation-and-runtime-requirements) · [Tunnels](#network-https-and-tunnels) · [In-Game Assistant](#in-game-chat-assistant) · [Bedrock Packs](#bedrock-world-packs) · [Data & Safety](#persistent-data-and-security) · [Development](#development-and-validation)
 
 </div>
 
@@ -221,6 +221,14 @@ Shared player conversation memory contains only the 10 most recent exchanges tha
 - By default, Bedrock announces a countdown from **03:55 to 04:00** and gracefully restarts every day at **04:00 Africa/Douala**. It announces once per minute and restarts even if players are connected. Configure time, timezone, warning duration, and enablement with `BDS_RESTART_TIME`, `BDS_RESTART_TIMEZONE`, `BDS_RESTART_WARNING_MINUTES`, and `BDS_RESTART_ENABLED` in `.env`, then restart the panel. After a container stop/restart, Bedrock itself remains stopped until Start; the schedule only restarts an instance that is already running.
 - Nebula Craft keeps `server-port=19132`, `server-portv6=19133`, `online-mode=false`, and `allow-list=false` under panel control. Saving settings changes only requested keys and preserves unknown properties, unmanaged permissions, and world data.
 
+### Bedrock world packs
+
+The **Packs** panel imports a single Bedrock resource or behavior pack and lets an admin activate it separately for each ready world. Stop Bedrock before importing or changing activation. Upload one `.mcpack`, or a `.zip`/`.mcaddon` archive containing exactly one `manifest.json`; multi-pack archives are rejected. Archives are limited to **256 MiB**, **10,000 entries**, and **1 GiB** extracted data. Path traversal, symbolic links, malformed manifests, unsupported module types, and UUID collisions are refused. Existing pack files are never overwritten.
+
+Imported files go into the server-wide `resource_packs/ncraft-<uuid>` or `behavior_packs/ncraft-<uuid>` directory. Activation updates only that world's `world_resource_packs.json` or `world_behavior_packs.json`; disabling a pack leaves its installed files intact. UUID-based pack dependencies must be installed at the requested version and active first, and a pack used by another active pack cannot be disabled. Script API `module_name` requirements are retained in the manifest but are not checked against the BDS runtime. Viewer accounts can inspect packs; import and activation require an admin/owner session and same-origin requests.
+
+Nebula Craft does **not** change `texturepack-required`, permissions, or other server settings. Check each pack's compatibility with the selected BDS build yourself before activating it; the panel validates the Bedrock manifest and dependencies but does not certify pack/runtime compatibility. Packs are global to the server installation while activation is per world.
+
 ## Persistent Data and Security
 
 Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for your hosting environment. A forced container stop can still interrupt an in-progress save; allow graceful shutdown to finish.
@@ -237,7 +245,7 @@ Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for 
 | `data/playit/` | Private default agent secret file; an existing Playit configuration at `~/.local/share/playit/secret.toml` may also be reused. |
 | `data/versions.json` | Manually maintained catalog; never replaced by `.env` or a Deploy operation. |
 | `data/runtime/` | Local OpenSSL 1.1 dependencies for older BDS versions; ignored by Git. |
-| `bedrock/server/` | Persistent server binary, world, packs, and Bedrock configuration; Deploy updates it without deleting it. |
+| `bedrock/server/` | Persistent server binary, worlds, global resource/behavior packs, and Bedrock configuration; Deploy updates it without deleting custom packs. Per-world `world_resource_packs.json` and `world_behavior_packs.json` files store pack activation. |
 
 ## Development and Validation
 

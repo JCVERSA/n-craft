@@ -858,6 +858,14 @@ select:focus-visible {
 .world-file-input:disabled { opacity: .55; cursor: not-allowed; }
 .world-import-submit { min-height: 44px; white-space: nowrap; }
 .world-import-footnote { margin: 10px 0 0; color: var(--nether-dim); font-size: 9px; line-height: 1.55; }
+.world-pack-target { display: grid; gap: 8px; margin-bottom: 14px; }
+.world-pack-import-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 10px; }
+.world-pack-list { display: grid; gap: 8px; margin-top: 12px; }
+.world-pack-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: linear-gradient(145deg,rgba(27,23,31,.7),rgba(11,9,13,.62)); }
+.world-pack-row__details { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.world-pack-row__details strong { color: var(--nether-text); font-size: 11px; overflow-wrap: anywhere; }
+.world-pack-row__details small { color: var(--nether-muted); font-size: 9px; line-height: 1.45; }
+.world-pack-row__details span { color: var(--nether-dim); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
 .world-manager-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
 .managed-world { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding: 13px; border: 1px solid rgba(255,255,255,.075); border-radius: 12px; background: linear-gradient(145deg,rgba(27,23,31,.76),rgba(11,9,13,.72)); transition: border-color .18s ease,background .18s ease; }
 .managed-world:hover { border-color: rgba(155,230,176,.2); }
@@ -966,8 +974,10 @@ select:focus-visible {
   .section-heading-note { font-size: 10px; }
   .ncraft-operations-stack { display: flex; }
   .world-manager-toolbar { align-items: flex-start; flex-direction: column; }
-  .world-choice-grid, .world-manager-list, .world-import-grid { grid-template-columns: minmax(0,1fr); }
+  .world-choice-grid, .world-manager-list, .world-import-grid, .world-pack-import-row { grid-template-columns: minmax(0,1fr); }
   .world-import-submit { grid-column: auto; }
+  .world-pack-row { align-items: stretch; flex-direction: column; }
+  .world-pack-row > .nether-btn { justify-content: center; }
   .managed-world__actions .nether-btn { flex: 1 1 44%; }
   .world-assign-row { align-items: stretch; flex-direction: column; }
   .cartridge-slot { grid-template-columns: 45px minmax(0,1fr); gap: 9px; padding: 10px; }

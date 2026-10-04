@@ -82,6 +82,8 @@ import type {
   TunnelProvider,
   VersionEntry,
   ManagedWorld,
+  ManagedBedrockPack,
+  WorldBedrockPacksSnapshot,
 } from '../types/backend.ts';
 
 interface StatusResponse {
@@ -408,6 +410,10 @@ export function LivePanelView() {
     tag: `client ${version.clientVersion}`,
   })), [versions]);
   const [worlds, setWorlds] = useState<ManagedWorld[]>([]);
+  const [packWorldId, setPackWorldId] = useState('');
+  const [worldPacks, setWorldPacks] = useState<ManagedBedrockPack[]>([]);
+  const [worldPackLoading, setWorldPackLoading] = useState(false);
+  const [worldPackFile, setWorldPackFile] = useState<File | null>(null);
   const [configuration, setConfiguration] = useState<DeployConfiguration>(defaultConfiguration);
   const [selectedWorldId, setSelectedWorldId] = useState<string | null>(null);
   const [worldEditId, setWorldEditId] = useState<string | null>(null);
@@ -434,6 +440,7 @@ export function LivePanelView() {
   const socketRef = useRef<WebSocket | null>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
   const worldImportInputRef = useRef<HTMLInputElement>(null);
+  const worldPackInputRef = useRef<HTMLInputElement>(null);
   const applyStatus = useCallback((nextStatus: StatusResponse) => {
     setStatus((current) => current && areJsonValuesEqual(current, nextStatus) ? current : nextStatus);
   }, []);
@@ -473,6 +480,10 @@ export function LivePanelView() {
     }
   }, []);
 
+  const fetchWorldPacks = useCallback(async (worldId: string) => (
+    apiRequest<WorldBedrockPacksSnapshot>(`/api/server/worlds/${encodeURIComponent(worldId)}/packs`)
+  ), []);
+
   const refreshStatus = useCallback(async (forceConfiguration = false) => {
     try {
       const next = await apiRequest<StatusResponse>('/api/server/status');
@@ -490,6 +501,31 @@ export function LivePanelView() {
       }
     }
   }, [applyConfigurationIfChanged, applyStatus]);
+
+  useEffect(() => {
+    if (!authenticated || !packWorldId) {
+      setWorldPacks([]);
+      setWorldPackLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setWorldPackLoading(true);
+    void fetchWorldPacks(packWorldId)
+      .then((snapshot) => {
+        if (!cancelled) setWorldPacks(snapshot.packs);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setAuthenticated(false);
+          setStatus(null);
+        } else setWorldManagerError((error as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setWorldPackLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [authenticated, fetchWorldPacks, packWorldId]);
 
   useEffect(() => {
     saveMetricHistory(metricHistory, getMetricStorage());
@@ -1116,6 +1152,64 @@ export function LivePanelView() {
     }
   };
 
+  const handleImportPack = async () => {
+    if (!worldPackFile) {
+      setWorldManagerError('Choisis un fichier .mcpack ou une archive ZIP contenant un seul pack.');
+      return;
+    }
+    const query = new URLSearchParams({ fileName: worldPackFile.name });
+    setWorldBusyId('pack-import');
+    setWorldManagerError('');
+    try {
+      const response = await fetch(`/api/server/packs/import?${query.toString()}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: worldPackFile,
+      });
+      const payload = await response.json().catch(() => ({})) as { pack?: ManagedBedrockPack; error?: string };
+      if (!response.ok || !payload.pack) throw new ApiError(payload.error || `Erreur HTTP ${response.status}.`, response.status);
+      setWorldPackFile(null);
+      if (worldPackInputRef.current) worldPackInputRef.current.value = '';
+      if (packWorldId) {
+        const snapshot = await fetchWorldPacks(packWorldId);
+        setWorldPacks(snapshot.packs);
+      }
+      pushPanelToast({
+        tone: 'success',
+        title: 'Pack importé',
+        description: `« ${payload.pack.name} » est installé sans écraser de pack existant. ${packWorldId ? 'Active-le pour le monde choisi.' : 'Sélectionne un monde prêt pour l’activer.'}`,
+      });
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
+  const handleTogglePack = async (pack: ManagedBedrockPack) => {
+    if (!packWorldId) return;
+    setWorldBusyId(`pack-${pack.uuid}`);
+    setWorldManagerError('');
+    try {
+      const snapshot = await apiRequest<WorldBedrockPacksSnapshot>(
+        `/api/server/worlds/${encodeURIComponent(packWorldId)}/packs/${encodeURIComponent(pack.uuid)}`,
+        { method: 'PUT', body: JSON.stringify({ enabled: !pack.active }) },
+      );
+      setWorldPacks(snapshot.packs);
+      pushPanelToast({
+        tone: 'success',
+        title: pack.active ? 'Pack désactivé' : 'Pack activé',
+        description: `« ${pack.name} » a été ${pack.active ? 'retiré de' : 'ajouté à'} la liste de packs de ce monde.`,
+      });
+    } catch (error) {
+      setWorldManagerError((error as Error).message);
+    } finally {
+      setWorldBusyId(null);
+    }
+  };
+
   const handleExportWorld = (world: ManagedWorld) => {
     const serverStatus = status?.state.server;
     const bedrockIsRunning = serverStatus?.status === 'running' || (serverStatus?.status === 'failed' && serverStatus.pid !== null);
@@ -1475,10 +1569,13 @@ export function LivePanelView() {
   const activeConfig = status?.state.activeConfig;
   const panelRole: PanelRole | null = authStatus?.role ?? null;
   const canOperate = panelRole === 'owner' || panelRole === 'admin' || panelRole === 'operator';
+  const canAdmin = panelRole === 'owner' || panelRole === 'admin';
   const activeWorld = activeConfig
     ? worlds.find((world) => world.version === activeConfig.version && world.folder === activeConfig.levelName)
     : undefined;
   const selectedWorld = selectedWorldId ? worlds.find((world) => world.id === selectedWorldId) : undefined;
+  const packWorld = packWorldId ? worlds.find((world) => world.id === packWorldId) : undefined;
+  const readyPackWorlds = worlds.filter((world) => world.status === 'ready');
   const editingWorld = worldEditId ? worlds.find((world) => world.id === worldEditId) : undefined;
   const selectedVersion = versions.find((version) => version.version === configuration.version);
   const isExistingDeployment = Boolean(activeConfig);
@@ -1487,6 +1584,8 @@ export function LivePanelView() {
     || server.status === 'starting'
     || server.status === 'stopping'
     || (server.status === 'failed' && server.pid !== null);
+  const packImportLocked = !canAdmin || configurationLocked || worldBusyId !== null;
+  const packMutationLocked = packImportLocked || !packWorld || packWorld.status !== 'ready';
   const worldsForSelectedVersion = worlds.filter((world) => world.version === configuration.version && world.status === 'ready');
   const hasVersionChange = Boolean(activeConfig && configuration.version !== activeConfig.version);
   const hasWorldChange = selectedWorldId
@@ -2353,6 +2452,96 @@ export function LivePanelView() {
                     </article>
                   );
                 })}
+              </div>
+            )}
+          </NetherCard>
+
+          <NetherCard
+            title="Packs Bedrock"
+            eyebrow="RESSOURCES & COMPORTEMENTS · PAR MONDE"
+            description="Importe un pack de ressources ou de comportement, puis active-le séparément pour chaque monde. Les fichiers désactivés restent installés."
+            icon={Layers}
+            accent="portal"
+            className="world-manager-card"
+          >
+            <div className="world-pack-target">
+              <label className="nether-field" htmlFor="world-pack-target">
+                <span>Monde cible</span>
+                <select
+                  id="world-pack-target"
+                  className="nether-input"
+                  value={packWorldId}
+                  onChange={(event) => setPackWorldId(event.target.value)}
+                  disabled={readyPackWorlds.length === 0}
+                >
+                  <option value="">Choisir un monde prêt…</option>
+                  {readyPackWorlds.map((world) => <option key={world.id} value={world.id}>{world.name} · BDS {world.version}</option>)}
+                </select>
+              </label>
+              <p className="world-import-footnote">L’activation écrit uniquement la liste de packs du monde choisi. Vérifie la compatibilité avec le BDS et les modules Script API; Bedrock doit être arrêté. Aucun pack ni réglage n’est supprimé lors de l’import.</p>
+            </div>
+
+            {canAdmin ? (
+              <div className="world-import-panel">
+                <div className="world-import-panel__heading"><span className="world-import-icon"><FileUp size={17} /></span><div><strong>Importer un pack</strong><small>.mcpack, ou ZIP/.mcaddon contenant un seul pack · 256 Mio max</small></div></div>
+                <div className="world-pack-import-row">
+                  <label className="nether-field world-file-field">
+                    <span>Archive du pack</span>
+                    <input
+                      ref={worldPackInputRef}
+                      type="file"
+                      accept=".mcpack,.mcaddon,.zip,application/zip,application/octet-stream"
+                      disabled={packImportLocked}
+                      onChange={(event) => setWorldPackFile(event.target.files?.[0] ?? null)}
+                      className="world-file-input"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleImportPack()}
+                    disabled={packImportLocked || !worldPackFile}
+                    className="nether-btn nether-btn--primary"
+                  >
+                    {worldBusyId === 'pack-import' ? <Loader2 className="spin-soft" size={16} /> : <FileUp size={16} />}
+                    {worldBusyId === 'pack-import' ? 'Import en cours…' : 'Importer le pack'}
+                  </button>
+                </div>
+                <p className="world-import-footnote">Les archives sont extraites avec contrôle des chemins, des liens symboliques, du nombre de fichiers et de la taille décompressée. Une archive multi-pack est refusée; les dépendances de packs UUID doivent être installées et activées avant le pack qui en dépend.</p>
+              </div>
+            ) : (
+              <p className="nether-inline-note"><ShieldCheck size={14} />L’import et l’activation de packs sont réservés aux comptes admin ou propriétaire.</p>
+            )}
+
+            {!packWorldId ? (
+              <div className="world-manager-empty"><Layers size={24} /><strong>Choisis un monde prêt</strong><span>Les packs sont activés monde par monde; un pack importé n’est pas activé automatiquement.</span></div>
+            ) : worldPackLoading ? (
+              <p className="nether-inline-note" role="status"><Loader2 className="spin-soft" size={14} /> Lecture des packs de « {packWorld?.name ?? 'ce monde'} »…</p>
+            ) : worldPacks.length === 0 ? (
+              <div className="world-manager-empty"><Package size={24} /><strong>Aucun pack Bedrock détecté</strong><span>Importe un .mcpack ou un ZIP contenant un seul manifest.json.</span></div>
+            ) : (
+              <div className="world-pack-list" aria-label={`Packs du monde ${packWorld?.name ?? ''}`}>
+                {worldPacks.map((pack) => (
+                  <article key={pack.uuid} className="world-pack-row">
+                    <div className="world-pack-row__details">
+                      <strong>{pack.name}</strong>
+                      <small>{pack.kind === 'resource' ? 'Pack de ressources' : 'Pack de comportement'} · v{pack.version.join('.')} · {pack.active ? 'Actif dans ce monde' : 'Installé, inactif'}</small>
+                      {pack.description && <span>{pack.description}</span>}
+                    </div>
+                    {canAdmin && (
+                      <button
+                        type="button"
+                        className={`nether-btn ${pack.active ? 'nether-btn--quiet' : 'nether-btn--primary'} nether-btn--tiny`}
+                        onClick={() => void handleTogglePack(pack)}
+                        disabled={packMutationLocked || worldBusyId === `pack-${pack.uuid}`}
+                        aria-pressed={pack.active}
+                        aria-label={`${pack.active ? 'Désactiver' : 'Activer'} ${pack.name} pour ${packWorld?.name ?? 'ce monde'}`}
+                      >
+                        {worldBusyId === `pack-${pack.uuid}` ? <Loader2 className="spin-soft" size={14} /> : pack.active ? <X size={14} /> : <Check size={14} />}
+                        {pack.active ? 'Désactiver' : 'Activer'}
+                      </button>
+                    )}
+                  </article>
+                ))}
               </div>
             )}
           </NetherCard>

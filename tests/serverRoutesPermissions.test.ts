@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServerRouter, type ServerRouteDependencies } from '../src/routes/server.routes.ts';
 import { PanelAuthService, type PanelPrincipal } from '../src/auth.ts';
+import { WorldManagerError } from '../src/bedrock/worldManager.ts';
 import type { RecoverySnapshot } from '../src/types/backend.ts';
 import type { Request, Response } from 'express';
 import test from 'node:test';
@@ -113,4 +114,63 @@ test('server routes allow viewer reads, require operator for writes, and reserve
   assert.equal(updateCalls, 1);
   await new Promise((resolve) => setImmediate(resolve));
   assert.ok(auditEvents.includes('recovery-settings-updated'));
+});
+
+test('pack routes allow viewer reads but reserve import and activation for same-origin admins', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'ncraft-pack-route-rbac-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const auth = new PanelAuthService(TOKEN, directory);
+  await auth.initialize();
+  await auth.createUser('pack-viewer', 'pack-viewer-password-long', 'viewer');
+  await auth.createUser('pack-operator', 'pack-operator-password-long', 'operator');
+  await auth.createUser('pack-admin', 'pack-admin-password-long', 'admin');
+  const viewer = (await auth.authenticate({ username: 'pack-viewer', password: 'pack-viewer-password-long' }))!;
+  const operator = (await auth.authenticate({ username: 'pack-operator', password: 'pack-operator-password-long' }))!;
+  const admin = (await auth.authenticate({ username: 'pack-admin', password: 'pack-admin-password-long' }))!;
+  const dependencies = {
+    auth,
+    state: { getSnapshot: () => ({ server: { status: 'stopped', pid: null } }) },
+    bedrockConsole: { isRunning: true },
+    pipeline: { isRunning: false },
+    worldManager: {
+      isBusy: false,
+      async withExclusiveOperation<T>(operation: () => Promise<T>) { return operation(); },
+      getWorld() { throw new WorldManagerError('World not found.', 404); },
+    },
+    audit: { async record() {} },
+  } as unknown as ServerRouteDependencies;
+  const app = express();
+  app.use(express.json());
+  app.use('/api/server', createServerRouter(dependencies));
+  const server = app.listen(0, '127.0.0.1');
+  context.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const viewerCookie = cookieFor(auth, viewer);
+  const operatorCookie = cookieFor(auth, operator);
+  const adminCookie = cookieFor(auth, admin);
+  const headers = (cookie: string, requestOrigin = origin) => ({ cookie, origin: requestOrigin, 'content-type': 'application/json' });
+  const worldId = 'a1d8fbb4-9cda-4ed8-9466-c62cf3189f51';
+
+  const viewerRead = await fetch(`${origin}/api/server/worlds/${worldId}/packs`, { headers: headers(viewerCookie) });
+  assert.equal(viewerRead.status, 404, 'viewer reads are allowed and reach the world lookup');
+
+  for (const requestPath of ['/api/server/packs/import', `/api/server/worlds/${worldId}/packs/123e4567-e89b-12d3-a456-426614174000`]) {
+    const method = requestPath.endsWith('/import') ? 'POST' : 'PUT';
+    const body = method === 'PUT' ? JSON.stringify({ enabled: true }) : undefined;
+    const viewerWrite = await fetch(`${origin}${requestPath}`, { method, headers: headers(viewerCookie), body });
+    assert.equal(viewerWrite.status, 403, 'viewers cannot modify packs');
+    const operatorWrite = await fetch(`${origin}${requestPath}`, { method, headers: headers(operatorCookie), body });
+    assert.equal(operatorWrite.status, 403, 'operators cannot modify packs');
+    const crossOriginAdmin = await fetch(`${origin}${requestPath}`, {
+      method,
+      headers: headers(adminCookie, 'https://attacker.invalid'),
+      body,
+    });
+    assert.equal(crossOriginAdmin.status, 403, 'admin pack mutations remain same-origin protected');
+    const adminWrite = await fetch(`${origin}${requestPath}`, { method, headers: headers(adminCookie), body });
+    assert.equal(adminWrite.status, 409, 'same-origin admins reach the stopped-server safety check');
+  }
 });
