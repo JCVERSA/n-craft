@@ -1,143 +1,87 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
-  Check,
   CheckCircle2,
   ChevronRight,
-  Clock3,
-  Copy,
-  Database,
-  Download,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  FileUp,
-  Globe,
   Info,
   Layers,
   Loader2,
-  LockKeyhole,
-  MessageCircle,
   LogOut,
-  Package,
-  Paintbrush,
-  Pencil,
-  Play,
-  Power,
-  RefreshCw,
-  Save,
-  Server,
   Shield,
   ShieldCheck,
-  Trash2,
-  Terminal,
-  Users,
-  Wifi,
   X,
 } from 'lucide-react';
 import { AboutModal } from '../components/AboutModal.tsx';
-import { OperationsView } from './OperationsView.tsx';
-import type { MonitoringSnapshot } from '../monitoring.ts';
-import { SeedTools } from '../components/SeedTools.tsx';
-import { XuidConverter } from '../components/XuidConverter.tsx';
-import { NebulaBrandMark } from '../components/NebulaBrandMark.tsx';
+import BranchedMenu from '../components/BranchedMenu.jsx';
 import { useDialogs } from '../components/DialogProvider.tsx';
+import type { GlideSelectOption } from '../components/GlideSelect.tsx';
+import { NebulaBrandMark } from '../components/NebulaBrandMark.tsx';
 import { NetherAmbientBackground } from '../components/NetherAmbientBackground.tsx';
-import { BedrockMetricsChart } from '../components/BedrockMetricsChart.tsx';
-import BranchedMenu, { type BranchedMenuItem } from '../components/BranchedMenu.jsx';
-import FuseButton from '../components/FuseButton.jsx';
-import { GlideSelect, type GlideSelectOption } from '../components/GlideSelect.tsx';
-import JellyRadio from '../components/JellyRadio.jsx';
-import { NetherCard } from '../components/NetherCard.tsx';
-import RefineFrame from '../components/RefineFrame.jsx';
-import { RubberSegment, type SegmentOption } from '../components/RubberSegment.tsx';
-import { SpringCheck } from '../components/SpringCheck.tsx';
-import SwipeRow from '../components/SwipeRow.jsx';
 import SwipeToast from '../components/SwipeToast.jsx';
+import type {
+  AuthStatus,
+  ChatbotSnapshot,
+  ConsoleLog,
+  DeployConfiguration,
+  ManagedBedrockPack,
+  ManagedWorld,
+  PanelRole,
+  PersistentPanelState,
+  WorldBedrockPacksSnapshot,
+} from '../types/backend.ts';
 import {
   appendMetricSample,
   loadMetricHistory,
   saveMetricHistory,
   type BedrockMetricSample,
-  type MetricStorage,
 } from '../utils/metricHistory.ts';
-import type {
-  AuthStatus,
-  ConsoleLog,
-  PanelRole,
-  RecoverySnapshot,
-  SnapshotManagerSnapshot,
-  ChatbotSnapshot,
-  DeployConfiguration,
-  PersistentPanelState,
-  PipelineStep,
-  PlayitSetupSnapshot,
-  PortwarpLoginSnapshot,
-  ScheduledRestartSnapshot,
-  SystemPreflight,
-  TunnelProvider,
-  VersionEntry,
-  ManagedWorld,
-  ManagedBedrockPack,
-  WorldBedrockPacksSnapshot,
-} from '../types/backend.ts';
+import { OverviewPanel } from './panel/OverviewPanel.tsx';
+import { PanelLoginView } from './panel/PanelLoginView.tsx';
+import { PanelLoadingFallback, StatusPill } from './panel/PanelPrimitives.tsx';
+import {
+  ApiError,
+  apiRequest,
+  areJsonValuesEqual,
+  BRANCHED_NAV_ITEMS,
+  defaultConfiguration,
+  formatBytes,
+  getMetricStorage,
+  getWorldSettingsConfirmation,
+  hasConfigurationSettingsChanged,
+  hasDeployConfigurationChanged,
+  haveSameConsoleLogIds,
+  initialPanelTab,
+  isValidForm,
+  PANEL_TABS,
+  panelTabFromHash,
+  pipelineSteps,
+  statusLabel,
+  type PanelTabId,
+  type PanelToast,
+  type PanelToastTone,
+  type PublicVersion,
+  type StatusResponse,
+} from './panel/panelHelpers.ts';
 
-interface StatusResponse {
-  state: PersistentPanelState;
-  tunnelProvider: TunnelProvider;
-  playitSetup: PlayitSetupSnapshot;
-  portwarpSetup: PortwarpLoginSnapshot;
-  system: SystemPreflight;
-  serverDirectory: string;
-  deployBusy: boolean;
-  scheduler: ScheduledRestartSnapshot;
-  chatbot: ChatbotSnapshot;
-  snapshots: SnapshotManagerSnapshot;
-  recovery: RecoverySnapshot;
-  monitoring: MonitoringSnapshot;
-}
-
-type PublicVersion = Omit<VersionEntry, 'downloadUrl'>;
-
-type PanelTabId = 'overview' | 'deploy' | 'worlds' | 'diagnostics' | 'operations' | 'console' | 'pixel-studio';
-type TabNavigation = 'desktop' | 'mobile';
-
+const DeployPanel = lazy(() => import('./panel/DeployPanel.tsx'));
+const WorldsPanel = lazy(() => import('./panel/WorldsPanel.tsx'));
+const DiagnosticsPanel = lazy(() => import('./panel/DiagnosticsPanel.tsx'));
+const OperationsView = lazy(() => import('./OperationsView.tsx'));
+const ConsolePanel = lazy(() => import('./panel/ConsolePanel.tsx'));
 const PixelStudioView = lazy(() => import('./PixelStudioView.tsx'));
-
-const PANEL_TABS: Array<{ id: PanelTabId; label: string; compactLabel: string; icon: LucideIcon }> = [
-  { id: 'overview', label: 'Vue générale', compactLabel: 'Vue', icon: Server },
-  { id: 'deploy', label: 'Déploiement', compactLabel: 'Déployer', icon: Package },
-  { id: 'worlds', label: 'Mondes', compactLabel: 'Mondes', icon: Globe },
-  { id: 'diagnostics', label: 'Diagnostics', compactLabel: 'Diag.', icon: ShieldCheck },
-  { id: 'operations', label: 'Opérations', compactLabel: 'Ops', icon: Activity },
-  { id: 'console', label: 'Console', compactLabel: 'Console', icon: Terminal },
-  { id: 'pixel-studio', label: 'Pixel Studio', compactLabel: 'Studio', icon: Paintbrush },
-];
-
-type PanelToastTone = 'success' | 'warning' | 'error' | 'info';
-interface PanelToast { id: number; tone: PanelToastTone; title: string; description: string; }
-
-const BRANCHED_NAV_ITEMS: BranchedMenuItem[] = [
-  { label: 'Serveur', children: [
-    { value: 'overview', label: 'Vue générale' },
-    { value: 'worlds', label: 'Mondes sauvegardés' },
-  ] },
-  { label: 'Configuration', children: [
-    { value: 'deploy', label: 'Déploiement' },
-    { value: 'console', label: 'Console Bedrock' },
-  ] },
-  { label: 'Supervision', children: [
-    { value: 'diagnostics', label: 'Diagnostics système' },
-    { value: 'operations', label: 'Snapshots, accès et alertes' },
-  ] },
-  { label: 'Création', children: [
-    { value: 'pixel-studio', label: 'Pixel Studio' },
-  ] },
-];
 
 const PANEL_TOAST_LOOKS: Record<PanelToastTone, { background: string; fuse: string; icon: ReactNode }> = {
   success: { background: 'rgba(18, 34, 28, 0.98)', fuse: '#9be6b0', icon: <CheckCircle2 size={17} /> },
@@ -145,187 +89,6 @@ const PANEL_TOAST_LOOKS: Record<PanelToastTone, { background: string; fuse: stri
   error: { background: 'rgba(47, 22, 27, 0.98)', fuse: '#ff7f79', icon: <AlertTriangle size={17} /> },
   info: { background: 'rgba(28, 22, 39, 0.98)', fuse: '#c5a0ff', icon: <Info size={17} /> },
 };
-
-function panelTabFromHash(hash: string): PanelTabId | null {
-  const value = hash.replace(/^#/, '');
-  return PANEL_TABS.some((tab) => tab.id === value) ? value as PanelTabId : null;
-}
-
-function initialPanelTab(): PanelTabId {
-  return typeof window === 'undefined' ? 'overview' : panelTabFromHash(window.location.hash) ?? 'overview';
-}
-
-function getMetricStorage(): MetricStorage | null {
-  try {
-    return typeof window === 'undefined' ? null : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}
-
-async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
-  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'same-origin',
-    cache: 'no-store',
-  });
-  const payload = await response.json().catch(() => ({})) as { error?: string } & T;
-  if (!response.ok) throw new ApiError(payload.error || `Erreur HTTP ${response.status}.`, response.status);
-  return payload;
-}
-
-const defaultConfiguration: DeployConfiguration = {
-  version: '',
-  serverName: 'Nebula Craft',
-  levelName: 'NebulaWorld',
-  gamemode: 'survival',
-  difficulty: 'normal',
-  maxPlayers: 10,
-  adminXuids: [''],
-  seed: '',
-  viewDistance: 10,
-  allowCheats: false,
-  eulaAccepted: false,
-};
-
-const gameModeOptions: SegmentOption<DeployConfiguration['gamemode']>[] = [
-  { value: 'survival', label: 'Survie' },
-  { value: 'creative', label: 'Créatif' },
-  { value: 'adventure', label: 'Aventure' },
-];
-
-const difficultyOptions: SegmentOption<DeployConfiguration['difficulty']>[] = [
-  { value: 'peaceful', label: 'Paisible' },
-  { value: 'easy', label: 'Facile' },
-  { value: 'normal', label: 'Normale' },
-  { value: 'hard', label: 'Difficile' },
-];
-
-const pipelineSteps: Array<{ id: PipelineStep; label: string }> = [
-  { id: 'preflight', label: 'Vérification système' },
-  { id: 'downloading', label: 'Téléchargement du ZIP' },
-  { id: 'extracting', label: 'Extraction sécurisée en staging' },
-  { id: 'stopping', label: 'Arrêt gracieux de Bedrock' },
-  { id: 'updating_files', label: 'Mise à jour sans effacement des données' },
-  { id: 'writing_config', label: 'Préservation / création des réglages' },
-  { id: 'accepting_eula', label: 'EULA (prompt détecté uniquement)' },
-  { id: 'starting', label: 'Redémarrage et contrôle' },
-  { id: 'running', label: 'Serveur en ligne' },
-];
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return 'inconnu';
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} Go`;
-  return `${(bytes / 1024 ** 2).toFixed(0)} Mio`;
-}
-
-function formatDuration(totalSeconds: number | null): string {
-  if (totalSeconds === null || !Number.isFinite(totalSeconds)) return '—';
-  const seconds = Math.max(0, Math.floor(totalSeconds));
-  const days = Math.floor(seconds / 86_400);
-  const hours = Math.floor((seconds % 86_400) / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const remainder = seconds % 60;
-  const clock = [hours, minutes, remainder].map((value) => String(value).padStart(2, '0')).join(':');
-  return days > 0 ? `${days} j ${clock}` : clock;
-}
-
-function formatScheduledTime(value: string | null, timeZone: string): string {
-  if (!value) return 'calcul en cours';
-  return new Date(value).toLocaleString('fr-FR', {
-    timeZone,
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    stopped: 'ARRÊTÉ',
-    stopping: 'ARRÊT EN COURS',
-    starting: 'DÉMARRAGE',
-    running: 'EN LIGNE',
-    failed: 'ÉCHEC',
-    idle: 'INACTIF',
-    address_not_detected: 'ADRESSE NON DÉTECTÉE',
-    waiting_for_secret: 'CLAIM PLAYIT À FINALISER',
-    claim_pending: 'APPROBATION PLAYIT EN ATTENTE',
-    configuration_missing: 'CONFIGURATION MANQUANTE',
-    client_missing: 'CLI PORTWARP ABSENT',
-    authentication_required: 'AUTORISATION REQUISE',
-    awaiting_approval: 'APPROBATION EN ATTENTE',
-    tunnel_missing: 'TUNNEL À CRÉER',
-    tunnel_misconfigured: 'RÈGLE UDP À CORRIGER',
-    connecting: 'CONNEXION',
-    exited: 'AGENT ARRÊTÉ',
-  };
-  return labels[status] ?? status.toUpperCase();
-}
-
-function isValidForm(configuration: DeployConfiguration): boolean {
-  return Boolean(
-    configuration.version &&
-    configuration.serverName.trim() &&
-    configuration.levelName.trim() &&
-    Number.isSafeInteger(configuration.maxPlayers) && configuration.maxPlayers > 0 &&
-    Number.isSafeInteger(configuration.viewDistance) && configuration.viewDistance > 0 &&
-    configuration.adminXuids.length >= 1 && configuration.adminXuids.length <= 3 &&
-    configuration.adminXuids.every((xuid) => /^\d{1,20}$/.test(xuid)) &&
-    new Set(configuration.adminXuids).size === configuration.adminXuids.length &&
-    configuration.eulaAccepted
-  );
-}
-
-function getWorldSettingsConfirmation(current: DeployConfiguration, next: DeployConfiguration): string | null {
-  const warnings: string[] = [];
-  if (current.levelName !== next.levelName) {
-    warnings.push(`Bedrock utilisera le dossier worlds/${next.levelName}. S’il n’existe pas, un nouveau monde sera créé; l’ancien restera intact.`);
-  }
-  if (current.seed !== next.seed) {
-    warnings.push('La seed ne sert qu’à générer un monde neuf; elle ne modifie pas les chunks déjà créés.');
-  }
-  if (warnings.length === 0) return null;
-  warnings.push('Aucun monde existant ne sera supprimé ni déplacé.');
-  return warnings.join('\n\n');
-}
-
-function hasConfigurationSettingsChanged(current: DeployConfiguration, next: DeployConfiguration): boolean {
-  return current.serverName !== next.serverName
-    || current.levelName !== next.levelName
-    || current.gamemode !== next.gamemode
-    || current.difficulty !== next.difficulty
-    || current.maxPlayers !== next.maxPlayers
-    || current.seed !== next.seed
-    || current.viewDistance !== next.viewDistance
-    || current.allowCheats !== next.allowCheats
-    || current.eulaAccepted !== next.eulaAccepted
-    || current.adminXuids.length !== next.adminXuids.length
-    || current.adminXuids.some((xuid, index) => xuid !== next.adminXuids[index]);
-}
-
-function hasDeployConfigurationChanged(current: DeployConfiguration, next: DeployConfiguration): boolean {
-  return current.version !== next.version || hasConfigurationSettingsChanged(current, next);
-}
-
-function areJsonValuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function haveSameConsoleLogIds(current: ConsoleLog[], next: ConsoleLog[]): boolean {
-  return current.length === next.length && current.every((line, index) => line.id === next[index]?.id);
-}
 
 export function LivePanelView() {
   const dialogs = useDialogs();
@@ -346,16 +109,19 @@ export function LivePanelView() {
   const [showToken, setShowToken] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [metricHistory, setMetricHistory] = useState<BedrockMetricSample[]>(() => loadMetricHistory(getMetricStorage()));
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = Boolean(useReducedMotion());
   const [panelToasts, setPanelToasts] = useState<PanelToast[]>([]);
   const toastSequenceRef = useRef(0);
+
   const pushPanelToast = useCallback((toast: Omit<PanelToast, 'id'>) => {
     const next = { ...toast, id: ++toastSequenceRef.current };
     setPanelToasts((current) => [...current.slice(-2), next]);
   }, []);
+
   const dismissPanelToast = useCallback((id: number) => {
     setPanelToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
+
   const switchPanel = useCallback((nextTab: PanelTabId) => {
     setNavMenuOpen(false);
     setActiveSection(nextTab);
@@ -364,7 +130,8 @@ export function LivePanelView() {
     if (window.location.hash !== nextHash) window.history.pushState({ ncraftTab: nextTab }, '', nextHash);
     window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [reduceMotion]);
-  const handleTabKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>, currentTab: PanelTabId, navigation: TabNavigation) => {
+
+  const handleMobileTabKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>, currentTab: PanelTabId) => {
     const currentIndex = PANEL_TABS.findIndex((tab) => tab.id === currentTab);
     let nextIndex = currentIndex;
     if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % PANEL_TABS.length;
@@ -373,9 +140,9 @@ export function LivePanelView() {
     else if (event.key === 'End') nextIndex = PANEL_TABS.length - 1;
     else return;
     event.preventDefault();
-    const nextTab = PANEL_TABS[nextIndex];
+    const nextTab = PANEL_TABS[nextIndex]!;
     switchPanel(nextTab.id);
-    window.requestAnimationFrame(() => document.getElementById(`${navigation}-tab-${nextTab.id}`)?.focus());
+    window.requestAnimationFrame(() => document.getElementById(`mobile-tab-${nextTab.id}`)?.focus());
   }, [switchPanel]);
 
   useEffect(() => {
@@ -441,6 +208,11 @@ export function LivePanelView() {
   const logViewportRef = useRef<HTMLDivElement>(null);
   const worldImportInputRef = useRef<HTMLInputElement>(null);
   const worldPackInputRef = useRef<HTMLInputElement>(null);
+
+  const tunnelProvider = status?.tunnelProvider ?? 'portwarp';
+  const activeConfig = status?.state.activeConfig;
+  const isExistingDeployment = Boolean(activeConfig);
+
   const applyStatus = useCallback((nextStatus: StatusResponse) => {
     setStatus((current) => current && areJsonValuesEqual(current, nextStatus) ? current : nextStatus);
   }, []);
@@ -458,7 +230,13 @@ export function LivePanelView() {
     previousActiveSectionRef.current = activeSection;
   }, [activeSection]);
 
-  const isPipelineBusy = Boolean(status?.deployBusy || status?.state.pipeline.status === 'running' || busyAction === 'deploy' || busyAction === 'save-config' || busyAction === 'start');
+  const isPipelineBusy = Boolean(
+    status?.deployBusy
+    || status?.state.pipeline.status === 'running'
+    || busyAction === 'deploy'
+    || busyAction === 'save-config'
+    || busyAction === 'start',
+  );
   const currentStepIndex = useMemo(
     () => pipelineSteps.findIndex((step) => step.id === status?.state.pipeline.step),
     [status?.state.pipeline.step],
@@ -488,9 +266,9 @@ export function LivePanelView() {
     try {
       const next = await apiRequest<StatusResponse>('/api/server/status');
       applyStatus(next);
-      const activeConfig = next.state.activeConfig;
-      if (activeConfig && (!configTouchedRef.current || forceConfiguration)) {
-        applyConfigurationIfChanged(activeConfig);
+      const nextActiveConfig = next.state.activeConfig;
+      if (nextActiveConfig && (!configTouchedRef.current || forceConfiguration)) {
+        applyConfigurationIfChanged(nextActiveConfig);
       }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -599,12 +377,12 @@ export function LivePanelView() {
           applyStatus(nextStatus);
           setWorlds(worldResult.worlds);
           const currentConfig = nextStatus.state.activeConfig;
-          const activeWorld = currentConfig
+          const currentActiveWorld = currentConfig
             ? worldResult.worlds.find((world) => world.version === currentConfig.version && world.folder === currentConfig.levelName)
             : undefined;
           if (currentConfig && !configTouchedRef.current) {
             applyConfigurationIfChanged(currentConfig);
-            setSelectedWorldId(activeWorld?.id ?? null);
+            setSelectedWorldId(currentActiveWorld?.id ?? null);
             setNewWorldName('Nouveau monde');
             configTouchedRef.current = false;
           }
@@ -705,12 +483,17 @@ export function LivePanelView() {
           setConsoleError('Message WebSocket invalide.');
         }
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (currentSocket !== socket) return;
         currentSocket = null;
         if (socketRef.current === socket) socketRef.current = null;
         setConsoleConnected(false);
         flushPendingLines();
+        if (event.code === 4401) {
+          setAuthenticated(false);
+          setStatus(null);
+          return;
+        }
         if (!disposed && document.visibilityState === 'visible') {
           reconnectTimer = window.setTimeout(() => {
             reconnectTimer = undefined;
@@ -758,7 +541,7 @@ export function LivePanelView() {
 
   useEffect(() => {
     if (versions.length > 0 && !configuration.version && !status?.state.activeConfig) {
-      setConfiguration((current) => ({ ...current, version: versions[0].version }));
+      setConfiguration((current) => ({ ...current, version: versions[0]!.version }));
     }
   }, [versions, configuration.version, status?.state.activeConfig]);
 
@@ -1427,134 +1210,23 @@ export function LivePanelView() {
 
   if (!authenticated) {
     return (
-      <main className="ncraft-shell ncraft-auth-shell">
-        <NetherAmbientBackground />
-        <div className="ncraft-auth-orbit" aria-hidden="true" />
-        <motion.div
-          className="ncraft-login-layout"
-          initial={reduceMotion ? false : { opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: reduceMotion ? 0 : 0.42, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <aside className="ncraft-login-showcase">
-            <div className="login-showcase__texture" aria-hidden="true" />
-            <div className="login-showcase__brand" aria-hidden="true">
-              <span className="brand-mark"><NebulaBrandMark /></span>
-              <span>BEDROCK CONTROL DECK</span>
-            </div>
-            <div className="login-showcase__portal" aria-hidden="true"><span /><span /><span /></div>
-            <img
-              className="login-showcase__mascot"
-              src="/assets/minecraft/creeper-mascot.svg"
-              alt="Creeper pixelisé, mascotte de N-Craft"
-              width="140"
-              height="204"
-            />
-            <div className="login-showcase__content">
-              <p className="login-showcase__eyebrow">CONSOLE OPÉRATEUR · MINECRAFT BEDROCK</p>
-              <p className="login-showcase__title">Garde la main<br /><span>sur ton monde.</span></p>
-              <p className="login-showcase__description">Déploie Bedrock, retrouve tes sauvegardes et surveille ton serveur depuis un seul panneau privé.</p>
-            </div>
-            <div className="login-showcase__footer" aria-hidden="true">
-              <span><LockKeyhole size={14} /> Accès privé</span>
-              <span><ShieldCheck size={14} /> Jeton non conservé</span>
-            </div>
-          </aside>
-
-          <motion.section
-            className="ncraft-login-card"
-            initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: reduceMotion ? 0 : 0.3, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="login-brand-row">
-              <span className="brand-mark brand-mark--large"><NebulaBrandMark /></span>
-              <div>
-                <p className="nether-eyebrow">BEDROCK CONTROL DECK</p>
-                <h1 className="login-wordmark" translate="no">Nebula Craft</h1>
-                <p className="login-subtitle">Panneau privé · instance Bedrock</p>
-              </div>
-            </div>
-            <div className="login-divider" />
-            <div className="login-heading">
-              <span className="login-heading__icon"><LockKeyhole size={18} /></span>
-              <div>
-                <h2>Accès opérateur</h2>
-                <p>Connecte-toi pour gérer ton serveur.</p>
-              </div>
-            </div>
-            <p className="login-security-copy">
-              Utilise un compte de rôle ou laisse le nom vide pour te connecter avec PANEL_TOKEN. Le secret n’est pas conservé dans le navigateur.
-            </p>
-            {!authStatus?.configured && (
-              <div role="alert" className="nether-callout nether-callout--danger">
-                <AlertTriangle size={17} />
-                <span>PANEL_TOKEN n’est pas configuré dans l’environnement du conteneur. Définis-le, puis redémarre le panneau.</span>
-              </div>
-            )}
-            <form onSubmit={handleLogin} className="login-form">
-              <div className="nether-field">
-                <label className="login-token-label" htmlFor="panel-username">Nom du compte <span>(laisser vide pour PANEL_TOKEN)</span></label>
-                <input
-                  id="panel-username"
-                  type="text"
-                  autoComplete="username"
-                  value={loginUsername}
-                  onChange={(event) => setLoginUsername(event.target.value)}
-                  disabled={!authStatus?.configured || loginBusy}
-                  className="nether-input"
-                  placeholder="owner"
-                  maxLength={32}
-                />
-              </div>
-              <div className="nether-field">
-                <label className="login-token-label" htmlFor="panel-token">{loginUsername.trim() ? 'Mot de passe du compte' : 'Jeton du panneau'}</label>
-                <div className="login-token-field">
-                  <input
-                    id="panel-token"
-                    type={showToken ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={token}
-                    onChange={(event) => setToken(event.target.value)}
-                    disabled={!authStatus?.configured || loginBusy}
-                    className="nether-input login-token-input"
-                    placeholder={loginUsername.trim() ? 'Saisis le mot de passe du compte' : 'Saisis le jeton propriétaire'}
-                    aria-invalid={Boolean(loginError)}
-                    aria-describedby={loginError ? 'login-error' : undefined}
-                  />
-                  <button
-                    type="button"
-                    className="login-token-toggle"
-                    onClick={() => setShowToken((visible) => !visible)}
-                    disabled={!authStatus?.configured || loginBusy}
-                    aria-label={showToken ? 'Masquer le secret de connexion' : 'Afficher le secret de connexion'}
-                    aria-pressed={showToken}
-                    title={showToken ? 'Masquer le secret de connexion' : 'Afficher le secret de connexion'}
-                  >
-                    {showToken ? <EyeOff size={17} /> : <Eye size={17} />}
-                  </button>
-                </div>
-              </div>
-              {loginError && <p id="login-error" role="alert" className="inline-error">{loginError}</p>}
-              <motion.button
-                type="submit"
-                disabled={!authStatus?.configured || loginBusy || !token}
-                whileTap={reduceMotion ? undefined : { scale: 0.985 }}
-                className="nether-btn nether-btn--primary nether-btn--wide"
-              >
-                {loginBusy ? <Loader2 className="spin-soft" size={17} /> : <ArrowRight size={17} />}
-                {loginBusy ? 'Vérification…' : 'Ouvrir le panneau'}
-              </motion.button>
-            </form>
-            <p className="login-footer"><ShieldCheck size={14} /> Session HttpOnly · secret non conservé</p>
-          </motion.section>
-        </motion.div>
-      </main>
+      <PanelLoginView
+        authStatus={authStatus}
+        reduceMotion={reduceMotion}
+        loginUsername={loginUsername}
+        onUsernameChange={setLoginUsername}
+        token={token}
+        onTokenChange={setToken}
+        showToken={showToken}
+        onToggleShowToken={() => setShowToken((visible) => !visible)}
+        loginBusy={loginBusy}
+        loginError={loginError}
+        onSubmit={(event) => { void handleLogin(event); }}
+      />
     );
   }
 
   const server = status?.state.server;
-  const tunnelProvider = status?.tunnelProvider ?? 'portwarp';
   const playit = status?.state.playit;
   const localtonet = status?.state.localtonet;
   const portwarp = status?.state.portwarp;
@@ -1566,7 +1238,6 @@ export function LivePanelView() {
   const system = status?.system;
   const pipeline = status?.state.pipeline;
   const scheduler = status?.scheduler;
-  const activeConfig = status?.state.activeConfig;
   const panelRole: PanelRole | null = authStatus?.role ?? null;
   const canOperate = panelRole === 'owner' || panelRole === 'admin' || panelRole === 'operator';
   const canAdmin = panelRole === 'owner' || panelRole === 'admin';
@@ -1578,7 +1249,6 @@ export function LivePanelView() {
   const readyPackWorlds = worlds.filter((world) => world.status === 'ready');
   const editingWorld = worldEditId ? worlds.find((world) => world.id === worldEditId) : undefined;
   const selectedVersion = versions.find((version) => version.version === configuration.version);
-  const isExistingDeployment = Boolean(activeConfig);
   const configurationLocked = !canOperate || isPipelineBusy || !server
     || server.status === 'running'
     || server.status === 'starting'
@@ -1588,9 +1258,7 @@ export function LivePanelView() {
   const packMutationLocked = packImportLocked || !packWorld || packWorld.status !== 'ready';
   const worldsForSelectedVersion = worlds.filter((world) => world.version === configuration.version && world.status === 'ready');
   const hasVersionChange = Boolean(activeConfig && configuration.version !== activeConfig.version);
-  const hasWorldChange = selectedWorldId
-    ? selectedWorld?.id !== activeWorld?.id
-    : true;
+  const hasWorldChange = selectedWorldId ? selectedWorld?.id !== activeWorld?.id : true;
   const isEditingWorldSettings = Boolean(editingWorld && selectedWorldId === editingWorld.id);
   const hasSettingsChanges = Boolean(activeConfig && hasConfigurationSettingsChanged(activeConfig, configuration));
   const hasEditedWorldSettings = Boolean(editingWorld?.configuration
@@ -1661,7 +1329,7 @@ export function LivePanelView() {
       <header className="ncraft-header">
         <div className="ncraft-header__inner">
           <a className="ncraft-brand" href="#overview" aria-label="Nebula Craft, accueil" translate="no" onClick={(event) => { event.preventDefault(); switchPanel('overview'); }}>
-            <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { rotate: 8, scale: 1.04 }}>
+            <motion.span className="brand-mark" whileHover={reduceMotion ? undefined : { scale: 1.04 }}>
               <NebulaBrandMark />
             </motion.span>
             <span className="ncraft-brand__copy">
@@ -1739,7 +1407,7 @@ export function LivePanelView() {
             </motion.button>
             <motion.button
               type="button"
-              onClick={() => void handleLogout()}
+              onClick={() => { void handleLogout(); }}
               disabled={busyAction === 'logout'}
               whileTap={reduceMotion ? undefined : { scale: 0.95 }}
               className="icon-button logout-button"
@@ -1776,247 +1444,42 @@ export function LivePanelView() {
           id="panel-overview"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Vue générale"
+          aria-labelledby="mobile-tab-overview"
           tabIndex={0}
           hidden={activeSection !== 'overview'}
         >
           {activeSection === 'overview' && (
-            <motion.div
-              className="ncraft-tab-panel__content"
-              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-          <section className="ncraft-overview-grid">
-            <motion.section
-              className="nether-hero"
-              initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="nether-hero__ambient" aria-hidden="true"><span /><span /><span /></div>
-              <div className="nether-hero__topline">
-                <span className="nether-hero__mark"><Server size={17} /></span>
-                <span className="nether-eyebrow">CONTRÔLE DU SERVEUR</span>
-                <StatusPill status={currentServerStatus} />
-              </div>
-              <div className="nether-hero__intro">
-                <h1>Ton monde,<br /><span>sous contrôle.</span></h1>
-                <p>Bedrock Dedicated Server · Instance unique</p>
-              </div>
-
-              <div className="world-capsule">
-                <span className={`world-capsule__icon ${activeConfig ? 'world-capsule__icon--block' : ''}`} aria-hidden="true">
-                  {activeConfig ? (
-                    <RefineFrame
-                      status={isPipelineBusy ? 'refining' : 'complete'}
-                      width={34}
-                      aspectRatio="1"
-                      radius={10}
-                      background="rgba(20, 31, 24, 0.9)"
-                      color="var(--nether-moss)"
-                      labels={{ queued: 'En attente', generating: 'Préparation', refining: 'Déploiement', complete: 'Prêt', error: 'Échec' }}
-                      stageDuration={520}
-                      sweep={isPipelineBusy}
-                      showStatus={false}
-                      className="ncraft-world-frame"
-                    >
-                      <img src="/assets/minecraft/grass-block.webp" alt="" width="34" height="34" />
-                    </RefineFrame>
-                  ) : <Globe size={19} />}
-                </span>
-                <span className="world-capsule__copy">
-                  <small>MONDE ACTIF</small>
-                  <strong title={activeWorld?.name ?? activeConfig?.levelName ?? 'Aucun monde déployé'}>{activeWorld?.name ?? activeConfig?.levelName ?? 'Aucun monde déployé'}</strong>
-                </span>
-                <span className="world-capsule__version">
-                  {activeConfig?.version ? `BDS ${activeConfig.version}` : 'À configurer'}
-                </span>
-              </div>
-
-              <div className="hero-metrics-grid">
-                <MetricTile icon={Users} label="Joueurs" value={`${server?.playersOnline ?? '—'} / ${activeConfig?.maxPlayers ?? '—'}`} detail="connectés / maximum" accent="portal" />
-                <MetricTile icon={Clock3} label="Disponibilité" value={<LiveUptime startedAt={server?.status === 'running' ? server.startedAt : null} />} detail={server?.status === 'running' && server.startedAt ? 'depuis le démarrage' : 'serveur hors ligne'} accent="soul" />
-              </div>
-
-              <div className="nether-hero__actions">
-                <motion.button
-                  type="button"
-                  onClick={() => void handleStart()}
-                  disabled={startDisabled}
-                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="nether-btn nether-btn--primary"
-                >
-                  {busyAction === 'start' ? <Loader2 className="spin-soft" size={17} /> : <Play size={17} fill="currentColor" />}
-                  {busyAction === 'start' ? 'Démarrage…' : 'Démarrer Bedrock'}
-                </motion.button>
-                <motion.button
-                  type="button"
-                  onClick={() => void handleStop()}
-                  disabled={stopDisabled}
-                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="nether-btn nether-btn--danger"
-                >
-                  {busyAction === 'stop' ? <Loader2 className="spin-soft" size={17} /> : <Power size={17} />}
-                  {busyAction === 'stop' ? 'Arrêt…' : 'Arrêter'}
-                </motion.button>
-                <motion.button type="button" className="nether-btn nether-btn--quiet" onClick={() => switchPanel('deploy')} whileTap={reduceMotion ? undefined : { scale: 0.97 }}><Package size={16} /> Mettre à jour <ArrowRight size={14} /></motion.button>
-              </div>
-
-              <div className="restart-strip">
-                <span className="restart-strip__icon"><Clock3 size={15} /></span>
-                <span className="restart-strip__label">Redémarrage quotidien</span>
-                <strong>{scheduler?.enabled ? `${scheduler.time} · ${scheduler.timeZone}` : 'Désactivé'}</strong>
-                {scheduler?.enabled && <span className="restart-strip__next">Prochain : {formatScheduledTime(scheduler.nextRestartAt, scheduler.timeZone)}</span>}
-                {scheduler?.phase === 'countdown' && <span className="restart-strip__notice">Annonce · {formatDuration(scheduler.countdownSeconds)}</span>}
-                {scheduler?.phase === 'restarting' && <span className="restart-strip__notice">Redémarrage en cours…</span>}
-                {scheduler?.phase === 'failed' && <span className="restart-strip__error">{scheduler.error || 'Échec du redémarrage automatique.'}</span>}
-              </div>
-              {server?.error && <p className="hero-error"><AlertTriangle size={15} />{server.error}</p>}
-            </motion.section>
-
-            <NetherCard
-              id="network"
-              title={`Relais ${providerName}`}
-              eyebrow="ACCÈS BEDROCK · UDP 19132"
-              description="Adresse publique du tunnel sélectionné"
-              icon={Wifi}
-              accent="soul"
-              className="tunnel-card"
-              action={<StatusPill status={tunnelStatus} />}
-            >
-              <div className="public-address-panel">
-                <div className="public-address-panel__heading"><span>ADRESSE PUBLIQUE</span><Globe size={15} /></div>
-                {activeTunnel?.address ? (
-                  <div className="public-address-value">
-                    <code>{activeTunnel.address}</code>
-                    <motion.button
-                      type="button"
-                      onClick={() => void handleCopy(activeTunnel.address ?? '', 'Adresse')}
-                      whileTap={reduceMotion ? undefined : { scale: 0.92 }}
-                      className="copy-button"
-                      aria-label="Copier l’adresse publique"
-                      title="Copier l’adresse"
-                    ><Copy size={15} /></motion.button>
-                  </div>
-                ) : (
-                  <p className="public-address-empty">L’adresse apparaîtra lorsque le relais sera connecté.</p>
-                )}
-              </div>
-              <div className="tunnel-meta-row">
-                <span>Destination locale</span>
-                <code>127.0.0.1:19132/UDP</code>
-              </div>
-
-              {tunnelProvider === 'portwarp' && portwarp && (
-                <div className="tunnel-detail-stack">
-                  <div className="tunnel-meta-row">
-                    <span>{portwarp.tunnelName}</span>
-                    <code>UDP {portwarp.localPort ?? 19132}{portwarp.publicPort ? ` → ${portwarp.publicPort}` : ''}</code>
-                  </div>
-                  <AnimatePresence initial={false}>
-                    {portwarpSetup?.phase === 'waiting_for_approval' && portwarpSetup.userCode && (
-                      <motion.div
-                        key="portwarp-approval"
-                        className="nether-callout nether-callout--portal"
-                        initial={reduceMotion ? false : { opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={reduceMotion ? undefined : { opacity: 0, height: 0 }}
-                      >
-                        <LockKeyhole size={17} />
-                        <div className="callout-copy">
-                          <strong>Autorise cette machine</strong>
-                          <span>Ouvre Portwarp avec ta session authentifiée, puis saisis ce code temporaire :</span>
-                          <a href={portwarpSetup.verificationUrl ?? 'https://portwarp.com/device'} target="_blank" rel="noreferrer" className="inline-link">
-                            Ouvrir portwarp.com/device <ExternalLink size={13} />
-                          </a>
-                          <div className="device-code-row">
-                            <code>{portwarpSetup.userCode}</code>
-                            <button type="button" onClick={() => void handleCopy(portwarpSetup.userCode ?? '', 'Code temporaire')} className="copy-button copy-button--small" aria-label="Copier le code temporaire"><Copy size={14} /></button>
-                          </div>
-                          <small>Éphémère : affiché dans cette session authentifiée, jamais enregistré dans .env ou l’état du panel.</small>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  {portwarpSetup?.phase === 'waiting_for_approval' && !portwarpSetup.userCode && !canOperate && (
-                    <p className="nether-inline-note" role="status">Un compte operator ou supérieur doit consulter le code temporaire et terminer l’autorisation Portwarp.</p>
-                  )}
-                  {portwarpSetup?.phase === 'starting' && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Démarrage de l’autorisation Portwarp…</p>}
-                  {portwarpSetup?.phase === 'failed' && portwarpSetup.error && <p role="alert" className="inline-error">{portwarpSetup.error}</p>}
-                  {portwarp.status === 'tunnel_missing' && (
-                    <div className="nether-callout nether-callout--warning">
-                      <AlertTriangle size={17} />
-                      <div className="callout-copy">
-                        <strong>Tunnel existant introuvable</strong>
-                        <span>Crée ou active manuellement « {portwarp.tunnelName} » dans Portwarp : UDP vers 127.0.0.1:19132. N-Craft ne crée ni ne supprime de tunnel.</span>
-                        <a href="https://portwarp.com/tunnels" target="_blank" rel="noreferrer" className="inline-link">Gérer mes tunnels <ExternalLink size={13} /></a>
-                      </div>
-                    </div>
-                  )}
-                  {portwarp.status === 'client_missing' && <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Le CLI pwrp manque. Relance ncraft setup pour l’installer et le vérifier.</p>}
-                  {portwarp.error && <p role="status" className="inline-error">{portwarp.error}</p>}
-                </div>
-              )}
-
-              {tunnelProvider === 'localtonet' && localtonet?.status === 'address_not_detected' && (
-                <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Crée et démarre dans Localtonet un tunnel UDP vers 127.0.0.1:19132. Son adresse apparaîtra ici.</p>
-              )}
-              {tunnelProvider === 'localtonet' && localtonet?.status === 'configuration_missing' && (
-                <p className="nether-callout nether-callout--warning"><AlertTriangle size={17} />Vérifie le client Localtonet et configure LOCALTONET_AUTH_TOKEN ainsi que LOCALTONET_API_KEY dans le .env du conteneur, puis redémarre le panneau.</p>
-              )}
-              {tunnelProvider === 'localtonet' && localtonet?.error && <p role="status" className="inline-error">{localtonet.error}</p>}
-              {tunnelProvider === 'playit' && playitSetup?.claimUrl && (
-                <a href={playitSetup.claimUrl} target="_blank" rel="noreferrer" className="nether-btn nether-btn--primary nether-btn--wide"><ExternalLink size={16} /> Ouvrir le lien Playit</a>
-              )}
-              {tunnelProvider === 'playit' && playitSetup?.phase === 'claim_pending' && !playitSetup.claimUrl && !canOperate && (
-                <p className="nether-inline-note" role="status">Un compte operator ou supérieur doit ouvrir le lien temporaire de rattachement Playit.</p>
-              )}
-              {tunnelProvider === 'playit' && playitSetup?.phase === 'configured' && !playit?.address && <p className="nether-inline-note">Agent approuvé. Crée un tunnel Bedrock UDP dans ton compte Playit.</p>}
-              {tunnelProvider === 'playit' && (playitSetup?.phase === 'waiting_for_secret' || playitSetup?.phase === 'starting') && !playitSetup.claimUrl && <p className="nether-inline-note"><Loader2 size={14} className="spin-soft" /> Préparation du lien de claim…</p>}
-              {tunnelProvider === 'playit' && playitSetup?.error && <p role="status" className="inline-error">{playitSetup.error}</p>}
-              {tunnelProvider === 'playit' && playit?.error && <p role="status" className="inline-error">{playit.error}</p>}
-              {tunnelProvider === 'playit' && (playitSetup?.phase === 'failed' || (playitSetup?.phase === 'waiting_for_secret' && !playitSetup.claimUrl)) && (
-                <motion.button type="button" onClick={() => void handlePlayitSetup()} disabled={!canOperate || busyAction === 'playit'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--quiet nether-btn--wide">
-                  {busyAction === 'playit' ? <Loader2 className="spin-soft" size={16} /> : <RefreshCw size={16} />}
-                  {busyAction === 'playit' ? 'Démarrage…' : 'Réessayer le claim'}
-                </motion.button>
-              )}
-
-              {tunnelProvider === 'portwarp' && (
-                <motion.button
-                  type="button"
-                  onClick={() => void handlePortwarpRetry()}
-                  disabled={!canOperate || busyAction === 'portwarp'}
-                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="nether-btn nether-btn--quiet nether-btn--wide"
-                >
-                  {busyAction === 'portwarp' ? <Loader2 className="spin-soft" size={16} /> : <RefreshCw size={16} />}
-                  {busyAction === 'portwarp' ? 'Vérification…' : 'Vérifier / reconnecter'}
-                </motion.button>
-              )}
-              <p className="tunnel-caveat">Un relais actif ne prouve pas que Bedrock UDP est joignable depuis Internet. Vérifie l’adresse depuis un client Bedrock.</p>
-            </NetherCard>
-          </section>
-
-          <section className="ncraft-telemetry-grid" aria-label="Mesures et configuration Bedrock">
-            <BedrockMetricsChart samples={metricHistory} serverStatus={server?.status} />
-            <NetherCard title="Fiche du monde" eyebrow="CONFIGURATION ACTIVE" icon={Database} accent="moss">
-              {activeConfig ? (
-                <dl className="world-details-list">
-                  <WorldDetail label="Nom du serveur" value={activeConfig.serverName} />
-                  <WorldDetail label="Version Bedrock" value={versionEntry?.label ?? activeConfig.version} />
-                  <WorldDetail label="Mode de jeu" value={activeConfig.gamemode === 'survival' ? 'Survie' : activeConfig.gamemode === 'creative' ? 'Créatif' : 'Aventure'} />
-                  <WorldDetail label="Difficulté" value={activeConfig.difficulty === 'peaceful' ? 'Paisible' : activeConfig.difficulty === 'easy' ? 'Facile' : activeConfig.difficulty === 'normal' ? 'Normale' : 'Difficile'} />
-                  <WorldDetail label="Joueurs maximum" value={String(activeConfig.maxPlayers)} />
-                  <WorldDetail label="Distance de vue" value={`${activeConfig.viewDistance} chunks`} />
-                </dl>
-              ) : (
-                <div className="empty-state"><Package size={24} /><strong>Aucune version déployée</strong><span>Choisis une version Bedrock vérifiée dans le panneau de déploiement.</span><button type="button" className="empty-state__link" onClick={() => switchPanel('deploy')}>Configurer le serveur <ChevronRight size={14} /></button></div>
-              )}
-            </NetherCard>
-          </section>
-            </motion.div>
+            <OverviewPanel
+              reduceMotion={reduceMotion}
+              animatePanelEntry={animatePanelEntry}
+              currentServerStatus={currentServerStatus}
+              isPipelineBusy={isPipelineBusy}
+              activeConfig={activeConfig}
+              activeWorld={activeWorld}
+              server={server}
+              startDisabled={startDisabled}
+              stopDisabled={stopDisabled}
+              busyAction={busyAction}
+              scheduler={scheduler}
+              providerName={providerName}
+              tunnelProvider={tunnelProvider}
+              tunnelStatus={tunnelStatus}
+              activeTunnel={activeTunnel}
+              portwarp={portwarp}
+              portwarpSetup={portwarpSetup}
+              localtonet={localtonet}
+              playit={playit}
+              playitSetup={playitSetup}
+              canOperate={canOperate}
+              metricHistory={metricHistory}
+              versionEntry={versionEntry}
+              onStart={() => { void handleStart(); }}
+              onStop={() => { void handleStop(); }}
+              onSwitchPanel={switchPanel}
+              onCopy={(value, label) => { void handleCopy(value, label); }}
+              onPlayitSetup={() => { void handlePlayitSetup(); }}
+              onPortwarpRetry={() => { void handlePortwarpRetry(); }}
+            />
           )}
         </section>
 
@@ -2024,248 +1487,47 @@ export function LivePanelView() {
           id="panel-deploy"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Déploiement"
+          aria-labelledby="mobile-tab-deploy"
           tabIndex={0}
           hidden={activeSection !== 'deploy'}
         >
           {activeSection === 'deploy' && (
-            <motion.div
-              className="ncraft-tab-panel__content"
-              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-          <PanelHeading
-            variant="deployment"
-            eyebrow="DÉPLOIEMENT BEDROCK"
-            title="Déployer Bedrock"
-            description="Choisis une build BDS et sa sauvegarde. Enregistrer les propriétés laisse Bedrock arrêté; changer de version ou de monde lance le déploiement et son redémarrage."
-          />
-          <section className="ncraft-workspace-grid ncraft-workspace-grid--single">
-            <NetherCard
-              title="Déployer un monde"
-              eyebrow="VERSION ET RÉGLAGES BEDROCK"
-              description="Les propriétés peuvent être enregistrées sans redémarrer. Changer de version ou de monde lance un déploiement puis redémarre Bedrock."
-              icon={Package}
-              accent="magma"
-              className="deploy-card"
-            >
-              <form onSubmit={handleDeploy} className="deploy-form">
-                {isExistingDeployment && (
-                  <div className="nether-callout nether-callout--success">
-                    <ShieldCheck size={18} />
-                    <div className="callout-copy">
-                      <strong>Mise à jour non destructive</strong>
-                      <span>Le monde, les packs, les permissions et les fichiers non modifiés sont conservés. Les réglages peuvent être enregistrés lorsque Bedrock est arrêté.</span>
-                    </div>
-                  </div>
-                )}
-                {isExistingDeployment && bedrockMayBeRunning && (
-                  <div className="nether-callout nether-callout--warning">
-                    <LockKeyhole size={18} />
-                    <div className="callout-copy">
-                      <strong>Bedrock doit être arrêté</strong>
-                      <span>Arrête Bedrock pour modifier les réglages ou la version. Le tunnel restera actif.</span>
-                    </div>
-                  </div>
-                )}
-                {isExistingDeployment && !configurationLocked && (
-                  <p className="nether-inline-note"><ShieldCheck size={15} />Enregistrer les réglages ne télécharge pas Bedrock et ne démarre pas le serveur. Il restera arrêté jusqu’à ce que tu cliques sur « Démarrer Bedrock ».</p>
-                )}
-
-                <div className="cartridge-slot">
-                  <div className="cartridge-slot__art"><Package size={26} /></div>
-                  <div className="nether-field cartridge-slot__picker">
-                    <span id="bedrock-version-label">Version du serveur <b>requise</b></span>
-                    <GlideSelect
-                      options={deploymentVersionOptions}
-                      value={configuration.version}
-                      onChange={(value) => changeField('version', value)}
-                      labelledBy="bedrock-version-label"
-                      describedBy="bedrock-version-status"
-                      disabled={configurationLocked}
-                      required
-                      invalid={!selectedVersion}
-                    />
-                  </div>
-                  <div id="bedrock-version-status" className="cartridge-slot__info">
-                    <span className="nether-eyebrow">SÉLECTION</span>
-                    <strong>{selectedVersion?.label ?? (configuration.version || 'Aucune version')}</strong>
-                    <small className={!selectedVersion && versions.length > 0 ? 'cartridge-slot__version-error' : undefined}>
-                      {selectedVersion
-                        ? `${selectedVersion.channel === 'preview' ? 'Preview' : 'Version stable'} · client ${selectedVersion.clientVersion}${selectedVersion.releaseDate ? ` · sortie ${selectedVersion.releaseDate}` : ''}`
-                        : versions.length > 0 ? 'Version indisponible · choisis une version du catalogue' : 'Catalogue historique du panneau'}
-                    </small>
-                  </div>
-                </div>
-                {versions.length === 0 && <p className="inline-error">Aucune archive BDS configurée dans le catalogue local.</p>}
-
-                <fieldset className="world-choice-box" disabled={configurationLocked}>
-                  <legend>Monde à démarrer <b>requis</b></legend>
-                  <div className="world-choice-grid" role="radiogroup" aria-label="Monde à démarrer">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={!selectedWorldId}
-                      className={`world-choice-card ${!selectedWorldId ? 'is-selected' : ''}`}
-                      onClick={chooseNewWorld}
-                      disabled={configurationLocked}
-                    >
-                      <span className="world-choice-card__radio" aria-hidden="true" />
-                      <span className="world-choice-card__copy"><strong>Créer un nouveau monde</strong><small>Nouveau dossier isolé pour BDS {configuration.version || 'sélectionné'}</small></span>
-                      <Globe size={17} />
-                    </button>
-                    {worldsForSelectedVersion.map((world) => (
-                      <button
-                        key={world.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selectedWorldId === world.id}
-                        className={`world-choice-card ${selectedWorldId === world.id ? 'is-selected' : ''}`}
-                        onClick={() => chooseWorld(world, false)}
-                        disabled={configurationLocked}
-                      >
-                        <span className="world-choice-card__radio" aria-hidden="true" />
-                        <span className="world-choice-card__copy"><strong>{world.name}</strong><small>Progression existante · BDS {world.version}</small></span>
-                        {world.lastUsedAt ? <span className="world-choice-card__meta">Repris</span> : <Database size={16} />}
-                      </button>
-                    ))}
-                  </div>
-                  {worldsForSelectedVersion.length === 0 && <p className="world-choice-note">Aucun monde prêt n’est associé à cette version exacte. Les mondes d’autres versions ne sont jamais proposés ici.</p>}
-                  {selectedWorld && selectedWorld.version === configuration.version && <p className="world-choice-note"><ShieldCheck size={14} /> Le dossier et les chunks de « {selectedWorld.name} » seront repris tels quels. Les réglages modifiables seront appliqués; la seed reste verrouillée.</p>}
-                </fieldset>
-
-                <div className="nether-form-grid">
-                  <label className="nether-field">
-                    <span>Nom du serveur</span>
-                    <input value={configuration.serverName} maxLength={64} disabled={configurationLocked} onChange={(event) => changeField('serverName', event.target.value)} className="nether-input" required />
-                  </label>
-                  {selectedWorld ? (
-                    <div className="nether-field">
-                      <span>Monde existant · progression conservée</span>
-                      <div className="world-selected-summary"><strong>{selectedWorld.name}</strong><small>BDS {selectedWorld.version} · dossier isolé</small></div>
-                    </div>
-                  ) : (
-                    <label className="nether-field">
-                      <span>Nom du nouveau monde</span>
-                      <input value={newWorldName} maxLength={64} disabled={configurationLocked} onChange={(event) => { markConfigTouched(); setNewWorldName(event.target.value); }} className="nether-input" required />
-                    </label>
-                  )}
-                  <div className="nether-field deploy-segment-field">
-                    <span id="deploy-gamemode-label">Mode de jeu</span>
-                    <RubberSegment
-                      options={gameModeOptions}
-                      value={configuration.gamemode}
-                      onChange={(value) => changeField('gamemode', value)}
-                      labelledBy="deploy-gamemode-label"
-                      disabled={configurationLocked}
-                    />
-                  </div>
-                  <div className="nether-field deploy-segment-field">
-                    <span id="deploy-difficulty-label">Difficulté</span>
-                    <RubberSegment
-                      options={difficultyOptions}
-                      value={configuration.difficulty}
-                      onChange={(value) => changeField('difficulty', value)}
-                      labelledBy="deploy-difficulty-label"
-                      disabled={configurationLocked}
-                    />
-                  </div>
-                  <label className="nether-field">
-                    <span>Joueurs maximum</span>
-                    <input type="number" min={1} step={1} value={configuration.maxPlayers} disabled={configurationLocked} onChange={(event) => changeField('maxPlayers', Number(event.target.value))} className="nether-input" required />
-                  </label>
-                  <div className="nether-field deploy-seed-field">
-                    <label className="deploy-seed-field__label" htmlFor="deploy-seed">Seed <small>{selectedWorld ? 'verrouillée · monde déjà généré' : 'optionnelle · vide = aléatoire'}</small></label>
-                    <input id="deploy-seed" value={configuration.seed} maxLength={80} disabled={configurationLocked || Boolean(selectedWorld)} onChange={(event) => changeField('seed', event.target.value)} className="nether-input" />
-                    <SeedTools seed={configuration.seed} onCopy={(seed) => { void handleCopy(seed, 'Seed'); }} />
-                  </div>
-                  <label className="nether-field">
-                    <span>Distance de vue <small>chunks</small></span>
-                    <input type="number" min={1} max={96} step={1} value={configuration.viewDistance} disabled={configurationLocked} onChange={(event) => changeField('viewDistance', Number(event.target.value))} className="nether-input" />
-                  </label>
-                </div>
-
-                <div className="admin-xuid-box">
-                  <div className="admin-xuid-box__header">
-                    <div><strong>Administrateurs Bedrock</strong><small>1 à 3 XUID numériques uniques · aucun gamertag</small></div>
-                    <motion.button type="button" onClick={addAdminField} disabled={configurationLocked || configuration.adminXuids.length >= 3} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--tiny nether-btn--quiet">
-                      <Users size={14} /> Ajouter
-                    </motion.button>
-                  </div>
-                  <div className="admin-xuid-list">
-                    {configuration.adminXuids.map((xuid, index) => (
-                      <div key={index} className="admin-xuid-row">
-                        <span className="admin-xuid-row__number">{String(index + 1).padStart(2, '0')}</span>
-                        <input aria-label={`XUID administrateur ${index + 1}`} inputMode="numeric" autoComplete="off" value={xuid} disabled={configurationLocked} onChange={(event) => setAdminXuid(index, event.target.value)} className="nether-input" placeholder="Ex. 2535412894129841" required />
-                        {configuration.adminXuids.length > 1 && <button type="button" onClick={() => removeAdminField(index)} disabled={configurationLocked} className="icon-button icon-button--danger" aria-label={`Retirer le XUID ${index + 1}`}><X size={16} /></button>}
-                      </div>
-                    ))}
-                  </div>
-                  {configuration.adminXuids.some((xuid) => xuid.length > 0 && !/^\d{1,20}$/.test(xuid)) && <p className="inline-error">Le XUID doit contenir uniquement des chiffres, sans espace.</p>}
-                  {configuration.adminXuids.every((xuid) => xuid.length > 0) && new Set(configuration.adminXuids).size !== configuration.adminXuids.length && <p className="inline-error">Chaque XUID administrateur doit être unique.</p>}
-                  <XuidConverter onCopy={handleCopy} />
-                </div>
-
-                <div className="deploy-options-grid">
-                  <div className="deploy-jelly-setting">
-                    <strong id="allow-cheats-label">Autoriser les commandes</strong>
-                    <JellyRadio
-                      items={[
-                        { value: false, label: 'Désactivées' },
-                        { value: true, label: 'Autorisées' },
-                      ]}
-                      value={configuration.allowCheats}
-                      onChange={(allowCheats) => changeField('allowCheats', allowCheats)}
-                      labelledBy="allow-cheats-label"
-                      describedBy="allow-cheats-help"
-                      ariaLabel="Autoriser les commandes de jeu"
-                      chipColor="rgba(38, 31, 42, 0.96)"
-                      activeColor="var(--nether-magma)"
-                      textColor="var(--nether-muted)"
-                      activeTextColor="#21160f"
-                      size="sm"
-                      gap={6}
-                      radius={12}
-                      disabled={configurationLocked}
-                      className="ncraft-cheats-radio"
-                    />
-                    <small id="allow-cheats-help">Cheats et commandes de jeu sur le serveur Bedrock.</small>
-                  </div>
-                  <div className="security-badges">
-                    <span><LockKeyhole size={13} /> Auth Bedrock</span>
-                    <span><Wifi size={13} /> UDP 19132</span>
-                    <span><ShieldCheck size={13} /> Allow-list off</span>
-                  </div>
-                </div>
-
-                <SpringCheck
-                  className="eula-card"
-                  checked={configuration.eulaAccepted}
-                  onChange={(checked) => changeField('eulaAccepted', checked)}
-                  disabled={configurationLocked}
-                >
-                  J’ai lu et j’accepte l’<a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">EULA Minecraft</a>. Si le binaire affiche un prompt connu, le backend y répondra automatiquement; aucun fichier EULA non vérifié ne sera inventé.
-                </SpringCheck>
-
-                <motion.button
-                  type={isEditingWorldSettings || (isExistingDeployment && !operationNeedsDeploy) ? 'button' : 'submit'}
-                  onClick={isEditingWorldSettings
-                    ? () => void handleSaveWorldSettings()
-                    : isExistingDeployment && !operationNeedsDeploy ? () => void handleSaveConfiguration() : undefined}
-                  disabled={configurationActionDisabled || (isEditingWorldSettings && worldBusyId === editingWorld?.id)}
-                  whileTap={reduceMotion ? undefined : { scale: 0.99 }}
-                  className="nether-btn nether-btn--primary nether-btn--wide deploy-submit"
-                >
-                  {isPipelineBusy || (isEditingWorldSettings && worldBusyId === editingWorld?.id)
-                    ? <Loader2 className="spin-soft" size={18} />
-                    : isEditingWorldSettings || (isExistingDeployment && !operationNeedsDeploy) ? <Save size={18} /> : <ArrowRight size={18} />}
-                  {configurationActionLabel}
-                </motion.button>
-              </form>
-            </NetherCard>
-          </section>
-            </motion.div>
+            <Suspense fallback={<PanelLoadingFallback label="Chargement du déploiement…" />}>
+              <DeployPanel
+                reduceMotion={reduceMotion}
+                animatePanelEntry={animatePanelEntry}
+                canAdmin={canAdmin}
+                isExistingDeployment={isExistingDeployment}
+                bedrockMayBeRunning={bedrockMayBeRunning}
+                configurationLocked={configurationLocked}
+                deploymentVersionOptions={deploymentVersionOptions}
+                configuration={configuration}
+                selectedVersion={selectedVersion}
+                versionsCount={versions.length}
+                selectedWorldId={selectedWorldId}
+                selectedWorld={selectedWorld}
+                worldsForSelectedVersion={worldsForSelectedVersion}
+                newWorldName={newWorldName}
+                isPipelineBusy={isPipelineBusy}
+                isEditingWorldSettings={isEditingWorldSettings}
+                editingWorld={editingWorld}
+                worldBusyId={worldBusyId}
+                operationNeedsDeploy={operationNeedsDeploy}
+                configurationActionDisabled={configurationActionDisabled}
+                configurationActionLabel={configurationActionLabel}
+                onDeploySubmit={(event) => { void handleDeploy(event); }}
+                onSaveWorldSettings={() => { void handleSaveWorldSettings(); }}
+                onSaveConfiguration={() => { void handleSaveConfiguration(); }}
+                onChangeField={changeField}
+                onChooseNewWorld={chooseNewWorld}
+                onChooseWorld={chooseWorld}
+                onNewWorldNameChange={(value) => { markConfigTouched(); setNewWorldName(value); }}
+                onAddAdminField={addAdminField}
+                onSetAdminXuid={setAdminXuid}
+                onRemoveAdminField={removeAdminField}
+                onCopy={handleCopy}
+              />
+            </Suspense>
           )}
         </section>
 
@@ -2273,279 +1535,71 @@ export function LivePanelView() {
           id="panel-worlds"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Mondes"
+          aria-labelledby="mobile-tab-worlds"
           tabIndex={0}
           hidden={activeSection !== 'worlds'}
         >
           {activeSection === 'worlds' && (
-            <motion.div
-              className="ncraft-tab-panel__content"
-              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-          <PanelHeading
-            variant="worlds"
-            eyebrow="SAUVEGARDES BEDROCK"
-            title="Gérer les mondes"
-            description="Chaque build BDS exacte garde sa propre sauvegarde. Importer, exporter, renommer ou supprimer un monde ne touche pas aux autres."
-          />
-          <NetherCard
-            title="Gestionnaire de mondes"
-            eyebrow="SAUVEGARDES BEDROCK ISOLÉES"
-            description="Chaque sauvegarde est associée à un build BDS exact. Reprendre conserve les mêmes chunks; les données d’une version ne sont jamais ouvertes avec une autre version sans choix explicite."
-            icon={Database}
-            accent="moss"
-            className="world-manager-card"
-            action={<span className="world-manager-count">{worlds.length} monde{worlds.length === 1 ? '' : 's'}</span>}
-          >
-            <div className="world-manager-toolbar">
-              <p><ShieldCheck size={15} /> Les opérations de gestion nécessitent l’arrêt de Bedrock. Export recommandé avant suppression.</p>
-              <motion.button type="button" onClick={() => void refreshWorlds()} disabled={configurationLocked} whileTap={reduceMotion ? undefined : { scale: 0.96 }} className="nether-btn nether-btn--quiet nether-btn--tiny">
-                <RefreshCw size={14} /> Actualiser
-              </motion.button>
-            </div>
-
-            {worldManagerError && <div role="alert" className="nether-callout nether-callout--danger world-manager-message"><AlertTriangle size={16} /><span>{worldManagerError}</span></div>}
-
-            <div className="world-import-panel">
-              <div className="world-import-panel__heading"><span className="world-import-icon"><FileUp size={17} /></span><div><strong>Importer un monde</strong><small>.mcworld ou archive ZIP Bedrock · aucun écrasement</small></div></div>
-              <div className="world-import-grid">
-                <div className="nether-field">
-                  <span id="world-import-version-label">Version BDS exacte</span>
-                  <GlideSelect
-                    options={worldVersionOptions}
-                    value={worldImportVersion}
-                    onChange={setWorldImportVersion}
-                    labelledBy="world-import-version-label"
-                    disabled={configurationLocked || versions.length === 0}
-                    required
-                    invalid={!versions.some((version) => version.version === worldImportVersion)}
-                  />
-                </div>
-                <label className="nether-field">
-                  <span>Nom dans le gestionnaire</span>
-                  <input value={worldImportName} maxLength={80} disabled={configurationLocked} onChange={(event) => setWorldImportName(event.target.value)} className="nether-input" placeholder={worldImportFile?.name.replace(/\.(mcworld|zip)$/i, '') || 'Nom du monde'} />
-                </label>
-                <label className="nether-field world-file-field">
-                  <span>Archive Bedrock</span>
-                  <input
-                    ref={worldImportInputRef}
-                    type="file"
-                    accept=".mcworld,.zip,application/zip,application/octet-stream"
-                    disabled={configurationLocked}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      setWorldImportFile(file);
-                      if (file && !worldImportName) setWorldImportName(file.name.replace(/\.(mcworld|zip)$/i, ''));
-                    }}
-                    className="world-file-input"
-                  />
-                </label>
-                <motion.button type="button" onClick={() => void handleImportWorld()} disabled={configurationLocked || !worldImportFile || !worldImportVersion || worldBusyId === 'import'} whileTap={reduceMotion ? undefined : { scale: 0.97 }} className="nether-btn nether-btn--primary world-import-submit">
-                  {worldBusyId === 'import' ? <Loader2 className="spin-soft" size={16} /> : <FileUp size={16} />}
-                  {worldBusyId === 'import' ? 'Import en cours…' : 'Importer sans remplacer'}
-                </motion.button>
-              </div>
-              <p className="world-import-footnote">L’archive est vérifiée et extraite avec des limites de taille; un dossier temporaire est utilisé. Le monde n’est ajouté à la liste qu’après validation, et tout nom de dossier est généré côté serveur.</p>
-            </div>
-
-            {worlds.length === 0 ? (
-              <div className="world-manager-empty"><Globe size={25} /><strong>Aucune sauvegarde enregistrée</strong><span>Crée un monde depuis le déploiement ou importe une archive Bedrock.</span><button type="button" className="world-manager-empty__link" onClick={chooseNewWorld}>Créer le premier monde <ChevronRight size={14} /></button></div>
-            ) : (
-              <div className="world-manager-list">
-                {worlds.map((world) => {
-                  const isCurrent = activeWorld?.id === world.id;
-                  const sourceLabel = world.source === 'imported' ? 'Importé' : world.source === 'legacy' ? 'Existant' : 'Créé par N-Craft';
-                  const statusLabelText = world.status === 'ready' ? 'PRÊT' : world.status === 'pending' ? 'À INITIALISER' : world.status === 'missing' ? 'DOSSIER ABSENT' : world.status === 'unsafe' ? 'INACCESSIBLE' : 'VERSION À ASSOCIER';
-                  const statusTone = world.status === 'ready' ? 'running' : world.status === 'missing' || world.status === 'unsafe' ? 'failed' : 'starting';
-                  return (
-                    <article key={world.id} className={`managed-world ${isCurrent ? 'managed-world--current' : ''}`}>
-                      <SwipeRow
-                        key={`${world.id}-actions-${worldSwipeNonce[world.id] ?? 0}`}
-                        actions={[{ id: 'delete', label: 'Supprimer' }]}
-                        label={`Actions du monde ${world.name}`}
-                        actionColor="#a7373d"
-                        drawerColor="rgba(105, 37, 45, 0.96)"
-                        rowColor="rgba(18, 15, 21, 0.9)"
-                        textColor="var(--nether-text)"
-                        height={58}
-                        radius={10}
-                        actionWidth={96}
-                        fullSwipe
-                        disabled={configurationLocked || worldBusyId === world.id || renameWorldId === world.id}
-                        onCommit={(action) => {
-                          if (action.id !== 'delete') return;
-                          void handleDeleteWorld(world).then((deleted) => {
-                            if (!deleted) setWorldSwipeNonce((current) => ({ ...current, [world.id]: (current[world.id] ?? 0) + 1 }));
-                          });
-                        }}
-                        className="ncraft-world-swipe-row"
-                      >
-                      <div className="managed-world__heading">
-                        <span className="managed-world__icon"><img src="/assets/minecraft/grass-block.webp" alt="" width="22" height="22" /></span>
-                        <div className="managed-world__identity">
-                          {renameWorldId === world.id ? (
-                            <div className="world-rename-row">
-                              <label className="sr-only" htmlFor={`world-name-${world.id}`}>Nouveau nom pour {world.name}</label>
-                              <input id={`world-name-${world.id}`} value={renameWorldValue} maxLength={80} onChange={(event) => setRenameWorldValue(event.target.value)} className="nether-input" autoFocus />
-                              <button type="button" className="icon-button" aria-label="Enregistrer le nom" disabled={worldBusyId === world.id || configurationLocked} onClick={() => void handleRenameWorld(world)}><Check size={15} /></button>
-                              <button type="button" className="icon-button" aria-label="Annuler le renommage" onClick={() => setRenameWorldId(null)}><X size={15} /></button>
-                            </div>
-                          ) : (
-                            <>
-                              <strong>{world.name}{isCurrent && <span className="managed-world__current-tag">MONDE ACTIF</span>}</strong>
-                              <small>{sourceLabel} · créé le {new Date(world.createdAt).toLocaleDateString('fr-FR')}</small>
-                            </>
-                          )}
-                        </div>
-                        <StatusPill status={statusTone} label={statusLabelText} />
-                      </div>
-                      </SwipeRow>
-
-                      <div className="managed-world__details">
-                        <span><small>Version dédiée</small><strong>{world.version ? `BDS ${world.version}` : 'Non associée'}</strong></span>
-                        <span className="managed-world__seed-detail">
-                          <small>Seed</small>
-                          <strong>{world.seed === null ? 'Inconnue · non modifiable' : world.seed || 'Aléatoire'}</strong>
-                          {world.seed !== null && world.seed.trim() && <SeedTools seed={world.seed} copyLabel={`Copier la seed de ${world.name}`} onCopy={(seed) => { void handleCopy(seed, `Seed de « ${world.name} »`); }} />}
-                        </span>
-                        <span><small>Dernière utilisation</small><strong>{world.lastUsedAt ? new Date(world.lastUsedAt).toLocaleString('fr-FR') : 'Jamais démarré ici'}</strong></span>
-                        {world.lastModifiedAt && <span><small>level.dat modifié</small><strong>{new Date(world.lastModifiedAt).toLocaleDateString('fr-FR')}</strong></span>}
-                      </div>
-
-                      {world.status === 'unassigned' && (
-                        <div className="world-assign-row">
-                          <div className="nether-field">
-                            <span id={`assign-version-label-${world.id}`}>Attribuer la version d’origine</span>
-                            <GlideSelect
-                              options={worldVersionOptions}
-                              value={assignWorldVersion[world.id] ?? (versions.some((version) => version.version === configuration.version) ? configuration.version : '')}
-                              onChange={(value) => setAssignWorldVersion((current) => ({ ...current, [world.id]: value }))}
-                              labelledBy={`assign-version-label-${world.id}`}
-                              disabled={configurationLocked || worldBusyId === world.id}
-                              placeholder="Choisir la version exacte…"
-                              required
-                            />
-                          </div>
-                          <button type="button" className="nether-btn nether-btn--quiet" onClick={() => void handleAssignWorld(world)} disabled={configurationLocked || worldBusyId === world.id}><Check size={15} /> Associer</button>
-                        </div>
-                      )}
-
-                      <div className="managed-world__actions">
-                        <button type="button" className="nether-btn nether-btn--primary nether-btn--tiny" onClick={() => isCurrent ? void handleStart() : chooseWorld(world, false)} disabled={configurationLocked || world.status !== 'ready' || !world.version || (isCurrent && startDisabled)}>
-                          <Play size={14} /> {isCurrent ? 'Démarrer ce monde' : 'Choisir & reprendre'}
-                        </button>
-                        <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => chooseWorld(world, true)} disabled={configurationLocked || !world.version || world.status === 'missing' || world.status === 'unsafe'}>
-                          <Pencil size={14} /> Modifier les options
-                        </button>
-                        <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => handleExportWorld(world)} disabled={configurationLocked || world.status !== 'ready'}>
-                          <Download size={14} /> Exporter
-                        </button>
-                        {renameWorldId !== world.id && <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" onClick={() => { setRenameWorldId(world.id); setRenameWorldValue(world.name); }} disabled={configurationLocked}>
-                          <Pencil size={14} /> Renommer
-                        </button>}
-                        <button type="button" className="nether-btn nether-btn--danger nether-btn--tiny" onClick={() => void handleDeleteWorld(world)} disabled={configurationLocked || worldBusyId === world.id}>
-                          {worldBusyId === world.id ? <Loader2 className="spin-soft" size={14} /> : <Trash2 size={14} />} Supprimer
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </NetherCard>
-
-          <NetherCard
-            title="Packs Bedrock"
-            eyebrow="RESSOURCES & COMPORTEMENTS · PAR MONDE"
-            description="Importe un pack de ressources ou de comportement, puis active-le séparément pour chaque monde. Les fichiers désactivés restent installés."
-            icon={Layers}
-            accent="portal"
-            className="world-manager-card"
-          >
-            <div className="world-pack-target">
-              <label className="nether-field" htmlFor="world-pack-target">
-                <span>Monde cible</span>
-                <select
-                  id="world-pack-target"
-                  className="nether-input"
-                  value={packWorldId}
-                  onChange={(event) => setPackWorldId(event.target.value)}
-                  disabled={readyPackWorlds.length === 0}
-                >
-                  <option value="">Choisir un monde prêt…</option>
-                  {readyPackWorlds.map((world) => <option key={world.id} value={world.id}>{world.name} · BDS {world.version}</option>)}
-                </select>
-              </label>
-              <p className="world-import-footnote">L’activation écrit uniquement la liste de packs du monde choisi. Vérifie la compatibilité avec le BDS et les modules Script API; Bedrock doit être arrêté. Aucun pack ni réglage n’est supprimé lors de l’import.</p>
-            </div>
-
-            {canAdmin ? (
-              <div className="world-import-panel">
-                <div className="world-import-panel__heading"><span className="world-import-icon"><FileUp size={17} /></span><div><strong>Importer un pack</strong><small>.mcpack, ou ZIP/.mcaddon contenant un seul pack · 256 Mio max</small></div></div>
-                <div className="world-pack-import-row">
-                  <label className="nether-field world-file-field">
-                    <span>Archive du pack</span>
-                    <input
-                      ref={worldPackInputRef}
-                      type="file"
-                      accept=".mcpack,.mcaddon,.zip,application/zip,application/octet-stream"
-                      disabled={packImportLocked}
-                      onChange={(event) => setWorldPackFile(event.target.files?.[0] ?? null)}
-                      className="world-file-input"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleImportPack()}
-                    disabled={packImportLocked || !worldPackFile}
-                    className="nether-btn nether-btn--primary"
-                  >
-                    {worldBusyId === 'pack-import' ? <Loader2 className="spin-soft" size={16} /> : <FileUp size={16} />}
-                    {worldBusyId === 'pack-import' ? 'Import en cours…' : 'Importer le pack'}
-                  </button>
-                </div>
-                <p className="world-import-footnote">Les archives sont extraites avec contrôle des chemins, des liens symboliques, du nombre de fichiers et de la taille décompressée. Une archive multi-pack est refusée; les dépendances de packs UUID doivent être installées et activées avant le pack qui en dépend.</p>
-              </div>
-            ) : (
-              <p className="nether-inline-note"><ShieldCheck size={14} />L’import et l’activation de packs sont réservés aux comptes admin ou propriétaire.</p>
-            )}
-
-            {!packWorldId ? (
-              <div className="world-manager-empty"><Layers size={24} /><strong>Choisis un monde prêt</strong><span>Les packs sont activés monde par monde; un pack importé n’est pas activé automatiquement.</span></div>
-            ) : worldPackLoading ? (
-              <p className="nether-inline-note" role="status"><Loader2 className="spin-soft" size={14} /> Lecture des packs de « {packWorld?.name ?? 'ce monde'} »…</p>
-            ) : worldPacks.length === 0 ? (
-              <div className="world-manager-empty"><Package size={24} /><strong>Aucun pack Bedrock détecté</strong><span>Importe un .mcpack ou un ZIP contenant un seul manifest.json.</span></div>
-            ) : (
-              <div className="world-pack-list" aria-label={`Packs du monde ${packWorld?.name ?? ''}`}>
-                {worldPacks.map((pack) => (
-                  <article key={pack.uuid} className="world-pack-row">
-                    <div className="world-pack-row__details">
-                      <strong>{pack.name}</strong>
-                      <small>{pack.kind === 'resource' ? 'Pack de ressources' : 'Pack de comportement'} · v{pack.version.join('.')} · {pack.active ? 'Actif dans ce monde' : 'Installé, inactif'}</small>
-                      {pack.description && <span>{pack.description}</span>}
-                    </div>
-                    {canAdmin && (
-                      <button
-                        type="button"
-                        className={`nether-btn ${pack.active ? 'nether-btn--quiet' : 'nether-btn--primary'} nether-btn--tiny`}
-                        onClick={() => void handleTogglePack(pack)}
-                        disabled={packMutationLocked || worldBusyId === `pack-${pack.uuid}`}
-                        aria-pressed={pack.active}
-                        aria-label={`${pack.active ? 'Désactiver' : 'Activer'} ${pack.name} pour ${packWorld?.name ?? 'ce monde'}`}
-                      >
-                        {worldBusyId === `pack-${pack.uuid}` ? <Loader2 className="spin-soft" size={14} /> : pack.active ? <X size={14} /> : <Check size={14} />}
-                        {pack.active ? 'Désactiver' : 'Activer'}
-                      </button>
-                    )}
-                  </article>
-                ))}
-              </div>
-            )}
-          </NetherCard>
-            </motion.div>
+            <Suspense fallback={<PanelLoadingFallback label="Chargement du gestionnaire de mondes…" />}>
+              <WorldsPanel
+                reduceMotion={reduceMotion}
+                animatePanelEntry={animatePanelEntry}
+                canOperate={canOperate}
+                canAdmin={canAdmin}
+                configurationLocked={configurationLocked}
+                configurationVersion={versions.some((version) => version.version === configuration.version) ? configuration.version : ''}
+                versionsAvailable={versions.length > 0}
+                isValidImportVersion={versions.some((version) => version.version === worldImportVersion)}
+                worlds={worlds}
+                activeWorld={activeWorld}
+                startDisabled={startDisabled}
+                worldManagerError={worldManagerError}
+                worldVersionOptions={worldVersionOptions}
+                worldImportVersion={worldImportVersion}
+                worldImportName={worldImportName}
+                worldImportFile={worldImportFile}
+                worldImportInputRef={worldImportInputRef}
+                worldBusyId={worldBusyId}
+                renameWorldId={renameWorldId}
+                renameWorldValue={renameWorldValue}
+                assignWorldVersion={assignWorldVersion}
+                worldSwipeNonce={worldSwipeNonce}
+                packWorldId={packWorldId}
+                packWorld={packWorld}
+                readyPackWorlds={readyPackWorlds}
+                packImportLocked={packImportLocked}
+                packMutationLocked={packMutationLocked}
+                worldPackFile={worldPackFile}
+                worldPackInputRef={worldPackInputRef}
+                worldPackLoading={worldPackLoading}
+                worldPacks={worldPacks}
+                onRefreshWorlds={() => { void refreshWorlds(); }}
+                onSetWorldImportVersion={setWorldImportVersion}
+                onSetWorldImportName={setWorldImportName}
+                onSelectWorldImportFile={(file) => {
+                  setWorldImportFile(file);
+                  if (file && !worldImportName) setWorldImportName(file.name.replace(/\.(mcworld|zip)$/i, ''));
+                }}
+                onImportWorld={() => { void handleImportWorld(); }}
+                onChooseNewWorld={chooseNewWorld}
+                onChooseWorld={chooseWorld}
+                onStartServer={() => { void handleStart(); }}
+                onExportWorld={handleExportWorld}
+                onStartRenameWorld={(world) => { setRenameWorldId(world.id); setRenameWorldValue(world.name); }}
+                onCancelRenameWorld={() => setRenameWorldId(null)}
+                onChangeRenameWorldValue={setRenameWorldValue}
+                onCommitRenameWorld={(world) => { void handleRenameWorld(world); }}
+                onChangeAssignWorldVersion={(worldId, version) => setAssignWorldVersion((current) => ({ ...current, [worldId]: version }))}
+                onAssignWorld={(world) => { void handleAssignWorld(world); }}
+                onDeleteWorld={handleDeleteWorld}
+                onResetWorldSwipe={(worldId) => setWorldSwipeNonce((current) => ({ ...current, [worldId]: (current[worldId] ?? 0) + 1 }))}
+                onCopy={handleCopy}
+                onSetPackWorldId={setPackWorldId}
+                onSelectWorldPackFile={setWorldPackFile}
+                onImportPack={() => { void handleImportPack(); }}
+                onTogglePack={(pack) => { void handleTogglePack(pack); }}
+              />
+            </Suspense>
           )}
         </section>
 
@@ -2553,174 +1607,36 @@ export function LivePanelView() {
           id="panel-diagnostics"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Diagnostics"
+          aria-labelledby="mobile-tab-diagnostics"
           tabIndex={0}
           hidden={activeSection !== 'diagnostics'}
         >
           {activeSection === 'diagnostics' && (
-            <motion.div
-              className="ncraft-tab-panel__content"
-              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-          <PanelHeading
-            variant="diagnostics"
-            eyebrow="ÉTAT DU CONTENEUR"
-            title="Diagnostics"
-            description="Contrôles réels du pipeline, des prérequis système et du binaire Bedrock."
-        />
-          <aside className="ncraft-operations-stack ncraft-operations-stack--diagnostics">
-            <NetherCard
-              title="Chatbot conversationnel"
-              eyebrow="DANS LE CHAT MINECRAFT · !AIDE · !JOUEURS · .. <question>"
-              description="Mémoire conversationnelle partagée limitée aux 10 derniers échanges. !aide et !joueurs (compteur seul, sans noms ni XUID) sont traitées localement; seuls les messages « .. » sont transmis à l’IA, sans outil ni commande Bedrock."
-              icon={MessageCircle}
-              accent="portal"
-              action={<StatusPill status={chatbotPillStatus} label={chatbotPillLabel} />}
-            >
-              <div className="system-check-list">
-                <CheckRow
-                  label={`Build BDS ${chatbot?.build ?? '—'} · client ${chatbot?.clientVersion ?? '—'} · protocole ${chatbot?.protocolVersion ?? '—'}`}
-                  ok={chatbot ? chatbot.protocolSupported && chatbot.protocolTested : null}
-                  detail={chatbot?.protocolNote}
-                />
-                <CheckRow label="Gemini · fournisseur principal" ok={chatbot?.geminiConfigured ?? null} />
-                <CheckRow label="NVIDIA NIM · secours" ok={chatbot?.nvidiaConfigured ?? null} />
-                <CheckRow
-                  label="Compte Bedrock dédié lié"
-                  ok={chatbot?.accountLinked ?? null}
-                  detail={chatbot?.occupiesPlayerSlot ? 'Le client occupe un emplacement joueur.' : 'Aucun compte ni jeton n’est affiché ici.'}
-                />
-                <CheckRow
-                  label={`Requêtes IA · aujourd’hui (UTC) ${chatbot?.dailyUsed ?? 0}/${chatbot?.dailyLimit ?? 0}`}
-                  ok={chatbot ? chatbot.dailyLimit === 0 || chatbot.dailyUsed < chatbot.dailyLimit : null}
-                  detail="Le plafond et les clés se règlent côté serveur via ncraft env."
-                />
-              </div>
-              {chatbot?.message && <p className="nether-inline-note"><ShieldCheck size={14} />{chatbot.message}</p>}
-              {chatbot?.userActionPending && !chatbot.deviceCode && !canOperate && (
-                <p className="nether-inline-note" role="status">Une autorisation de compte est en attente. Un compte operator ou supérieur est requis pour afficher son code temporaire.</p>
-              )}
-              {chatbot?.deviceCode && chatbot.userActionPending && (
-                <div className="nether-callout nether-callout--portal" role="status">
-                  <LockKeyhole size={17} />
-                  <div className="callout-copy">
-                    <strong>Approbation manuelle du compte Bedrock</strong>
-                    <span>Ouvre le site Microsoft officiel et saisis ce code. N-Craft ne demande jamais ton mot de passe.</span>
-                    <div className="device-code-row"><code>{chatbot.deviceCode.userCode}</code></div>
-                    <a className="inline-link" href={chatbot.deviceCode.verificationUrl} target="_blank" rel="noreferrer noopener">
-                      Ouvrir la page Microsoft <ExternalLink size={13} />
-                    </a>
-                    <small>Code valable jusqu’au {new Date(chatbot.deviceCode.expiresAt).toLocaleTimeString()} (heure locale).</small>
-                  </div>
-                </div>
-              )}
-              {chatbotFeedback && <p className="nether-inline-note" role="status">{chatbotFeedback}</p>}
-              <div className="chatbot-actions">
-                {chatbot?.canLink && !chatbot.userActionPending && (
-                  <button type="button" className="nether-btn nether-btn--primary" onClick={() => void handleChatbotLink()} disabled={!canOperate || chatbotBusy}>
-                    {chatbotBusy ? <Loader2 className="spin-soft" size={15} /> : <LockKeyhole size={15} />}
-                    {chatbot.accountLinked ? 'Réautoriser le compte dédié' : 'Lier un compte dédié'}
-                  </button>
-                )}
-                {chatbot?.userActionPending && (
-                  <button type="button" className="nether-btn nether-btn--quiet" onClick={() => void handleChatbotCancel()} disabled={!canOperate || chatbotBusy}>
-                    {chatbotBusy ? <Loader2 className="spin-soft" size={15} /> : <X size={15} />} Annuler l’autorisation
-                  </button>
-                )}
-                {chatbot?.accountLinked && !chatbot.userActionPending && (
-                  <FuseButton
-                    label="Délier et effacer les jetons"
-                    undoLabel="Annuler la déliaison"
-                    doneLabel="Confirmation requise"
-                    icon={<Trash2 size={15} aria-hidden="true" />}
-                    color="#ffe8e0"
-                    background="rgba(91, 34, 39, 0.7)"
-                    fuseColor="var(--nether-magma)"
-                    size="sm"
-                    radius={12}
-                    undoWindow={4200}
-                    commitOn="fuseEnd"
-                    settle="reset"
-                    disabled={!canOperate || chatbotBusy}
-                    onCommit={(reason) => { if (reason === 'fuseEnd') void handleChatbotUnlink(); }}
-                    onUndo={() => {
-                      setChatbotFeedback('Déliaison annulée.');
-                      pushPanelToast({ tone: 'info', title: 'Déliaison annulée', description: 'Le compte Bedrock dédié et ses jetons restent inchangés.' });
-                    }}
-                    className="ncraft-fuse-unlink"
-                  />
-                )}
-              </div>
-            </NetherCard>
-
-            <NetherCard
-              title="Pipeline de déploiement"
-              eyebrow="ÉTAT EN TEMPS RÉEL"
-              description="Chaque étape vient du backend."
-              icon={Layers}
-              accent="portal"
-              action={<StatusPill status={pipeline?.status === 'failed' ? 'failed' : isPipelineBusy ? 'starting' : pipeline?.step === 'running' ? 'running' : 'stopped'} label={pipeline?.status === 'failed' ? 'ÉCHEC' : isPipelineBusy ? 'EN COURS' : pipeline?.step === 'running' ? 'TERMINÉ' : 'PRÊT'} />}
-            >
-              <ol className="pipeline-list">
-                {pipelineSteps.map((step, index) => {
-                  const done = (pipeline?.status !== 'failed' && pipeline?.step === 'running') || (currentStepIndex >= 0 && index < currentStepIndex);
-                  const active = isPipelineBusy && pipeline?.step === step.id;
-                  const failed = pipeline?.status === 'failed' && index === currentStepIndex;
-                  return (
-                    <li key={step.id} className={`pipeline-step ${failed ? 'is-failed' : active ? 'is-active' : done ? 'is-done' : ''}`}>
-                      <span className="pipeline-step__marker">{failed ? <X size={14} /> : done ? <Check size={14} /> : active ? <Loader2 size={14} className="spin-soft" /> : String(index + 1).padStart(2, '0')}</span>
-                      <span>{step.label}</span>
-                      {active && <small>EN COURS</small>}
-                    </li>
-                  );
-                })}
-              </ol>
-              {pipeline?.error && <div role="alert" className="nether-callout nether-callout--danger"><AlertTriangle size={17} /><span>{pipeline.error}</span></div>}
-              <p className="pipeline-footnote"><ShieldCheck size={14} /> Le monde, les packs et les permissions sont préservés pendant Deploy.</p>
-            </NetherCard>
-
-            <NetherCard
-              id="preflight"
-              title="Précontrôle système"
-              eyebrow="CONTENEUR DU PANNEAU"
-              description={`Bedrock · ${status?.serverDirectory ?? 'répertoire en attente'}`}
-              icon={ShieldCheck}
-              accent="moss"
-            >
-              <div className="system-check-list">
-                <CheckRow label={`Linux x64 · Node ${system?.nodeVersion ?? '…'}`} ok={system ? system.platform === 'linux' && system.arch === 'x64' : null} />
-                <CheckRow label={`glibc ${system?.glibcVersion ?? 'non détectée'} · minimum visé 2.29`} ok={system ? system.glibc.ok : null} detail={system?.glibc.detail} />
-                <CheckRow label="libcurl.so.4" ok={system ? system.libcurl.ok : null} detail={system?.libcurl.detail} />
-                <CheckRow label="OpenSSL 1.1 · compatibilité à la demande" ok={system ? (system.legacyOpenSsl.ok ? true : null) : null} detail={system?.legacyOpenSsl.detail} />
-                <CheckRow label={`Mémoire : ${formatBytes(system?.memoryLimitBytes ?? null)} · cible 4 Go`} ok={system ? !system.memoryWarning : null} detail={system?.memoryWarning ? 'Avertissement : un arrêt OOM est possible; le test reste autorisé.' : undefined} />
-                <CheckRow label={`DATA_DIR : ${formatBytes(system?.dataDiskFreeBytes ?? null)} libres`} ok={system ? !system.diskWarning : null} detail={system ? `${formatBytes(system.dataDiskRequiredBytes)} estimés${system.sharedDiskVolume ? ' · volume partagé' : ''}` : undefined} />
-                {system?.sharedDiskVolume === false && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres`} ok={!system.diskWarning} detail={`${formatBytes(system.serverDiskRequiredBytes)} estimés`} />}
-                {system && system.sharedDiskVolume === null && <CheckRow label={`BEDROCK_SERVER_DIR : ${formatBytes(system.serverDiskFreeBytes)} libres`} ok={!system.diskWarning} detail="Volume incertain" />}
-                {tunnelProvider === 'portwarp' ? (
-                  <CheckRow label="CLI Portwarp (pwrp)" ok={system ? system.portwarpBinary.ok : null} detail={system?.portwarpBinary.detail} />
-                ) : tunnelProvider === 'localtonet' ? (
-                  <CheckRow label="Client Localtonet" ok={system ? system.localtonetBinary.ok : null} detail={system?.localtonetBinary.detail} />
-                ) : (
-                  <>
-                    <CheckRow label="Daemon Playit (playitd)" ok={system ? system.playitBinary.ok : null} detail={system?.playitBinary.detail} />
-                    <CheckRow label="CLI Playit (claim)" ok={system ? system.playitCliBinary.ok : null} detail={system?.playitCliBinary.detail} />
-                  </>
-                )}
-                {system && <CheckRow label="Binaire Bedrock" ok={system.bedrockBinary.ok} detail={system.bedrockBinary.detail} />}
-              </div>
-              {system?.warnings.map((warning) => <p key={warning} className="system-warning"><AlertTriangle size={14} />{warning}</p>)}
-            </NetherCard>
-
-            <NetherCard title="Points de vérification" eyebrow="TRANSPARENCE" icon={AlertTriangle} accent="magma">
-              <ul className="verification-list">
-                <li>EULA : son format réel doit encore être confirmé avec le binaire téléchargé.</li>
-                <li>La persistance des permissions/XUID après un second déploiement n’est pas encore vérifiée; aucune décision n’est modifiée automatiquement.</li>
-              </ul>
-            </NetherCard>
-          </aside>
-            </motion.div>
+            <Suspense fallback={<PanelLoadingFallback label="Chargement des diagnostics…" />}>
+              <DiagnosticsPanel
+                reduceMotion={reduceMotion}
+                animatePanelEntry={animatePanelEntry}
+                canOperate={canOperate}
+                chatbot={chatbot}
+                chatbotPillStatus={chatbotPillStatus}
+                chatbotPillLabel={chatbotPillLabel}
+                chatbotBusy={chatbotBusy}
+                chatbotFeedback={chatbotFeedback}
+                pipeline={pipeline}
+                isPipelineBusy={isPipelineBusy}
+                currentStepIndex={currentStepIndex}
+                system={system}
+                serverDirectory={status?.serverDirectory}
+                tunnelProvider={tunnelProvider}
+                onChatbotLink={() => { void handleChatbotLink(); }}
+                onChatbotCancel={() => { void handleChatbotCancel(); }}
+                onChatbotUnlink={() => { void handleChatbotUnlink(); }}
+                onChatbotUnlinkUndo={() => {
+                  setChatbotFeedback('Déliaison annulée.');
+                  pushPanelToast({ tone: 'info', title: 'Déliaison annulée', description: 'Le compte Bedrock dédié et ses jetons restent inchangés.' });
+                }}
+              />
+            </Suspense>
           )}
         </section>
 
@@ -2728,23 +1644,25 @@ export function LivePanelView() {
           id="panel-operations"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Opérations"
+          aria-labelledby="mobile-tab-operations"
           tabIndex={0}
           hidden={activeSection !== 'operations'}
         >
           {activeSection === 'operations' && (
-            <OperationsView
-              role={panelRole}
-              authStatus={authStatus}
-              worlds={worlds}
-              state={status?.state ?? null}
-              system={status?.system ?? null}
-              snapshots={status?.snapshots ?? null}
-              recovery={status?.recovery ?? null}
-              monitoring={status?.monitoring ?? null}
-              refreshStatus={refreshStatus}
-              onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })}
-            />
+            <Suspense fallback={<PanelLoadingFallback label="Chargement des opérations…" />}>
+              <OperationsView
+                role={panelRole}
+                authStatus={authStatus}
+                worlds={worlds}
+                state={status?.state ?? null}
+                system={status?.system ?? null}
+                snapshots={status?.snapshots ?? null}
+                recovery={status?.recovery ?? null}
+                monitoring={status?.monitoring ?? null}
+                refreshStatus={refreshStatus}
+                onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })}
+              />
+            </Suspense>
           )}
         </section>
 
@@ -2752,62 +1670,27 @@ export function LivePanelView() {
           id="panel-console"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Console"
+          aria-labelledby="mobile-tab-console"
           tabIndex={0}
           hidden={activeSection !== 'console'}
         >
           {activeSection === 'console' && (
-            <motion.div
-              className="ncraft-tab-panel__content"
-              initial={reduceMotion || !animatePanelEntry ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-          <PanelHeading
-            variant="console"
-            eyebrow="JOURNAL DU SERVEUR"
-            title="Console Bedrock"
-            description="Logs reçus du processus et commandes envoyées directement à son stdin; aucun shell n’est lancé."
-          />
-          <NetherCard
-            title="Console Bedrock"
-            eyebrow="STDIN / STDOUT DU SERVEUR"
-            description="Flux temps réel · WebSocket protégé par la session du panneau"
-            icon={Terminal}
-            accent="moss"
-            action={<StatusPill status={consoleConnected ? 'running' : 'starting'} label={consoleConnected ? 'CONNECTÉE' : 'RECONNEXION'} />}
-            className="console-card"
-          >
-            <div ref={logViewportRef} className="nether-terminal" aria-live="polite" aria-label="Journal Bedrock">
-              {consoleLogs.length === 0 && <p className="terminal-empty">Aucun log Bedrock reçu. Le serveur est peut-être arrêté.</p>}
-              {consoleLogs.map((line) => (
-                <div key={line.id} className={`terminal-line terminal-line--${line.level}`}>
-                  <time dateTime={line.timestamp}>[{new Date(line.timestamp).toLocaleTimeString('fr-FR')}]</time>
-                  <b>[{line.tag}]</b>
-                  <span>{line.message}</span>
-                </div>
-              ))}
-            </div>
-            {consoleError && <p role="alert" className="inline-error">{consoleError}</p>}
-            <form onSubmit={handleCommand} className="console-command-form">
-              <label className="console-command-input">
-                <Terminal size={16} />
-                <input
-                  value={command}
-                  onChange={(event) => setCommand(event.target.value)}
-                  maxLength={1000}
-                  disabled={!canOperate || server?.status !== 'running'}
-                  aria-label="Commande Bedrock"
-                  placeholder={server?.status === 'running' ? 'Commande Bedrock (sans /)' : 'Le serveur doit être en ligne pour envoyer une commande'}
-                />
-              </label>
-              <motion.button type="submit" disabled={!canOperate || server?.status !== 'running' || !command.trim()} whileTap={reduceMotion ? undefined : { scale: 0.95 }} className="nether-btn nether-btn--primary">
-                <ArrowRight size={16} /> Envoyer
-              </motion.button>
-            </form>
-            <p className="console-footnote">Aucun shell n’est lancé : la commande est écrite directement sur stdin de bedrock_server.</p>
-          </NetherCard>
-            </motion.div>
+            <Suspense fallback={<PanelLoadingFallback label="Chargement de la console…" />}>
+              <ConsolePanel
+                reduceMotion={reduceMotion}
+                animatePanelEntry={animatePanelEntry}
+                canOperate={canOperate}
+                canAdmin={canAdmin}
+                serverRunning={server?.status === 'running'}
+                consoleConnected={consoleConnected}
+                consoleLogs={consoleLogs}
+                consoleError={consoleError}
+                command={command}
+                logViewportRef={logViewportRef}
+                onCommandChange={setCommand}
+                onSubmitCommand={handleCommand}
+              />
+            </Suspense>
           )}
         </section>
 
@@ -2815,12 +1698,12 @@ export function LivePanelView() {
           id="panel-pixel-studio"
           className="ncraft-tab-panel"
           role="tabpanel"
-          aria-label="Pixel Studio"
+          aria-labelledby="mobile-tab-pixel-studio"
           tabIndex={0}
           hidden={activeSection !== 'pixel-studio'}
         >
           {activeSection === 'pixel-studio' && (canOperate ? (
-            <Suspense fallback={<div className="pixel-studio-loading" role="status" aria-live="polite"><Loader2 className="spin-soft" size={20} /> Chargement de Pixel Studio…</div>}>
+            <Suspense fallback={<PanelLoadingFallback label="Chargement de Pixel Studio…" />}>
               <PixelStudioView onNotify={(tone, title, description) => pushPanelToast({ tone, title, description })} />
             </Suspense>
           ) : (
@@ -2851,7 +1734,7 @@ export function LivePanelView() {
               aria-selected={activeSection === tab.id}
               tabIndex={activeSection === tab.id ? 0 : -1}
               onClick={() => switchPanel(tab.id)}
-              onKeyDown={(event) => handleTabKeyDown(event, tab.id, 'mobile')}
+              onKeyDown={(event) => handleMobileTabKeyDown(event, tab.id)}
             >
               <Icon size={17} aria-hidden="true" />
               <span className="mobile-dock__label" aria-hidden="true">
@@ -2895,116 +1778,5 @@ export function LivePanelView() {
         {aboutOpen && <AboutModal key="about" onClose={() => setAboutOpen(false)} />}
       </AnimatePresence>
     </main>
-  );
-}
-
-
-function PanelHeading({ eyebrow, title, description, variant }: { eyebrow: string; title: string; description: string; variant?: 'deployment' | 'worlds' | 'diagnostics' | 'console' }) {
-  const variantClassName = variant ? ` ncraft-tab-heading--${variant}` : '';
-  return (
-    <header className={`ncraft-tab-heading${variantClassName}`}>
-      <div className="ncraft-tab-heading__copy">
-        <p className="nether-eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p>{description}</p>
-      </div>
-      <span className="ncraft-tab-heading__ornament" aria-hidden="true"><span /><span /><span /></span>
-    </header>
-  );
-}
-
-function StatusPill({ status, label }: { status: string; label?: string }) {
-  const positive = ['running', 'configured', 'authenticated', 'success'].includes(status);
-  const negative = ['failed', 'exited', 'tunnel_misconfigured'].includes(status);
-  const tone = positive ? 'good' : negative ? 'bad' : ['stopped', 'idle'].includes(status) ? 'neutral' : 'warning';
-  const text = label ?? statusLabel(status);
-  return (
-    <span className={`status-pill status-pill--${tone}`} aria-label={text} title={text}>
-      <span className="status-pill__dot" aria-hidden="true" />
-      {text}
-    </span>
-  );
-}
-
-function LiveUptime({ startedAt }: { startedAt: string | null | undefined }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!startedAt) return undefined;
-    let timer: number | undefined;
-    const stopClock = () => {
-      if (timer === undefined) return;
-      window.clearInterval(timer);
-      timer = undefined;
-    };
-    const startClock = () => {
-      if (document.visibilityState !== 'visible' || timer !== undefined) return;
-      setNow(Date.now());
-      timer = window.setInterval(() => setNow(Date.now()), 1000);
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') startClock();
-      else stopClock();
-    };
-
-    startClock();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      stopClock();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [startedAt]);
-
-  const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
-  const uptimeSeconds = startedAt && Number.isFinite(startedAtMs)
-    ? Math.floor((now - startedAtMs) / 1000)
-    : null;
-
-  return <>{formatDuration(uptimeSeconds)}</>;
-}
-
-function MetricTile({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  accent,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: ReactNode;
-  detail: string;
-  accent: 'portal' | 'soul' | 'magma' | 'moss';
-}) {
-  return (
-    <div className={`metric-tile metric-tile--${accent}`}>
-      <span className="metric-tile__icon"><Icon size={16} strokeWidth={1.9} /></span>
-      <div className="metric-tile__copy">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{detail}</small>
-      </div>
-    </div>
-  );
-}
-
-function WorldDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="world-detail-row">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
-function CheckRow({ label, ok, detail }: { label: string; ok: boolean | null; detail?: string }) {
-  return (
-    <div className={`system-check-row ${ok === null ? 'is-pending' : ok ? 'is-ok' : 'is-warning'}`}>
-      <span className="system-check-row__icon" aria-hidden="true">{ok === null ? <Clock3 size={14} /> : ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}</span>
-      <div className="system-check-row__copy">
-        <span>{label}</span>
-        {detail && <small>{detail}</small>}
-      </div>
-    </div>
   );
 }

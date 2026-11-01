@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { mkdir, lstat, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Request, RequestHandler, Response } from 'express';
-import type { PanelRole, PanelUserSummary } from './types/backend.ts';
+import type { ManagedWorld, PanelRole, PanelUserSummary, PersistentPanelState } from './types/backend.ts';
 
 const COOKIE_NAME = 'nebula_panel_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -96,6 +96,7 @@ async function assertNoSymlinkInPath(directory: string): Promise<void> {
 export class PanelAuthService {
   private readonly expectedDigest: Buffer | null;
   private readonly sessions = new Map<string, PanelSession>();
+  private readonly sessionListeners = new Set<() => void>();
   private users: StoredPanelUser[] = [];
   private userMutationQueue: Promise<void> = Promise.resolve();
   private readonly usersFilePath: string | null;
@@ -180,16 +181,41 @@ export class PanelAuthService {
 
   createSession(response: Response, request: Request, principal: PanelPrincipal = { username: 'owner', role: 'owner', userId: null }): void {
     const now = Date.now();
+    let evicted = false;
     for (const [sessionId, session] of this.sessions) {
-      if (session.expiresAt <= now) this.sessions.delete(sessionId);
+      if (session.expiresAt <= now) {
+        this.sessions.delete(sessionId);
+        evicted = true;
+      }
     }
     if (this.sessions.size >= MAX_TRACKED_SESSIONS) {
       const oldestSession = this.sessions.keys().next().value as string | undefined;
-      if (oldestSession) this.sessions.delete(oldestSession);
+      if (oldestSession) {
+        this.sessions.delete(oldestSession);
+        evicted = true;
+      }
     }
     const sessionId = randomBytes(32).toString('base64url');
     this.sessions.set(sessionId, { expiresAt: now + SESSION_TTL_MS, principal: { ...principal } });
     this.setCookie(response, request, `${COOKIE_NAME}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_TTL_SECONDS}`);
+    if (evicted) this.notifySessionChange();
+  }
+
+  onSessionChange(listener: () => void): () => void {
+    this.sessionListeners.add(listener);
+    return () => {
+      this.sessionListeners.delete(listener);
+    };
+  }
+
+  private notifySessionChange(): void {
+    for (const listener of [...this.sessionListeners]) {
+      try {
+        listener();
+      } catch {
+        // Keep session mutations resilient to listener failures.
+      }
+    }
   }
 
   getPrincipal(request: Request): PanelPrincipal | null {
@@ -210,8 +236,9 @@ export class PanelAuthService {
 
   destroySession(request: Request, response: Response): void {
     const sessionId = readCookie(request, COOKIE_NAME);
-    if (sessionId) this.sessions.delete(sessionId);
+    const removed = sessionId ? this.sessions.delete(sessionId) : false;
     this.setCookie(response, request, `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+    if (removed) this.notifySessionChange();
   }
 
   requireAuthentication(): RequestHandler {
@@ -295,9 +322,14 @@ export class PanelAuthService {
         this.users = before;
         throw error;
       }
+      let changedSession = false;
       for (const session of this.sessions.values()) {
-        if (session.principal.userId === id) session.principal.role = role;
+        if (session.principal.userId === id) {
+          session.principal.role = role;
+          changedSession = true;
+        }
       }
+      if (changedSession) this.notifySessionChange();
       return publicUser(this.users.find((user) => user.id === id)!);
     });
   }
@@ -314,9 +346,14 @@ export class PanelAuthService {
         this.users = before;
         throw error;
       }
+      let removedSession = false;
       for (const [sessionId, session] of this.sessions) {
-        if (session.principal.userId === id) this.sessions.delete(sessionId);
+        if (session.principal.userId === id) {
+          this.sessions.delete(sessionId);
+          removedSession = true;
+        }
       }
+      if (removedSession) this.notifySessionChange();
     });
   }
 
@@ -342,3 +379,61 @@ export class PanelAuthService {
     response.setHeader('Set-Cookie', `${value}${secure ? '; Secure' : ''}`);
   }
 }
+
+const PRIVILEGED_CONSOLE_COMMANDS = new Set([
+  'op',
+  'deop',
+  'permission',
+  'permissions',
+  'allowlist',
+  'whitelist',
+]);
+
+export function hasMinimumRole(role: PanelRole | null | undefined, minimumRole: PanelRole): boolean {
+  if (!role) return false;
+  return ROLE_WEIGHT[role] >= ROLE_WEIGHT[minimumRole];
+}
+
+export function sameAdminXuids(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  const normalize = (values: readonly string[] | undefined) => [...new Set((values ?? []).map((item) => item.trim()).filter(Boolean))].sort();
+  const normalizedLeft = normalize(left);
+  const normalizedRight = normalize(right);
+  if (normalizedLeft.length !== normalizedRight.length) return false;
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
+export function isPrivilegedConsoleCommand(command: string): boolean {
+  const token = command.trim().replace(/^\/+/, '').split(/\s+/, 1)[0]?.toLowerCase() ?? '';
+  return PRIVILEGED_CONSOLE_COMMANDS.has(token);
+}
+
+export function redactPanelStateForRole<T extends Partial<PersistentPanelState>>(
+  state: T,
+  role: PanelRole | null | undefined,
+): T {
+  if (hasMinimumRole(role, 'operator') || !state.activeConfig) return state;
+  return {
+    ...state,
+    activeConfig: {
+      ...state.activeConfig,
+      seed: '',
+      adminXuids: [],
+    },
+  };
+}
+
+export function redactWorldForRole(world: ManagedWorld, role: PanelRole | null | undefined): ManagedWorld {
+  if (hasMinimumRole(role, 'operator')) return world;
+  return {
+    ...world,
+    seed: null,
+    configuration: world.configuration
+      ? {
+        ...world.configuration,
+        seed: '',
+        adminXuids: [],
+      }
+      : null,
+  };
+}
+

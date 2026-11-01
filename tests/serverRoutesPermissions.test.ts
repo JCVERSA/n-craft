@@ -174,3 +174,150 @@ test('pack routes allow viewer reads but reserve import and activation for same-
     assert.equal(adminWrite.status, 409, 'same-origin admins reach the stopped-server safety check');
   }
 });
+
+test('strict RBAC reserves world deletion and adminXuids changes for admins, blocks viewer downloads, and audits mutations', async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'ncraft-strict-rbac-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const auth = new PanelAuthService(TOKEN, directory);
+  await auth.initialize();
+  await auth.createUser('strict-viewer', 'strict-viewer-password-long', 'viewer');
+  await auth.createUser('strict-operator', 'strict-operator-password-long', 'operator');
+  await auth.createUser('strict-admin', 'strict-admin-password-long', 'admin');
+  const viewer = (await auth.authenticate({ username: 'strict-viewer', password: 'strict-viewer-password-long' }))!;
+  const operator = (await auth.authenticate({ username: 'strict-operator', password: 'strict-operator-password-long' }))!;
+  const admin = (await auth.authenticate({ username: 'strict-admin', password: 'strict-admin-password-long' }))!;
+
+  const worldId = 'a1d8fbb4-9cda-4ed8-9466-c62cf3189f51';
+  const baseConfig = {
+    version: '1.21.131.1',
+    serverName: 'Strict RBAC Server',
+    levelName: 'ncraft_strict_world',
+    gamemode: 'survival' as const,
+    difficulty: 'normal' as const,
+    maxPlayers: 10,
+    adminXuids: ['2535412894129841'],
+    seed: '998877',
+    viewDistance: 10,
+    allowCheats: false,
+    eulaAccepted: true,
+  };
+  let savedConfigs = 0;
+  let deletedWorlds = 0;
+  const auditEvents: string[] = [];
+
+  const dependencies = {
+    auth,
+    catalog: {
+      allowedVersionIds: () => ['1.21.131.1'],
+      get: (v: string) => (v === '1.21.131.1' ? { version: v } : null),
+    },
+    state: {
+      getSnapshot: () => ({
+        server: { status: 'stopped', pid: null },
+        pipeline: { status: 'idle' },
+        activeConfig: baseConfig,
+      }),
+      async setActiveConfig() {},
+    },
+    bedrockConsole: { isRunning: false },
+    pipeline: {
+      isRunning: false,
+      async saveConfiguration() { savedConfigs += 1; },
+    },
+    worldManager: {
+      isBusy: false,
+      getWorld: (id: string) => ({
+        id,
+        name: 'Strict World',
+        folder: baseConfig.levelName,
+        version: baseConfig.version,
+        seed: baseConfig.seed,
+        configuration: baseConfig,
+      }),
+      findByVersionAndFolder: () => ({
+        id: worldId,
+        name: 'Strict World',
+        folder: baseConfig.levelName,
+        version: baseConfig.version,
+        seed: baseConfig.seed,
+        configuration: baseConfig,
+      }),
+      async updateConfiguration() {},
+      async deleteWorld(id: string) { deletedWorlds += 1; return { id }; },
+      async createWorldArchive() { throw new WorldManagerError('Archive stub reached.', 404); },
+    },
+    snapshots: {
+      async getArchive() { throw new Error('Snapshot archive stub reached.'); },
+    },
+    audit: {
+      async record(_principal: unknown, action: string) { auditEvents.push(action); },
+      list: () => [],
+    },
+  } as unknown as ServerRouteDependencies;
+
+  const app = express();
+  app.use(express.json());
+  app.use('/api/server', createServerRouter(dependencies));
+  const server = app.listen(0, '127.0.0.1');
+  context.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const viewerCookie = cookieFor(auth, viewer);
+  const operatorCookie = cookieFor(auth, operator);
+  const adminCookie = cookieFor(auth, admin);
+  const headers = (cookie: string) => ({ cookie, origin, 'content-type': 'application/json' });
+
+  // Viewer cannot download world or snapshot archives.
+  assert.equal((await fetch(`${origin}/api/server/worlds/${worldId}/export`, { headers: { cookie: viewerCookie } })).status, 403);
+  assert.equal((await fetch(`${origin}/api/server/snapshots/snap-1/download`, { headers: { cookie: viewerCookie } })).status, 403);
+  // Operator reaches archive lookup.
+  assert.equal((await fetch(`${origin}/api/server/worlds/${worldId}/export`, { headers: { cookie: operatorCookie } })).status, 404);
+
+  // Operator cannot change adminXuids via POST /configuration, but may change maxPlayers while keeping adminXuids identical.
+  const operatorEscalate = await fetch(`${origin}/api/server/configuration`, {
+    method: 'POST',
+    headers: headers(operatorCookie),
+    body: JSON.stringify({ config: { ...baseConfig, adminXuids: ['9999999999999999'] } }),
+  });
+  assert.equal(operatorEscalate.status, 403);
+  assert.equal(savedConfigs, 0);
+
+  const operatorRoutineSave = await fetch(`${origin}/api/server/configuration`, {
+    method: 'POST',
+    headers: headers(operatorCookie),
+    body: JSON.stringify({ config: { ...baseConfig, maxPlayers: 16 } }),
+  });
+  assert.equal(operatorRoutineSave.status, 200);
+  assert.equal(savedConfigs, 1);
+  assert.ok(auditEvents.includes('bedrock-configuration-saved'));
+
+  // Admin can change adminXuids via POST /configuration.
+  const adminSave = await fetch(`${origin}/api/server/configuration`, {
+    method: 'POST',
+    headers: headers(adminCookie),
+    body: JSON.stringify({ config: { ...baseConfig, adminXuids: ['9999999999999999'] } }),
+  });
+  assert.equal(adminSave.status, 200);
+  assert.equal(savedConfigs, 2);
+
+  // World deletion requires admin and records an audit event.
+  const operatorDelete = await fetch(`${origin}/api/server/worlds/${worldId}`, {
+    method: 'DELETE',
+    headers: headers(operatorCookie),
+    body: JSON.stringify({ confirmName: 'Strict World' }),
+  });
+  assert.equal(operatorDelete.status, 403);
+  assert.equal(deletedWorlds, 0);
+
+  const adminDelete = await fetch(`${origin}/api/server/worlds/${worldId}`, {
+    method: 'DELETE',
+    headers: headers(adminCookie),
+    body: JSON.stringify({ confirmName: 'Strict World' }),
+  });
+  assert.equal(adminDelete.status, 200);
+  assert.equal(deletedWorlds, 1);
+  assert.ok(auditEvents.includes('world-deleted'));
+});
+

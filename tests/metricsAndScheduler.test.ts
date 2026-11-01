@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { parsePlayerLifecycleMessage } from '../src/bedrock/playerTracker.ts';
 import {
@@ -8,7 +11,7 @@ import {
 import { BedrockRestartScheduler, computeNextScheduledRestart } from '../src/bedrock/scheduler.ts';
 import type { BedrockConsole } from '../src/bedrock/console.ts';
 import type { DeployPipeline } from '../src/bedrock/deployPipeline.ts';
-import type { StateStore } from '../src/state.ts';
+import { StateStore } from '../src/state.ts';
 
 test('player lifecycle parser tracks XUIDs without retaining player names in state', () => {
   assert.deepEqual(
@@ -85,3 +88,38 @@ test('scheduled restart sends an in-game warning and restarts at the scheduled i
   assert.equal(scheduler.getSnapshot().countdownSeconds, null);
   await scheduler.shutdown();
 });
+
+test('StateStore.updateServerMetrics broadcasts volatile metrics in memory without rewriting state.json', async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ncraft-volatile-metrics-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const store = new StateStore(root);
+  await store.initialize();
+  await store.updateServer({ status: 'running', pid: 4242 });
+
+  const stateFilePath = path.join(root, 'state.json');
+  const diskBefore = await readFile(stateFilePath, 'utf8');
+  const mtimeBefore = (await stat(stateFilePath)).mtimeMs;
+
+  let changeCount = 0;
+  store.on('change', () => {
+    changeCount += 1;
+  });
+
+  store.updateServerMetrics({
+    cpuPercent: 37.5,
+    memoryBytes: 512 * 1024 * 1024,
+    metricsUpdatedAt: '2026-11-01T12:00:00.000Z',
+  });
+
+  const snapshot = store.getSnapshot();
+  assert.equal(changeCount, 1);
+  assert.equal(snapshot.server.cpuPercent, 37.5);
+  assert.equal(snapshot.server.memoryBytes, 512 * 1024 * 1024);
+  assert.equal(snapshot.server.metricsUpdatedAt, '2026-11-01T12:00:00.000Z');
+
+  const diskAfter = await readFile(stateFilePath, 'utf8');
+  const mtimeAfter = (await stat(stateFilePath)).mtimeMs;
+  assert.equal(diskAfter, diskBefore);
+  assert.equal(mtimeAfter, mtimeBefore);
+});
+

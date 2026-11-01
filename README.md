@@ -10,13 +10,13 @@
 <strong>A private, single-instance control panel for Minecraft Bedrock Dedicated Server.</strong><br>
 Deploy and operate Bedrock from the Linux container you already have — without Docker-in-Docker or a database.
 
-[![CI](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml/badge.svg?branch=arena%2F01a0e06a-n-craft)](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
+[![CI](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml/badge.svg?branch=arena%2Fd39673a7-n-craft)](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-20.19%2B%20%7C%2022.12%2B-339933.svg?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20x86_64-5E6AD2.svg?style=for-the-badge&logo=linux&logoColor=white)](#runtime-requirements)
 [![Target](https://img.shields.io/badge/Target-Bedrock%20Dedicated%20Server-65449B.svg?style=for-the-badge)](https://www.minecraft.net/en-us/download/server/bedrock)
 [![No Docker](https://img.shields.io/badge/No-Docker%20or%20database-2E7D32.svg?style=for-the-badge)](#what-you-get)
 
-[What You Get](#what-you-get) · [Quick Start](#quick-start) · [Install & Requirements](#installation-and-runtime-requirements) · [Tunnels](#network-https-and-tunnels) · [In-Game Assistant](#in-game-chat-assistant) · [Bedrock Packs](#bedrock-world-packs) · [Data & Safety](#persistent-data-and-security) · [Development](#development-and-validation)
+[What You Get](#what-you-get) · [Quick Start](#quick-start) · [Install & Requirements](#installation-and-runtime-requirements) · [RBAC & Operations](#access-control-snapshots-and-operations) · [Tunnels](#network-https-and-tunnels) · [In-Game Assistant](#in-game-chat-assistant) · [Bedrock Packs](#bedrock-world-packs) · [Pixel Studio](#pixel-studio) · [Data & Safety](#persistent-data-and-security) · [Development](#development-and-validation)
 
 </div>
 
@@ -31,7 +31,8 @@ Deploy and operate Bedrock from the Linux container you already have — without
 - **Non-destructive deployment.** Deploy verifies and stages the server archive before applying it. Worlds, backups, custom packs, structures, and files not supplied by the archive are preserved.
 - **A public UDP tunnel is optional.** Portwarp is the default provider; Localtonet and Playit remain explicit alternatives. Tunnels are created and approved by the operator, not silently provisioned by Nebula Craft.
 - **An optional, tightly scoped in-game assistant.** `!aide` and `!joueurs` are local read-only commands; the latter exposes only the online count, never names or XUIDs. Only `.. ` questions go to AI providers. Unknown `!` commands stay local. The assistant has no tools or server-command capability; replies are public to players.
-- **Explicit security boundaries.** Secrets stay on the server, sensitive flows require operator action, HTTPS is required in production, and automated operations do not silently change Bedrock permissions or delete worlds.
+- **Explicit security boundaries & role-based access control.** `PANEL_TOKEN` authenticates the `owner`, who can create scoped `admin`, `operator`, and `viewer` accounts. Secrets stay on the server, sensitive flows require operator/admin action, HTTPS is enforced in production (including WebSocket console upgrades), revoked sessions close active WebSockets immediately, and fonts (`Space Grotesk` and `JetBrains Mono`) are self-hosted locally with zero external CDN requests.
+- **Snapshots, crash recovery, and auditability.** Capture online (`save hold` / `save query` / `save resume`, preserving active world pack bindings and root sidecars) or offline `.mcworld` snapshots, configure bounded crash-restart policies and resource alerts, test RakNet UDP reachability, export redacted diagnostics, and inspect a 1,000-event local audit log.
 
 > **Compatibility note:** The chatbot is currently restricted to the Bedrock client `1.21.130` family (protocol 898 / RakNet 11), mapped to BDS `1.21.130.3` and `1.21.130.4`. Its automated protocol test is offline and does **not** prove connectivity to the official BDS binary or real Microsoft authentication. See [In-Game Chat Assistant](#in-game-chat-assistant) before enabling it.
 
@@ -42,12 +43,12 @@ These steps install Nebula Craft into an **existing Debian/Ubuntu Linux x86_64 c
 ### 1. Download and inspect the installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JCVERSA/n-craft/arena/01a0e06a-n-craft/scripts/install.sh -o /tmp/ncraft-install.sh
+curl -fsSL https://raw.githubusercontent.com/JCVERSA/n-craft/arena/d39673a7-n-craft/scripts/install.sh -o /tmp/ncraft-install.sh
 less /tmp/ncraft-install.sh
 bash /tmp/ncraft-install.sh
 ```
 
-The script intentionally installs or updates the `arena/01a0e06a-n-craft` branch, not `main`. Review the script before running it, especially as root. It does not start the panel or Bedrock when installation finishes.
+The script intentionally installs or updates the `arena/d39673a7-n-craft` branch, not `main`. Review the script before running it, especially as root. It does not start the panel or Bedrock when installation finishes.
 
 ### 2. Start the panel and retrieve its token
 
@@ -84,7 +85,7 @@ By default, the installer reuses the current directory if it is already a clone 
 bash /tmp/ncraft-install.sh --dir /opt/n-craft
 ```
 
-The installer and `ncraft update` deliberately target `arena/01a0e06a-n-craft`, even after a long period. They use `git pull --ff-only`, refuse a dirty clone or a non-empty unrelated directory, and never replace `.env` secrets, the version catalog, or Bedrock data. The first setup creates `.env` with a random `PANEL_TOKEN` and mode `0600`; if a regular `.env` exists without a token, only that missing token is added. Migration changes the old default `TUNNEL_PROVIDER=localtonet` to `portwarp` once, recording a marker so a later explicit Localtonet choice is respected. A symlinked `.env` is never rewritten automatically: configure its target manually. A build or dependency failure does not delete the world. The installer does not start the panel or Bedrock.
+The installer and `ncraft update` deliberately target `arena/d39673a7-n-craft`, even after a long period. They use `git pull --ff-only`, refuse a dirty clone or a non-empty unrelated directory, and never replace `.env` secrets, the version catalog, or Bedrock data. The first setup creates `.env` with a random `PANEL_TOKEN` and mode `0600`; if a regular `.env` exists without a token, only that missing token is added. Migration changes the old default `TUNNEL_PROVIDER=localtonet` to `portwarp` once, recording a marker so a later explicit Localtonet choice is respected. A symlinked `.env` is never rewritten automatically: configure its target manually. A build or dependency failure does not delete the world. The installer does not start the panel or Bedrock.
 
 For a manual installation into a clean clone:
 
@@ -123,7 +124,7 @@ The installer creates an `ncraft` link to `manage.sh`: `/usr/local/bin` for root
 | `ncraft restart` | Restarts the panel. |
 | `ncraft status` | Shows panel state, HTTP health, memory, and masked variables. |
 | `ncraft logs` | Follows panel logs. |
-| `ncraft update` | Fast-forward-updates `arena/01a0e06a-n-craft`, runs `npm ci --ignore-scripts`, and builds without deploying Bedrock. |
+| `ncraft update` | Fast-forward-updates `arena/d39673a7-n-craft`, runs `npm ci --ignore-scripts`, and builds without deploying Bedrock. |
 | `ncraft doctor` | Checks Node, OpenPGP, system tools, selected tunnel, build, `.env`, `libcurl`, and memory. |
 | `ncraft env` | Opens the interactive `.env` menu; secrets are masked. |
 | `ncraft env list` | Lists configuration without revealing secrets. |
@@ -196,7 +197,7 @@ Support is strictly limited to the `1.21.130` client family (Bedrock protocol 89
 
 ### Provider setup and limits
 
-Configure AI secrets **on the server**, through the masked `ncraft env` menu. Running `ncraft env set GEMINI_API_KEY` with no value opens a masked prompt; the same works for `NVIDIA_NIM_API_KEY`. Do not pass a key as a command-line argument, paste it into the dashboard or chat, or add it to Git. Gemini is primary; NVIDIA NIM is fallback only. Defaults are `gemini-3.8-flash` and `meta/llama-3.3-70b-instruct`; set `CHATBOT_GEMINI_MODEL` or `CHATBOT_NIM_MODEL` to change them. `CHATBOT_DAILY_LIMIT` caps accepted AI requests per UTC day (100 by default; `0` disables requests). Only one AI request can run at a time. Local `!` commands are limited to one reply per player every five seconds and one command reply per second server-wide; cooldown keys exist only in memory.
+Configure AI secrets **on the server**, through the masked `ncraft env` menu. Running `ncraft env set GEMINI_API_KEY` with no value opens a masked prompt; the same works for `NVIDIA_NIM_API_KEY`. Do not pass a key as a command-line argument, paste it into the dashboard or chat, or add it to Git. For the in-game chatbot, Gemini is primary and NVIDIA NIM is fallback; defaults are `gemini-2.5-flash` and `meta/llama-3.3-70b-instruct` (`CHATBOT_GEMINI_MODEL`, `CHATBOT_NIM_MODEL`). For Pixel Studio, NVIDIA NIM is primary and Gemini is fallback; defaults are `nvidia/nemotron-3-super-120b-a12b` and `gemini-2.5-flash` (`PIXEL_STUDIO_NIM_MODEL`, `PIXEL_STUDIO_GEMINI_MODEL`). `CHATBOT_DAILY_LIMIT` caps accepted chatbot AI requests per UTC day (100 by default; `0` disables requests). Only one AI request per service can run at a time. Local `!` commands are limited to one reply per player every five seconds and one command reply per second server-wide; cooldown keys exist only in memory.
 
 ### Bedrock account linking
 
@@ -229,6 +230,33 @@ Imported files go into the server-wide `resource_packs/ncraft-<uuid>` or `behavi
 
 Nebula Craft does **not** change `texturepack-required`, permissions, or other server settings. Check each pack's compatibility with the selected BDS build yourself before activating it; the panel validates the Bedrock manifest and dependencies but does not certify pack/runtime compatibility. Packs are global to the server installation while activation is per world.
 
+## Access Control, Snapshots, and Operations
+
+### Role-based access control (RBAC)
+
+Sign in with an empty username and `PANEL_TOKEN` for the `owner` session, or create named `scrypt`-hashed accounts in **Operations** (`data/panel-users.json`, mode `0600`). Sessions use `HttpOnly`, `SameSite=Strict` cookies (`Secure` in production), bounded in memory, with immediate WebSocket termination (`4401`) when a session is logged out, deleted, or downgraded.
+
+| Capability | `viewer` | `operator` | `admin` | `owner` (`PANEL_TOKEN`) |
+| --- | :---: | :---: | :---: | :---: |
+| View server status, worlds, packs, metrics, RakNet UDP probe, redacted diagnostics | Yes (seeds, `adminXuids`, and setup codes redacted) | Yes | Yes | Yes |
+| Start / Stop Bedrock, deploy builds, import/rename worlds, edit gameplay settings | No | Yes | Yes | Yes |
+| Export `.mcworld` worlds, create & download snapshots, use Pixel Studio AI, link tunnels/chatbot | No | Yes | Yes | Yes |
+| Send standard Bedrock console commands over `/api/server/console` | No | Yes | Yes | Yes |
+| Modify `adminXuids`, send `op` / `deop` / `allowlist` / `permission` / `reload` console commands | No | No | Yes | Yes |
+| Delete worlds, restore/delete/schedule snapshots, import/toggle packs, edit recovery & monitoring, view audit log | No | No | Yes | Yes |
+| Create, re-role, or revoke panel user accounts | No | No | No | Yes |
+
+### World snapshots, crash recovery, and audit log
+
+- **Snapshots (`data/snapshots/`):** Create `.mcworld` archives while Bedrock is stopped or online. Online snapshots issue `save hold`, poll `save query`, copy the exact byte lengths reported by BDS plus validated root sidecar files (`world_resource_packs.json`, `world_behavior_packs.json`, pack history, `levelname.txt`, and world icon), and always issue `save resume` in a `finally` path (including graceful shutdown). Restoring requires Bedrock to be stopped and automatically creates a `before-restore` snapshot first. Scheduled snapshots are opt-in (disabled by default).
+- **Crash recovery & monitoring (`data/recovery.json`, `data/monitoring.json`):** Configure bounded restart attempts and backoff after unexpected `bedrock_server` exits, optional resume-after-panel-restart, and configurable disk/CPU/RAM alert thresholds. Live 5-second CPU/RAM process metrics stay in memory and broadcast over WebSocket without rewriting `data/state.json`.
+- **RakNet UDP probe & redacted diagnostics:** Test real Bedrock `Unconnected Ping` / `Unconnected Pong` responses locally (`127.0.0.1:19132`) or against the detected public tunnel endpoint, and download a redacted JSON diagnostic bundle containing zero `.env` secrets, tokens, XUIDs, seeds, tunnel endpoints, or console history.
+- **Audit trail (`data/audit.json`):** Records up to 1,000 recent attributed events (`actor`, `role`, `action`, `detail`) across authentication, server lifecycle, world/pack/snapshot mutations, tunnel/chatbot setup, and console commands.
+
+## Pixel Studio
+
+The **Pixel Studio** tab provides a browser-local `16×16`, `32×32`, and `64×64` sprite and frame-by-frame animation editor (`PNG`, spritesheet `PNG`, looping `GIF`, and `.ncraft-pixel.json` import/export). Projects stay in browser `localStorage` and downloaded files — Pixel Studio never modifies `BEDROCK_SERVER_DIR`, installed packs, or worlds. Authenticated `operator`, `admin`, and `owner` accounts can optionally generate sprites and multi-frame animations when `NVIDIA_NIM_API_KEY` and/or `GEMINI_API_KEY` is configured on the server (`PIXEL_STUDIO_NIM_MODEL`, `PIXEL_STUDIO_GEMINI_MODEL`).
+
 ## Persistent Data and Security
 
 Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for your hosting environment. A forced container stop can still interrupt an in-progress save; allow graceful shutdown to finish.
@@ -236,7 +264,12 @@ Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for 
 | Path | Purpose and lifetime |
 | --- | --- |
 | `.env` | Secrets and configuration, including server-side Gemini/NIM keys. Kept by the installer; regular files use mode `0600`. |
-| `data/state.json` | Panel, pipeline, server, and selected-tunnel state (address/status only). No Portwarp code, tunnel secret, AI key, Bedrock profile, or chat history. |
+| `data/state.json` | Panel, pipeline, server lifecycle, and selected-tunnel state (address/status only). Volatile 5-second CPU/RAM metrics remain in memory. No Portwarp code, tunnel secret, AI key, Bedrock profile, or chat history. |
+| `data/panel-users.json` | Named panel accounts (`admin`, `operator`, `viewer`) with `scrypt` password hashes (`0600` atomic writes). |
+| `data/audit.json` | Bounded 1,000-entry local audit trail (`0600` atomic writes); never logs passwords, tokens, or secrets. |
+| `data/worlds.json` | Managed Bedrock world registry mapping friendly world names and BDS versions to isolated `worlds/` folders. |
+| `data/snapshots/` | Restorable `.mcworld` snapshot archives and `index.json` retention/schedule metadata. |
+| `data/recovery.json`, `data/monitoring.json`, `data/players.json` | Crash-recovery policy, 30s resource alert thresholds/history, and observed XUID roster metadata. |
 | `data/bedrock-chatbot/auth/` | Private `0700`/`0600` Microsoft OAuth cache for the dedicated Bedrock account, used only after explicit approval. |
 | `data/bedrock-chatbot/quota.json` | UTC day and aggregate daily quota count; no message, reply, or player identifier. |
 | `~/.portwarp/` | Private Portwarp CLI profile for the current Linux user; managed only by `pwrp`, never copied to `.env` or moved by Nebula Craft. |
@@ -250,24 +283,27 @@ Mount `DATA_DIR` and, if needed, `BEDROCK_SERVER_DIR` as persistent volumes for 
 ## Development and Validation
 
 ```bash
-npm ci --ignore-scripts
+npm ci
 npm run lint
 npm test
 npm run build
 npm start
 ```
 
+Repository `.npmrc` sets `ignore-scripts=true` so optional native lifecycle scripts (`raknet-native`) are never executed during `npm ci` or `npm install`.
+
 `data/versions.json` is a manually maintained catalog of **160 stable builds**, from BDS `1.6.1.0` through `1.21.131.1` (client versions strictly below `1.21.132`), including `1.19.50.02`. URLs use the official Minecraft HTTPS format, though historical archives may become unavailable. During Deploy, the backend rejects unapproved hosts, checks the response, size, and ZIP format, then extracts without zip-slip or symbolic links. An unavailable URL fails before stopping a running server; the catalog is not automatically trimmed.
 
-The automated suite covers non-destructive startup, conditional ELF/OpenSSL dependency checks, global-pack refresh without replacing custom packs, simulated Portwarp/Localtonet/Playit runners, the private OAuth cache, AI quota/memory, child-process environment filtering, and an offline RakNet 11 loop. These tests do not replace testing against the official BDS `1.21.130.x` binary, a Microsoft flow approved by an operator, real tunnel clients, live BDS archives, or Ubuntu download/signature verification in the target environment.
+The automated suite (`tests/*.test.ts`) covers strict RBAC and role-based redaction across REST and WebSocket channels, immediate WebSocket session revocation, online/offline `.mcworld` snapshots with pack-binding sidecars, bounded crash recovery, non-destructive startup and deploy, conditional ELF/OpenSSL 1.1 runtime verification, global-pack refresh and per-world pack activation, simulated Portwarp/Localtonet/Playit runners, private OAuth caching, AI quota/memory and Pixel Studio model isolation, child-process environment filtering, offline RakNet 11 round trips, and React panel UI views. These tests do not replace testing against the official BDS `1.21.130.x` binary, a Microsoft flow approved by an operator, real tunnel clients, live BDS archives, or Ubuntu download/signature verification in the target environment.
 
 The GitHub Actions workflow runs TypeScript typechecking, tests, and a production build on Ubuntu with Node.js 22. The native `raknet-native` addon is intentionally not built or exercised by CI; the chatbot uses the prebuilt `raknet-node` binding.
 
 ## Project Links
 
-- [Report a bug or request a feature](https://github.com/JCVERSA/n-craft/issues)
-- [CI workflow](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
+- [Architecture & security reference](docs/ARCHITECTURE.md)
 - [Nebula Craft brand guidelines](docs/branding/nebula-craft-guidelines.md)
 - [Install script](scripts/install.sh)
+- [CI workflow](https://github.com/JCVERSA/n-craft/actions/workflows/ci.yml)
+- [Report a bug or request a feature](https://github.com/JCVERSA/n-craft/issues)
 
 No `LICENSE` file is currently included in this repository, so no license badge is shown.

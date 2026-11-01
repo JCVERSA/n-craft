@@ -206,12 +206,12 @@ export class PixelStudioAIService {
     const nvidiaKey = environment.NVIDIA_NIM_API_KEY?.trim() ?? '';
     const geminiKey = environment.GEMINI_API_KEY?.trim() ?? '';
     const nvidiaModel = readModel(
-      environment.PIXEL_STUDIO_NIM_MODEL ?? environment.CHATBOT_NIM_MODEL,
+      environment.PIXEL_STUDIO_NIM_MODEL,
       'nvidia/nemotron-3-super-120b-a12b',
     );
     const geminiModel = readModel(
-      environment.PIXEL_STUDIO_GEMINI_MODEL ?? environment.CHATBOT_GEMINI_MODEL,
-      'gemini-3.8-flash',
+      environment.PIXEL_STUDIO_GEMINI_MODEL,
+      'gemini-2.5-flash',
     );
     this.nvidiaProvider = options.providers && Object.hasOwn(options.providers, 'nvidia')
       ? options.providers.nvidia ?? null

@@ -264,6 +264,17 @@ export class StateStore extends EventEmitter {
     });
   }
 
+  /**
+   * Updates volatile live CPU/RAM metrics in memory and broadcasts them over
+   * WebSocket without rewriting state.json on disk every sampling tick.
+   */
+  updateServerMetrics(
+    patch: Pick<PersistentPanelState['server'], 'cpuPercent' | 'memoryBytes' | 'metricsUpdatedAt'>,
+  ): void {
+    this.state.server = { ...this.state.server, ...patch };
+    this.emit('change', this.getSnapshot());
+  }
+
   async updatePlayit(patch: Partial<PersistentPanelState['playit']>): Promise<void> {
     await this.update(() => {
       this.state.playit = { ...this.state.playit, ...patch };

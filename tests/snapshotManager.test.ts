@@ -176,3 +176,40 @@ test('shutdown waits for an in-flight online snapshot to send save resume', asyn
   assert.ok(result.id);
   assert.equal(bedrock.commands.at(-1), 'save resume');
 });
+
+test('online snapshot preserves Bedrock pack bindings and root sidecars across restore', async (context) => {
+  const fixture = await makeFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const resourceBindings = JSON.stringify([{ pack_id: '123e4567-e89b-12d3-a456-426614174000', version: [1, 0, 0] }], null, 2);
+  const behaviorBindings = JSON.stringify([{ pack_id: '223e4567-e89b-12d3-a456-426614174001', version: [1, 2, 0] }], null, 2);
+  await writeFile(path.join(fixture.worldDirectory, 'world_resource_packs.json'), resourceBindings);
+  await writeFile(path.join(fixture.worldDirectory, 'world_behavior_packs.json'), behaviorBindings);
+  await writeFile(path.join(fixture.worldDirectory, 'levelname.txt'), 'Snapshot world\n');
+
+  const bedrock = new FakeBedrockConsole();
+  bedrock.isRunning = true;
+  bedrock.isReady = true;
+  await fixture.state.updateServer({ status: 'running', pid: 1234, desiredRunning: true });
+  const snapshots = new BedrockSnapshotManager(path.join(fixture.root, 'data'), fixture.manager, bedrock as unknown as BedrockConsole, fixture.state);
+  await snapshots.initialize();
+
+  // BDS save query omits pack JSONs and may include levelname.txt.
+  bedrock.responses.push([
+    'Data saved. Files are now ready to be copied.',
+    `worlds/${fixture.folder}/level.dat: 14, worlds/${fixture.folder}/levelname.txt: 15, worlds/${fixture.folder}/db/CURRENT: 16`,
+  ]);
+  const onlineSnapshot = await snapshots.createSnapshot(fixture.worldId, 'manual');
+
+  // Stop server, mutate active world, then restore the online snapshot.
+  bedrock.isRunning = false;
+  bedrock.isReady = false;
+  await fixture.state.updateServer({ status: 'stopped', pid: null, desiredRunning: false });
+  await rm(path.join(fixture.worldDirectory, 'world_resource_packs.json'), { force: true });
+  await rm(path.join(fixture.worldDirectory, 'world_behavior_packs.json'), { force: true });
+
+  await snapshots.restoreSnapshot(onlineSnapshot.id);
+  assert.equal(await readFile(path.join(fixture.worldDirectory, 'world_resource_packs.json'), 'utf8'), resourceBindings);
+  assert.equal(await readFile(path.join(fixture.worldDirectory, 'world_behavior_packs.json'), 'utf8'), behaviorBindings);
+  assert.equal(await readFile(path.join(fixture.worldDirectory, 'levelname.txt'), 'utf8'), 'Snapshot world\n');
+});
+

@@ -1,5 +1,41 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
 @layer base {
   html, body {
     margin: 0;
@@ -10,206 +46,8 @@
   }
 }
 
-/* Custom Pixel & Terminal font utilities */
-.font-pixel {
-  font-family: 'Press Start 2P', monospace;
-}
-
-.font-silk {
-  font-family: 'Silkscreen', monospace;
-}
-
-.font-vt {
-  font-family: 'VT323', monospace;
-}
-
-.font-space {
-  font-family: 'Space Mono', monospace;
-}
-
 .font-jb {
   font-family: 'JetBrains Mono', monospace;
-}
-
-/* Minecraft Inset & Bevel primitives - Pure Diegetic Hard Edges */
-.mc-bevel {
-  border-top: 2px solid #524700;
-  border-left: 2px solid #524700;
-  border-bottom: 2px solid #000000;
-  border-right: 2px solid #000000;
-}
-
-.mc-bevel-green {
-  border-top: 2px solid #97d85d;
-  border-left: 2px solid #97d85d;
-  border-bottom: 2px solid #0e0e0e;
-  border-right: 2px solid #0e0e0e;
-}
-
-.mc-bevel-gold {
-  border-top: 2px solid #fde35a;
-  border-left: 2px solid #fde35a;
-  border-bottom: 2px solid #211b00;
-  border-right: 2px solid #211b00;
-}
-
-.mc-bevel-red {
-  border-top: 2px solid #ff8782;
-  border-left: 2px solid #ff8782;
-  border-bottom: 2px solid #410005;
-  border-right: 2px solid #410005;
-}
-
-.mc-bevel-obsidian {
-  border-top: 2px solid #3c3250;
-  border-left: 2px solid #3c3250;
-  border-bottom: 2px solid #08060d;
-  border-right: 2px solid #08060d;
-}
-
-.mc-inset {
-  border-top: 2px solid #000000;
-  border-left: 2px solid #000000;
-  border-bottom: 2px solid #343535;
-  border-right: 2px solid #343535;
-}
-
-.mc-stone-btn {
-  border-top: 2px solid #8c9380;
-  border-left: 2px solid #8c9380;
-  border-bottom: 2px solid #0e0e0e;
-  border-right: 2px solid #0e0e0e;
-  box-shadow: inset -2px -2px 0px 0px #1f2020, inset 2px 2px 0px 0px #343535;
-  transition: transform 0.08s ease, background-color 0.12s ease;
-  user-select: none;
-}
-
-.mc-stone-btn:active {
-  border-top: 2px solid #0e0e0e;
-  border-left: 2px solid #0e0e0e;
-  border-bottom: 2px solid #8c9380;
-  border-right: 2px solid #8c9380;
-  transform: translate(1px, 1px);
-}
-
-.mc-gui-window {
-  background: #c6c6c6;
-  border-top: 4px solid #ffffff;
-  border-left: 4px solid #ffffff;
-  border-right: 4px solid #555555;
-  border-bottom: 4px solid #555555;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
-}
-
-.mc-gui-inner {
-  border-top: 3px solid #373737;
-  border-left: 3px solid #373737;
-  border-right: 3px solid #ffffff;
-  border-bottom: 3px solid #ffffff;
-}
-
-.mc-slot {
-  background: #8b8b8b;
-  border-top: 3px solid #373737;
-  border-left: 3px solid #373737;
-  border-right: 3px solid #ffffff;
-  border-bottom: 3px solid #ffffff;
-  transition: background-color 0.1s;
-  position: relative;
-  user-select: none;
-}
-
-.mc-slot:hover {
-  background: #a0a0a0;
-}
-
-.mc-slot:active {
-  border-top: 3px solid #1a1a1a;
-  border-left: 3px solid #1a1a1a;
-  border-right: 3px solid #cfcfcf;
-  border-bottom: 3px solid #cfcfcf;
-}
-
-.mc-slot-active {
-  outline: 3px solid #FFE55C;
-  outline-offset: -1px;
-  background: #9d9d9d;
-}
-
-.pixel-shadow {
-  text-shadow: 2px 2px 0px #202020;
-}
-
-.pixel-shadow-gold {
-  text-shadow: 2px 2px 0px #4a3e00;
-}
-
-.pixel-shadow-green {
-  text-shadow: 2px 2px 0px #1e3c00;
-}
-
-.pixel-shadow-red {
-  text-shadow: 2px 2px 0px #3d0303;
-}
-
-/* CRT Screen Simulation */
-.crt-screen {
-  position: relative;
-  background: #0a0b0b;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.95);
-}
-
-.crt-screen::before {
-  content: " ";
-  display: block;
-  position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%), 
-              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-  z-index: 20;
-  background-size: 100% 3px, 6px 100%;
-  pointer-events: none;
-}
-
-.crt-glow {
-  text-shadow: 0 0 6px rgba(151, 216, 93, 0.55);
-}
-
-.crt-glow-gold {
-  text-shadow: 0 0 6px rgba(223, 199, 64, 0.55);
-}
-
-.crt-glow-red {
-  text-shadow: 0 0 6px rgba(255, 180, 171, 0.6);
-}
-
-/* Blueprint Grid */
-.blueprint-grid {
-  background-image: 
-    linear-gradient(to right, rgba(66, 73, 57, 0.15) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(66, 73, 57, 0.15) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* Pulsing Redstone Wire Animation */
-@keyframes redstonePulse {
-  0%, 100% { stroke-dashoffset: 0; opacity: 0.95; }
-  50% { stroke-dashoffset: 24; opacity: 0.45; }
-}
-
-.redstone-wire {
-  stroke-dasharray: 6 3;
-  animation: redstonePulse 1.8s linear infinite;
-}
-
-/* Minecraft Splash Text Wiggle */
-@keyframes splashWiggle {
-  0%, 100% { transform: scale(1) rotate(-2deg); }
-  50% { transform: scale(1.05) rotate(-2deg); }
-}
-
-.splash-bounce {
-  animation: splashWiggle 1.4s ease-in-out infinite;
 }
 
 /* Custom scrollbars */
@@ -452,12 +290,6 @@ select:focus-visible {
 .ncraft-brand__copy { display: grid; min-width: 0; align-content: center; gap: 5px; }
 .ncraft-brand__name { display: block; color: var(--nether-text); font-size: clamp(14px, 1.3vw, 17px); font-weight: 700; letter-spacing: -.035em; line-height: 1.05; white-space: nowrap; }
 .ncraft-brand__copy small { color: var(--nether-dim); font: 9px 'JetBrains Mono', monospace; letter-spacing: 0.13em; }
-
-.ncraft-nav { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(234,214,245,.07); border-radius: 13px; background: rgba(18,15,20,.74); }
-.ncraft-nav button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; color: var(--nether-muted); font-size: 12px; font-weight: 600; transition: color .18s ease, background .18s ease; }
-.ncraft-nav button:hover, .ncraft-nav button.is-current, .ncraft-nav button:focus-visible { color: var(--nether-text); background: rgba(255,255,255,.055); }
-.ncraft-nav button.is-current { box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
-.ncraft-nav button.is-current svg { color: var(--nether-magma); }
 .ncraft-header__actions { display: flex; align-items: center; justify-content: flex-end; gap: 11px; min-width: max-content; }
 
 .nether-eyebrow { margin: 0; color: var(--nether-dim); font: 10px 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
@@ -902,7 +734,6 @@ select:focus-visible {
 
 @media (max-width: 1160px) {
   .ncraft-header__inner { gap: 13px; }
-  .ncraft-nav button { padding: 8px 9px; font-size: 11px; }
   .ncraft-overview-grid { grid-template-columns: minmax(0,1.12fr) minmax(320px,.88fr); }
   .hero-metrics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .ncraft-workspace-grid { grid-template-columns: minmax(0,1.1fr) minmax(300px,.9fr); }
@@ -910,7 +741,6 @@ select:focus-visible {
 
 @media (max-width: 980px) {
   .ncraft-header__inner { width: min(100% - 28px,1460px); }
-  .ncraft-nav { display: none; }
   .ncraft-main { width: min(100% - 28px,1460px); padding-top: 18px; }
   .ncraft-overview-grid, .ncraft-telemetry-grid, .ncraft-workspace-grid { grid-template-columns: minmax(0,1fr); }
   .world-manager-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -1014,18 +844,6 @@ select:focus-visible {
 
 
 /* Tabbed operator workspace */
-.ncraft-nav button {
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ncraft-nav button:active:not(.is-current) { transform: scale(.98); }
-.ncraft-nav button.is-current { color: #fff2e2; background: linear-gradient(145deg, rgba(255,184,117,.14), rgba(255,184,117,.055)); }
-.ncraft-nav button.is-current svg { color: var(--nether-magma); }
-.ncraft-nav button:focus-visible { outline-offset: 2px; }
-
 .ncraft-tab-panel {
   display: flex;
   min-width: 0;
@@ -1227,11 +1045,6 @@ select:focus-visible {
 .mobile-dock button[aria-selected="true"] { color: var(--nether-magma); background: linear-gradient(180deg, rgba(255,184,117,.12), rgba(255,184,117,.035)); box-shadow: inset 0 0 0 1px rgba(255,184,117,.18); }
 .mobile-dock button:active { transform: scale(.97); }
 
-@media (max-width: 1160px) {
-  .ncraft-nav button { gap: 6px; padding: 8px 9px; font-size: 10px; }
-  .ncraft-nav { gap: 2px; }
-}
-
 @media (max-width: 980px) {
   .ncraft-login-layout { width: min(100%, 540px); grid-template-columns: minmax(0,1fr); gap: 12px; }
   .ncraft-login-showcase { min-height: 280px; padding: 24px; }
@@ -1287,7 +1100,7 @@ select:focus-visible {
 .deploy-submit:hover:not(:disabled) { background: linear-gradient(135deg, #ffdfb5, #ffad7d); box-shadow: 0 10px 26px rgba(255,132,74,.2), inset 0 1px rgba(255,255,255,.72); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ncraft-nav button:active, .mobile-dock button:active { transform: none !important; }
+  .mobile-dock button:active { transform: none !important; }
 }
 
 /* Noto matrix motif, rebuilt as a restrained Nether-palette ambient layer. */

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  Activity, AlertTriangle, CheckCircle2, Clock3, Download, HardDrive, Loader2, Plus, RefreshCw,
+  Activity, AlertTriangle, CheckCircle2, Clock3, Download, HardDrive, Loader2, RefreshCw,
   RotateCcw, Save, Shield, ShieldCheck, Trash2, UserPlus, Users, Wifi, XCircle,
 } from 'lucide-react';
+import { useDialogs } from '../components/DialogProvider.tsx';
 import { NetherCard } from '../components/NetherCard.tsx';
 import type {
   AuditEvent, AuthStatus, ManagedPlayer, ManagedWorld, MonitoringSettings, NetworkProbeResult,
@@ -64,6 +65,7 @@ const EMPTY_MONITORING: MonitoringSettings = {
 export function OperationsView({
   role, authStatus, worlds, state, system, snapshots, recovery, monitoring, refreshStatus, onNotify,
 }: OperationsViewProps) {
+  const dialogs = useDialogs();
   const canAdmin = role === 'owner' || role === 'admin';
   const canOperate = role !== null && role !== 'viewer';
   const isOwner = role === 'owner';
@@ -193,7 +195,14 @@ export function OperationsView({
   const restoreSnapshot = async (id: string) => {
     const snapshot = worldSnapshots.find((candidate) => candidate.id === id);
     if (!snapshot || !selectedWorld) return;
-    const confirmed = window.confirm(`Restaurer le snapshot du ${humanDate(snapshot.createdAt)} pour « ${selectedWorld.name} » ? Une sauvegarde préalable du dossier courant sera créée avant le remplacement.`);
+    const confirmed = await dialogs.confirm({
+      eyebrow: 'RESTAURATION DE SNAPSHOT',
+      title: `Restaurer « ${selectedWorld.name} » ?`,
+      message: `Restaurer le snapshot du ${humanDate(snapshot.createdAt)} pour « ${selectedWorld.name} » ?\n\nUne sauvegarde préalable du dossier courant sera créée automatiquement avant le remplacement.`,
+      tone: 'warning',
+      confirmLabel: 'Restaurer ce snapshot',
+      cancelLabel: 'Annuler',
+    });
     if (!confirmed) return;
     await run(`restore-${id}`, async () => {
       const result = await request<{ beforeRestore: { id: string } | null }>(`/api/server/snapshots/${encodeURIComponent(id)}/restore`, {
@@ -208,7 +217,15 @@ export function OperationsView({
   };
 
   const deleteSnapshot = async (id: string) => {
-    if (!window.confirm('Supprimer définitivement cette archive snapshot ? Cette action ne supprime pas le monde courant.')) return;
+    const confirmed = await dialogs.confirm({
+      eyebrow: 'SUPPRESSION D’ARCHIVE',
+      title: 'Supprimer définitivement ce snapshot ?',
+      message: 'Cette archive .mcworld sera effacée du stockage des snapshots. Cette action ne supprime pas le monde actif sur le serveur.',
+      tone: 'danger',
+      confirmLabel: 'Supprimer le snapshot',
+      cancelLabel: 'Annuler',
+    });
+    if (!confirmed) return;
     await run(`delete-${id}`, async () => {
       await request(`/api/server/snapshots/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
       onNotify('success', 'Snapshot supprimé', 'Le dossier du monde courant n’a pas été modifié.');
@@ -279,7 +296,15 @@ export function OperationsView({
   };
 
   const deletePanelUser = async (user: PanelUserSummary) => {
-    if (!window.confirm(`Supprimer le compte « ${user.username} » et révoquer ses sessions ?`)) return;
+    const confirmed = await dialogs.confirm({
+      eyebrow: 'RÉVOCATION D’ACCÈS',
+      title: `Supprimer le compte « ${user.username} » ?`,
+      message: `Le compte panneau « ${user.username} » (${user.role}) sera supprimé et toutes ses sessions actives seront révoquées immédiatement.`,
+      tone: 'danger',
+      confirmLabel: 'Supprimer et révoquer',
+      cancelLabel: 'Annuler',
+    });
+    if (!confirmed) return;
     await run(`user-${user.id}`, async () => {
       await request(`/api/auth/users/${encodeURIComponent(user.id)}`, { method: 'DELETE', body: '{}' });
       await refreshUsers();
@@ -300,6 +325,9 @@ export function OperationsView({
           <h1>Opérations du serveur</h1>
           <p>Snapshots Bedrock, disponibilité UDP, reprise après crash, roster et accès au panneau — protégés par les rôles de session.</p>
         </div>
+        <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" disabled={busy !== null} onClick={() => void refreshAll()}>
+          {busy === 'refresh' ? <Loader2 className="spin-soft" size={14} /> : <RefreshCw size={14} />} Actualiser
+        </button>
         <span className="ncraft-tab-heading__ornament" aria-hidden="true"><span /><span /><span /></span>
       </header>
 
@@ -338,7 +366,9 @@ export function OperationsView({
                     <small>ID {snapshot.id.slice(0, 8)}</small>
                   </div>
                   <div className="operations-inline-actions">
-                    <a className="nether-btn nether-btn--quiet nether-btn--tiny" href={`/api/server/snapshots/${encodeURIComponent(snapshot.id)}/download`} aria-label={`Télécharger snapshot du ${humanDate(snapshot.createdAt)}`}><Download size={15} /> Télécharger</a>
+                    {canOperate && (
+                      <a className="nether-btn nether-btn--quiet nether-btn--tiny" href={`/api/server/snapshots/${encodeURIComponent(snapshot.id)}/download`} aria-label={`Télécharger snapshot du ${humanDate(snapshot.createdAt)}`}><Download size={15} /> Télécharger</a>
+                    )}
                     <button type="button" className="nether-btn nether-btn--quiet nether-btn--tiny" disabled={!canAdmin || !serverStopped || pipelineBusy || busy !== null} onClick={() => void restoreSnapshot(snapshot.id)} title={!serverStopped ? 'Arrête Bedrock avant de restaurer' : 'La sauvegarde actuelle sera créée avant restauration'}><RotateCcw size={15} /> Restaurer</button>
                     <button type="button" className="nether-btn nether-btn--danger nether-btn--tiny" disabled={!canAdmin || busy !== null} onClick={() => void deleteSnapshot(snapshot.id)} aria-label={`Supprimer snapshot ${snapshot.id.slice(0, 8)}`}><Trash2 size={15} /></button>
                   </div>
@@ -490,3 +520,6 @@ function ProbeSummary({ result }: { result: NetworkProbeResult }) {
     </div>
   );
 }
+
+export default OperationsView;
+

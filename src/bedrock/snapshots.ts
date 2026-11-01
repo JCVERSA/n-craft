@@ -114,6 +114,31 @@ function cleanRelativePath(value: string): string {
   return parts.join('/');
 }
 
+const ONLINE_WORLD_ROOT_FILES = new Set([
+  'level.dat',
+  'level.dat_old',
+  'levelname.txt',
+  'world_icon.jpeg',
+  'world_icon.png',
+  'world_resource_packs.json',
+  'world_behavior_packs.json',
+  'world_resource_pack_history.json',
+  'world_behavior_pack_history.json',
+  'world_pack_history.json',
+]);
+
+const OPTIONAL_ONLINE_SIDECAR_FILES = [
+  'levelname.txt',
+  'level.dat_old',
+  'world_icon.jpeg',
+  'world_icon.png',
+  'world_resource_packs.json',
+  'world_behavior_packs.json',
+  'world_resource_pack_history.json',
+  'world_behavior_pack_history.json',
+  'world_pack_history.json',
+] as const;
+
 function toWorldRelativePath(reportedPath: string, worldFolder: string): string {
   const normalized = reportedPath.trim().replace(/^\.\//, '');
   const prefixes = [`worlds/${worldFolder}/`, `${worldFolder}/`];
@@ -126,7 +151,7 @@ function toWorldRelativePath(reportedPath: string, worldFolder: string): string 
     relative = normalized;
   }
   const safe = cleanRelativePath(relative);
-  if (safe !== 'level.dat' && !safe.startsWith('db/')) {
+  if (!ONLINE_WORLD_ROOT_FILES.has(safe) && !safe.startsWith('db/')) {
     throw new SnapshotManagerError(`save query a référencé un fichier hors du dossier du monde (${safe}).`, 409);
   }
   return safe;
@@ -604,12 +629,33 @@ export class BedrockSnapshotManager {
           if (!fileList && attempt + 1 < SAVE_QUERY_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 400));
         }
         if (!fileList) throw new SnapshotManagerError('Bedrock n’a pas renvoyé une liste de fichiers copiable après 10 requêtes « save query ». Réessaie ou crée le snapshot serveur arrêté.', 504);
-        sourceBytes = fileList.reduce((sum, file) => sum + file.sizeBytes, 0);
+        const copiedPaths = new Set(fileList.map((file) => file.path));
+        const sidecarFiles: SaveFileSpec[] = [];
+        for (const sidecarName of OPTIONAL_ONLINE_SIDECAR_FILES) {
+          if (copiedPaths.has(sidecarName)) continue;
+          const sidecarInfo = await lstat(path.join(worldDirectory, sidecarName)).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return null;
+            throw error;
+          });
+          if (!sidecarInfo) continue;
+          if (sidecarInfo.isSymbolicLink()) {
+            throw new SnapshotManagerError('Snapshot refusé : le monde contient un lien symbolique.', 409);
+          }
+          if (!sidecarInfo.isFile()) {
+            throw new SnapshotManagerError('Snapshot refusé : le monde contient un type de fichier non pris en charge.', 409);
+          }
+          sidecarFiles.push({ path: sidecarName, sizeBytes: sidecarInfo.size });
+        }
+        const allFiles = [...fileList, ...sidecarFiles];
+        if (allFiles.length > MAX_WORLD_ENTRIES) {
+          throw new SnapshotManagerError('Le snapshot Bedrock contient trop de fichiers.', 413);
+        }
+        sourceBytes = allFiles.reduce((sum, file) => sum + file.sizeBytes, 0);
         if (!Number.isSafeInteger(sourceBytes) || sourceBytes > MAX_UNPACKED_BYTES) {
           throw new SnapshotManagerError('Le snapshot dépasserait la taille maximale décompressée prise en charge.', 413);
         }
         await this.assertAvailableDisk(sourceBytes);
-        for (const file of fileList) {
+        for (const file of allFiles) {
           const from = path.resolve(worldDirectory, ...file.path.split('/'));
           const root = path.resolve(worldDirectory);
           if (!from.startsWith(`${root}${path.sep}`)) throw new SnapshotManagerError('Chemin de snapshot hors du monde actif refusé.', 409);

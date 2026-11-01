@@ -218,6 +218,7 @@ export class WorldManager {
   readonly worldsDirectory: string;
   readonly manifestPath: string;
   private records: StoredWorld[] = [];
+  private readonly sizeCache = new Map<string, { signature: string; sizeBytes: number }>();
   private mutationQueue: Promise<void> = Promise.resolve();
   private activeMutations = 0;
   private queuedMutations = 0;
@@ -394,6 +395,19 @@ export class WorldManager {
           else if (levelInfo?.isFile() && dbInfo?.isDirectory()) {
             status = record.version ? 'ready' : 'unassigned';
             lastModifiedAt = levelInfo.mtime.toISOString();
+            const signature = `${rootInfo.mtimeMs}:${levelInfo.mtimeMs}:${levelInfo.size}:${dbInfo.mtimeMs}`;
+            const cached = this.sizeCache.get(record.id);
+            if (cached?.signature === signature) {
+              sizeBytes = cached.sizeBytes;
+            } else {
+              const computed = await this.computeDirectorySizeBytes(root);
+              if (computed === 'unsafe') {
+                status = 'unsafe';
+              } else {
+                sizeBytes = computed;
+                if (computed !== null) this.sizeCache.set(record.id, { signature, sizeBytes: computed });
+              }
+            }
           } else {
             status = record.source === 'created' ? 'pending' : record.version ? 'missing' : 'unassigned';
           }
@@ -415,6 +429,29 @@ export class WorldManager {
       const rightTime = Date.parse(right.lastUsedAt ?? right.updatedAt);
       return rightTime - leftTime || left.name.localeCompare(right.name);
     });
+  }
+
+  private async computeDirectorySizeBytes(root: string): Promise<number | 'unsafe' | null> {
+    const stack = [root];
+    let entries = 0;
+    let total = 0;
+    try {
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        for (const entry of await readdir(current, { withFileTypes: true })) {
+          entries += 1;
+          if (entries > MAX_TREE_ENTRIES) return null;
+          const fullPath = path.join(current, entry.name);
+          const info = await lstat(fullPath);
+          if (info.isSymbolicLink()) return 'unsafe';
+          if (info.isDirectory()) stack.push(fullPath);
+          else if (info.isFile()) total += info.size;
+        }
+      }
+      return total;
+    } catch {
+      return null;
+    }
   }
 
   private assertUniqueName(name: string, version: string, exceptId?: string): void {

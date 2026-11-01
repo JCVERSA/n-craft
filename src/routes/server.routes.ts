@@ -5,7 +5,13 @@ import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { Router } from 'express';
-import type { PanelAuthService } from '../auth.ts';
+import {
+  hasMinimumRole,
+  redactPanelStateForRole,
+  redactWorldForRole,
+  sameAdminXuids,
+  type PanelAuthService,
+} from '../auth.ts';
 import { DeployInProgressError, DeployPipeline, ServerNotInstalledError, ServerRunningError } from '../bedrock/deployPipeline.ts';
 import { ConfigurationError, validateDeployConfiguration } from '../bedrock/configWriter.ts';
 import { BedrockConsole } from '../bedrock/console.ts';
@@ -92,12 +98,12 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         dependencies.snapshots.getSnapshotWithDisk(),
       ]);
       const principal = dependencies.auth.getPrincipal(request);
-      const canViewSetupCredentials = principal !== null && principal.role !== 'viewer';
+      const canViewSetupCredentials = hasMinimumRole(principal?.role, 'operator');
       const playitSetup = dependencies.playitRunner.getSetupSnapshot();
       const portwarpSetup = dependencies.portwarpRunner.getSetupSnapshot();
       const chatbot = dependencies.chatbot.getSnapshot();
       response.json({
-        state: dependencies.state.getSnapshot(),
+        state: redactPanelStateForRole(dependencies.state.getSnapshot(), principal?.role),
         tunnelProvider: dependencies.tunnelProvider,
         playitSetup: canViewSetupCredentials ? playitSetup : { ...playitSetup, claimUrl: null },
         portwarpSetup: canViewSetupCredentials
@@ -122,10 +128,12 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     response.json({ versions: dependencies.catalog.publicEntries() });
   });
 
-  router.get('/worlds', async (_request, response, next) => {
+  router.get('/worlds', async (request, response, next) => {
     try {
       response.setHeader('Cache-Control', 'no-store');
-      response.json({ worlds: await dependencies.worldManager.listWorlds() });
+      const principal = dependencies.auth.getPrincipal(request);
+      const worlds = await dependencies.worldManager.listWorlds();
+      response.json({ worlds: worlds.map((world) => redactWorldForRole(world, principal?.role)) });
     } catch (error) {
       next(error);
     }
@@ -265,7 +273,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.get('/snapshots/:id/download', async (request, response) => {
+  router.get('/snapshots/:id/download', requireOperator, async (request, response) => {
     try {
       const archive = await dependencies.snapshots.getArchive(request.params.id);
       response.setHeader('Content-Type', 'application/zip');
@@ -309,11 +317,14 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.get('/players', (_request, response) => {
+  router.get('/players', (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
+    const principal = dependencies.auth.getPrincipal(request);
     response.json({
       players: dependencies.players.list(),
-      admins: dependencies.state.getSnapshot().activeConfig?.adminXuids ?? [],
+      admins: hasMinimumRole(principal?.role, 'operator')
+        ? (dependencies.state.getSnapshot().activeConfig?.adminXuids ?? [])
+        : [],
     });
   });
 
@@ -462,7 +473,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.get('/worlds/:id/export', async (request, response) => {
+  router.get('/worlds/:id/export', requireOperator, async (request, response) => {
     const serverSnapshot = dependencies.state.getSnapshot().server;
     if (dependencies.bedrockConsole.isRunning || serverSnapshot.status === 'running' || (serverSnapshot.status === 'failed' && serverSnapshot.pid !== null) || dependencies.pipeline.isRunning) {
       response.status(409).json({ error: 'Arrête Bedrock et attends la fin des opérations pour garantir une archive cohérente.' });
@@ -531,6 +542,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         version,
         dependencies.state.getSnapshot().activeConfig,
       );
+      await audit(request, 'world-imported', `Monde « ${imported.name} » (${imported.id}) importé pour BDS ${version}.`);
       response.status(201).json({ world: imported });
     } catch (error) {
       if (error instanceof WorldManagerError) {
@@ -550,6 +562,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       return;
     }
     try {
+      const principal = dependencies.auth.getPrincipal(request);
       let world;
       if (request.body?.configuration !== undefined) {
         const record = dependencies.worldManager.getWorld(request.params.id);
@@ -559,14 +572,21 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
         const config = validateDeployConfiguration(request.body.configuration, allowedVersions);
         if (config.version !== record.version) throw new WorldManagerError('La version d’un monde existant est immuable.', 409);
         if (config.levelName !== record.folder) throw new WorldManagerError('Le dossier d’un monde existant ne peut pas être renommé depuis les propriétés.', 409);
+        const baselineAdmins = record.configuration?.adminXuids ?? dependencies.state.getSnapshot().activeConfig?.adminXuids;
+        if ((!baselineAdmins || !sameAdminXuids(config.adminXuids, baselineAdmins)) && !hasMinimumRole(principal?.role, 'admin')) {
+          response.status(403).json({ error: 'Le rôle administrateur est requis pour définir ou modifier les XUID opérateurs Bedrock.' });
+          return;
+        }
         if (dependencies.state.getSnapshot().activeConfig?.version === record.version
           && dependencies.state.getSnapshot().activeConfig?.levelName === record.folder) {
           await dependencies.pipeline.saveConfiguration(config);
         }
         await dependencies.worldManager.updateConfiguration(record.id, config);
         world = (await dependencies.worldManager.listWorlds()).find((candidate) => candidate.id === record.id);
+        await audit(request, 'world-configuration-updated', `Options du monde « ${record.name} » (${record.id}) mises à jour.`);
       } else {
         world = await dependencies.worldManager.renameWorld(request.params.id, request.body?.name);
+        await audit(request, 'world-renamed', `Monde ${world.id} renommé en « ${world.name} ».`);
       }
       response.json({ world });
     } catch (error) {
@@ -596,6 +616,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       const version = typeof request.body?.version === 'string' ? request.body.version : '';
       if (!dependencies.catalog.get(version)) throw new WorldManagerError('Cette version BDS ne figure pas dans le catalogue.');
       const world = await dependencies.worldManager.assignVersion(request.params.id, version);
+      await audit(request, 'world-version-assigned', `Monde « ${world.name} » (${world.id}) associé à BDS ${version}.`);
       response.json({ world });
     } catch (error) {
       if (error instanceof WorldManagerError) {
@@ -606,7 +627,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.delete('/worlds/:id', requireSameOrigin, async (request, response) => {
+  router.delete('/worlds/:id', requireAdmin, requireSameOrigin, async (request, response) => {
     const unavailable = stoppedForWorldMutation(dependencies);
     if (unavailable) {
       response.status(409).json({ error: unavailable });
@@ -619,6 +640,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       if (activeConfig?.version === record.version && activeConfig.levelName === record.folder) {
         await dependencies.state.setActiveConfig(null);
       }
+      await audit(request, 'world-deleted', `Monde « ${record.name} » (${deleted.id}) supprimé définitivement.`);
       response.json({ deleted: true, id: deleted.id });
     } catch (error) {
       if (error instanceof WorldManagerError) {
@@ -636,10 +658,15 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
 
   router.post('/configuration', requireSameOrigin, async (request, response) => {
     try {
+      const principal = dependencies.auth.getPrincipal(request);
       const currentConfig = dependencies.state.getSnapshot().activeConfig;
       const allowedVersions = new Set(dependencies.catalog.allowedVersionIds());
       if (currentConfig?.version) allowedVersions.add(currentConfig.version);
       const config = validateDeployConfiguration(request.body?.config, allowedVersions);
+      if ((!currentConfig || !sameAdminXuids(config.adminXuids, currentConfig.adminXuids)) && !hasMinimumRole(principal?.role, 'admin')) {
+        response.status(403).json({ error: 'Le rôle administrateur est requis pour définir ou modifier les XUID opérateurs Bedrock.' });
+        return;
+      }
       const activeWorld = currentConfig
         ? dependencies.worldManager.findByVersionAndFolder(currentConfig.version, currentConfig.levelName)
         : null;
@@ -652,6 +679,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       }
       await dependencies.pipeline.saveConfiguration(config);
       if (activeWorld) await dependencies.worldManager.updateConfiguration(activeWorld.id, config);
+      await audit(request, 'bedrock-configuration-saved', `Réglages Bedrock enregistrés (version ${config.version}, monde ${config.levelName}).`);
       response.json({ saved: true, state: dependencies.state.getSnapshot() });
     } catch (error) {
       if (error instanceof DeployInProgressError || error instanceof ServerNotInstalledError || error instanceof ServerRunningError) {
@@ -670,13 +698,14 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.post('/playit/setup', requireSameOrigin, (_request, response) => {
+  router.post('/playit/setup', requireSameOrigin, async (request, response) => {
     if (dependencies.tunnelProvider !== 'playit') {
       response.status(409).json({ error: 'Playit n’est pas le fournisseur de tunnel actif.' });
       return;
     }
     try {
       dependencies.playitRunner.requestSetup();
+      await audit(request, 'playit-setup-requested', 'Initialisation ou réclamation du tunnel Playit demandée.');
       response.status(202).json({ accepted: true, playitSetup: dependencies.playitRunner.getSetupSnapshot() });
     } catch (error) {
       response.status(409).json({
@@ -686,13 +715,14 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
   });
 
-  router.post('/portwarp/retry', requireSameOrigin, (_request, response) => {
+  router.post('/portwarp/retry', requireSameOrigin, async (request, response) => {
     if (dependencies.tunnelProvider !== 'portwarp') {
       response.status(409).json({ error: 'Portwarp n’est pas le fournisseur de tunnel actif.' });
       return;
     }
     try {
       dependencies.portwarpRunner.retry();
+      await audit(request, 'portwarp-retry-requested', 'Relance de la connexion Portwarp demandée.');
       response.status(202).json({ accepted: true, portwarpSetup: dependencies.portwarpRunner.getSetupSnapshot() });
     } catch (error) {
       response.status(409).json({
@@ -704,6 +734,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
 
   router.post('/deploy', requireSameOrigin, async (request, response) => {
     try {
+      const principal = dependencies.auth.getPrincipal(request);
       const server = dependencies.state.getSnapshot().server;
       if (dependencies.bedrockConsole.isRunning || server.status === 'running') {
         response.status(409).json({ error: 'Arrête Bedrock avant de modifier la configuration ou la version.' });
@@ -711,8 +742,14 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
       }
       const config = validateDeployConfiguration(request.body?.config, dependencies.catalog.allowedVersionIds());
       const selection = parseWorldSelection(request.body?.world, config.levelName);
-      const resolved = await dependencies.worldManager.resolveForDeployment(config, selection);
       const currentConfig = dependencies.state.getSnapshot().activeConfig;
+      const existingTargetWorld = selection.mode === 'existing' ? dependencies.worldManager.getWorld(selection.id) : null;
+      const baselineAdmins = existingTargetWorld?.configuration?.adminXuids ?? currentConfig?.adminXuids;
+      if ((!baselineAdmins || !sameAdminXuids(config.adminXuids, baselineAdmins)) && !hasMinimumRole(principal?.role, 'admin')) {
+        response.status(403).json({ error: 'Le rôle administrateur est requis pour définir ou modifier les XUID opérateurs Bedrock.' });
+        return;
+      }
+      const resolved = await dependencies.worldManager.resolveForDeployment(config, selection);
       if (selection.mode === 'existing') {
         await dependencies.snapshots.createSnapshot(resolved.worldId, 'before-deploy');
       }
@@ -752,15 +789,17 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
     try {
       await dependencies.chatbot.startUserApprovedLink();
+      await audit(request, 'chatbot-link-started', 'Flux d’association Microsoft Device Code du chatbot démarré.');
       response.status(202).json({ accepted: true, chatbot: dependencies.chatbot.getSnapshot() });
     } catch (error) {
       response.status(409).json({ error: (error as Error).message || 'Impossible de démarrer le chatbot.' });
     }
   });
 
-  router.post('/chatbot/cancel', requireSameOrigin, async (_request, response) => {
+  router.post('/chatbot/cancel', requireSameOrigin, async (request, response) => {
     try {
       await dependencies.chatbot.cancelUserApprovedLink();
+      await audit(request, 'chatbot-link-cancelled', 'Flux d’association du chatbot annulé.');
       response.json({ cancelled: true, chatbot: dependencies.chatbot.getSnapshot() });
     } catch {
       response.status(500).json({ error: 'Impossible d’annuler le flux du chatbot.' });
@@ -774,6 +813,7 @@ export function createServerRouter(dependencies: ServerRouteDependencies): Route
     }
     try {
       await dependencies.chatbot.unlinkAccount();
+      await audit(request, 'chatbot-account-unlinked', 'Profil Microsoft dédié du chatbot dissocié et purgé.');
       response.json({ unlinked: true, chatbot: dependencies.chatbot.getSnapshot() });
     } catch {
       response.status(500).json({ error: 'Impossible de supprimer le profil privé du chatbot.' });

@@ -120,6 +120,21 @@ test('NVIDIA credentials remain server-side and its selected model can be config
   assert.equal(authorization, 'Bearer test-secret-key');
   assert.equal(JSON.parse(requestBody).model, 'nvidia/example-model');
   assert.equal(JSON.stringify(result).includes('test-secret-key'), false);
+
+  // CHATBOT_NIM_MODEL must not silently clobber Pixel Studio's default NIM model.
+  let defaultBody = '';
+  const defaultModelService = new PixelStudioAIService({
+    environment: { NVIDIA_NIM_API_KEY: 'test-secret-key', CHATBOT_NIM_MODEL: 'meta/llama-3.3-70b-instruct' },
+    fetcher: async (_input, init) => {
+      defaultBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ choices: [{ message: { content: matrixResponse() } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+  await defaultModelService.generateMatrix({ prompt: 'un bloc de mousse' });
+  assert.equal(JSON.parse(defaultBody).model, 'nvidia/nemotron-3-super-120b-a12b');
 });
 
 test('animation generation validates frames and supports a drawn base without a text prompt', async () => {

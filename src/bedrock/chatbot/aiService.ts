@@ -164,7 +164,7 @@ export class ChatbotAIService {
 
     const geminiKey = environment.GEMINI_API_KEY?.trim() ?? '';
     const nvidiaKey = environment.NVIDIA_NIM_API_KEY?.trim() ?? '';
-    const geminiModel = readModel(environment.CHATBOT_GEMINI_MODEL, 'gemini-3.8-flash');
+    const geminiModel = readModel(environment.CHATBOT_GEMINI_MODEL, 'gemini-2.5-flash');
     const nvidiaModel = readModel(environment.CHATBOT_NIM_MODEL, 'meta/llama-3.3-70b-instruct');
     this.geminiProvider = options.providers && Object.hasOwn(options.providers, 'gemini')
       ? options.providers.gemini ?? null

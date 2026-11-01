@@ -180,3 +180,33 @@ test('registers legacy worlds by exact active configuration and leaves other wor
   assert.equal(worlds.find((world) => world.folder === 'OldFolder')?.version, null);
   assert.equal(worlds.find((world) => world.folder === 'OldFolder')?.status, 'unassigned');
 });
+
+test('listWorlds computes recursive sizeBytes and flags nested symlinks as unsafe', async (context) => {
+  const { root, manager } = await setupManager();
+  context.after(() => rm(root, { recursive: true, force: true }));
+
+  const created = await manager.resolveForDeployment(configuration(VERSION_A), { mode: 'new', name: 'Sized World' });
+  const worldDir = await materializeWorld(manager, created.configuration.levelName);
+  await writeFile(path.join(worldDir, 'db', '000003.ldb'), Buffer.alloc(1024, 0x61));
+
+  const readyList = await manager.listWorlds();
+  const readyWorld = readyList.find((world) => world.id === created.worldId);
+  assert.ok(readyWorld);
+  assert.equal(readyWorld.status, 'ready');
+  // 'leveldata' (9) + 'MANIFEST-000001\n' (16) + 1024 = 1049 bytes
+  assert.equal(readyWorld.sizeBytes, 9 + 16 + 1024);
+
+  const outsideTarget = path.join(root, 'outside.txt');
+  await writeFile(outsideTarget, 'secret');
+  const { symlink } = await import('node:fs/promises');
+  await symlink(outsideTarget, path.join(worldDir, 'db', 'bad-link'));
+  // Touch level.dat mtime/size so cache signature invalidates
+  await writeFile(path.join(worldDir, 'level.dat'), 'leveldata-updated');
+
+  const unsafeList = await manager.listWorlds();
+  const unsafeWorld = unsafeList.find((world) => world.id === created.worldId);
+  assert.ok(unsafeWorld);
+  assert.equal(unsafeWorld.status, 'unsafe');
+  assert.equal(unsafeWorld.sizeBytes, null);
+});
+

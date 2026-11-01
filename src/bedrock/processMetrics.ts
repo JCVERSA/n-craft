@@ -112,7 +112,7 @@ export class BedrockMetricsSampler {
         return;
       }
       this.previousSample = metrics.sample;
-      await this.state.updateServer({
+      this.state.updateServerMetrics({
         cpuPercent: metrics.cpuPercent,
         memoryBytes: metrics.memoryBytes,
         metricsUpdatedAt: new Date().toISOString(),

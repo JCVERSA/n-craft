@@ -208,7 +208,7 @@ const errorHandler: ErrorRequestHandler = (error, request, response, next) => {
 app.use(errorHandler);
 
 const httpServer = createServer(app);
-const consoleGateway = attachConsoleWebSocket(httpServer, auth, bedrockConsole, state);
+const consoleGateway = attachConsoleWebSocket(httpServer, auth, bedrockConsole, state, audit);
 
 bedrockConsole.on('players', (playersOnline: number) => {
   if (state.getSnapshot().server.playersOnline === playersOnline) return;

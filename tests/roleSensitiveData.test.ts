@@ -43,7 +43,59 @@ test('viewer status omits temporary integration credentials while operators can 
     auth,
     inspector: { async inspect() { return { deployReady: true }; } },
     snapshots: { async getSnapshotWithDisk() { return { snapshots: [], storageUsedBytes: 0, diskFreeBytes: 1_000_000 }; } },
-    state: { getSnapshot() { return { server: { status: 'stopped' }, pipeline: { status: 'idle' }, activeConfig: null }; } },
+    state: {
+      getSnapshot() {
+        return {
+          server: { status: 'stopped' },
+          pipeline: { status: 'idle' },
+          activeConfig: {
+            version: '1.21.131.1',
+            serverName: 'Nebula',
+            levelName: 'ncraft_secret',
+            gamemode: 'survival',
+            difficulty: 'normal',
+            maxPlayers: 10,
+            adminXuids: ['2535412894129841'],
+            seed: 'secret-world-seed',
+            viewDistance: 10,
+            allowCheats: false,
+            eulaAccepted: true,
+          },
+        };
+      },
+    },
+    worldManager: {
+      async listWorlds() {
+        return [{
+          id: 'world-1',
+          name: 'Secret World',
+          folder: 'ncraft_secret',
+          version: '1.21.131.1',
+          seed: 'secret-world-seed',
+          configuration: {
+            version: '1.21.131.1',
+            serverName: 'Nebula',
+            levelName: 'ncraft_secret',
+            gamemode: 'survival',
+            difficulty: 'normal',
+            maxPlayers: 10,
+            adminXuids: ['2535412894129841'],
+            seed: 'secret-world-seed',
+            viewDistance: 10,
+            allowCheats: false,
+            eulaAccepted: true,
+          },
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          lastUsedAt: null,
+          source: 'created',
+          status: 'ready',
+          sizeBytes: null,
+          lastModifiedAt: null,
+        }];
+      },
+    },
+    players: { list: () => [] },
     tunnelProvider: 'playit',
     playitRunner: { getSetupSnapshot() { return { phase: 'claim_pending', claimUrl: 'https://playit.gg/claim/secret-test-code', error: null }; } },
     portwarpRunner: { getSetupSnapshot() { return { phase: 'waiting_for_approval', verificationUrl: 'https://portwarp.example/device', userCode: 'TEST-CODE', error: null }; } },
@@ -57,22 +109,36 @@ test('viewer status omits temporary integration credentials while operators can 
   app.use('/api/server', createServerRouter(dependencies));
   const origin = await listen(app, (cleanup) => context.after(cleanup));
 
+  const viewerCookie = cookieFor(auth, viewer);
+  const operatorCookie = cookieFor(auth, operator);
   const getStatus = async (cookie: string) => {
     const response = await fetch(`${origin}/api/server/status`, { headers: { cookie } });
     assert.equal(response.status, 200);
     return response.json() as Promise<Record<string, any>>;
   };
-  const viewerStatus = await getStatus(cookieFor(auth, viewer));
+  const viewerStatus = await getStatus(viewerCookie);
   assert.equal(viewerStatus.playitSetup.claimUrl, null);
   assert.equal(viewerStatus.portwarpSetup.userCode, null);
   assert.equal(viewerStatus.portwarpSetup.verificationUrl, null);
   assert.equal(viewerStatus.chatbot.deviceCode, null);
   assert.equal(viewerStatus.portwarpSetup.phase, 'waiting_for_approval', 'non-sensitive setup state remains visible');
+  assert.equal(viewerStatus.state.activeConfig.seed, '');
+  assert.deepEqual(viewerStatus.state.activeConfig.adminXuids, []);
 
-  const operatorStatus = await getStatus(cookieFor(auth, operator));
+  const viewerWorlds = await (await fetch(`${origin}/api/server/worlds`, { headers: { cookie: viewerCookie } })).json() as Record<string, any>;
+  assert.equal(viewerWorlds.worlds[0].seed, null);
+  assert.equal(viewerWorlds.worlds[0].configuration.seed, '');
+  assert.deepEqual(viewerWorlds.worlds[0].configuration.adminXuids, []);
+
+  const viewerPlayers = await (await fetch(`${origin}/api/server/players`, { headers: { cookie: viewerCookie } })).json() as Record<string, any>;
+  assert.deepEqual(viewerPlayers.admins, []);
+
+  const operatorStatus = await getStatus(operatorCookie);
   assert.equal(operatorStatus.playitSetup.claimUrl, 'https://playit.gg/claim/secret-test-code');
   assert.equal(operatorStatus.portwarpSetup.userCode, 'TEST-CODE');
   assert.equal(operatorStatus.chatbot.deviceCode.userCode, 'MS-TEST-CODE');
+  assert.equal(operatorStatus.state.activeConfig.seed, 'secret-world-seed');
+  assert.deepEqual(operatorStatus.state.activeConfig.adminXuids, ['2535412894129841']);
 });
 
 test('Pixel Studio generation and animation require operator role, not merely a session', async (context) => {

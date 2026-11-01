@@ -76,9 +76,21 @@ export function isSameOriginRequest(request: OriginRequest | Request): boolean {
   return expected !== null && candidate !== null && candidate === expected;
 }
 
+export function isHttpsRequest(request: OriginRequest | Request): boolean {
+  const originRequest = request as OriginRequest;
+  if ((request as Request).secure === true) return true;
+  if (originRequest.socket?.encrypted === true) return true;
+  if (originRequest.protocol?.toLowerCase() === 'https') return true;
+  if (proxyTrustEnabled()) {
+    const forwardedProto = header(originRequest, 'x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+    if (forwardedProto === 'https') return true;
+  }
+  return false;
+}
+
 /** In production, mutations and the UI are served only over a trusted HTTPS hop. */
 export const requireHttpsInProduction: RequestHandler = (request, response, next) => {
-  if (process.env.NODE_ENV === 'production' && !request.secure) {
+  if (process.env.NODE_ENV === 'production' && !isHttpsRequest(request)) {
     response.status(400).type('text/plain').send('HTTPS requis : configure une terminaison TLS et PANEL_TRUST_PROXY.');
     return;
   }

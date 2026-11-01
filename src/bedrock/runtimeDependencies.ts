@@ -27,6 +27,9 @@ const MAX_INRELEASE_BYTES = 16 * 1024 * 1024;
 const MAX_PACKAGES_GZIP_BYTES = 12 * 1024 * 1024;
 const MAX_PACKAGES_INDEX_BYTES = 96 * 1024 * 1024;
 const MAX_DEB_BYTES = 8 * 1024 * 1024;
+const MIN_FOCAL_UPDATES_RELEASE_MS = Date.UTC(2025, 0, 1);
+const MAX_RELEASE_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+const MIN_FOCAL_LIBSSL_UBUNTU_PATCH = 22;
 const LEGACY_SSL_NAMES = new Set(['libssl.so.1.1', 'libcrypto.so.1.1']);
 
 export interface BinaryDependencyReport {
@@ -203,10 +206,12 @@ export function parseUbuntuFocalLibsslRecord(packagesIndex: string): UbuntuPacka
     const filename = fields.get('Filename') ?? '';
     const digest = fields.get('SHA256') ?? '';
     const size = Number(fields.get('Size'));
+    const patchMatch = /^1\.1\.1f-1ubuntu2\.(\d+)$/.exec(version);
     if (
       fields.get('Package') !== 'libssl1.1' ||
       fields.get('Architecture') !== 'amd64' ||
-      !/^1\.1\.1f-1ubuntu2(?:\.\d+)?$/.test(version)
+      !patchMatch ||
+      Number(patchMatch[1]) < MIN_FOCAL_LIBSSL_UBUNTU_PATCH
     ) continue;
 
     if (!/^pool\/main\/o\/openssl\/libssl1\.1_1\.1\.1f-1ubuntu2(?:\.\d+)?_amd64\.deb$/.test(filename)) {
@@ -345,7 +350,14 @@ export async function verifyUbuntuInRelease(
   }
   const releaseDate = parseReleaseValue(payload, 'Date');
   const releaseTime = releaseDate ? Date.parse(releaseDate) : Number.NaN;
-  if (!Number.isFinite(releaseTime) || releaseTime > Date.now() + 24 * 60 * 60 * 1000 || Date.now() - releaseTime > 45 * 24 * 60 * 60 * 1000) {
+  // Ubuntu 20.04 (focal-updates) reached end of standard support in May 2025, so its
+  // archive index may remain legitimately static for months. Enforce a post-2025 floor
+  // plus minimum libssl1.1 patch level to block rollback attacks without breaking installs.
+  if (
+    !Number.isFinite(releaseTime) ||
+    releaseTime < MIN_FOCAL_UPDATES_RELEASE_MS ||
+    releaseTime > Date.now() + MAX_RELEASE_FUTURE_SKEW_MS
+  ) {
     throw new Error('Dépôt refusé : les métadonnées signées Ubuntu sont absentes, trop anciennes ou datées dans le futur.');
   }
   return payload;

@@ -8,10 +8,16 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import path from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import { buildChildEnvironment } from '../childEnvironment.ts';
-import type { PanelAuthService } from '../auth.ts';
+import type { AuditLog } from '../audit.ts';
+import {
+  hasMinimumRole,
+  isPrivilegedConsoleCommand,
+  redactPanelStateForRole,
+  type PanelAuthService,
+} from '../auth.ts';
 import type { StateStore } from '../state.ts';
 import type { ConsoleLog, LogLevel } from '../types/backend.ts';
-import { isSameOriginRequest } from '../security.ts';
+import { isHttpsRequest, isSameOriginRequest } from '../security.ts';
 import { parsePlayerLifecycleDetails } from './playerTracker.ts';
 
 const MAX_RECENT_LINES = 500;
@@ -465,6 +471,7 @@ export function attachConsoleWebSocket(
   auth: PanelAuthService,
   bedrockConsole: BedrockConsole,
   stateStore: StateStore,
+  audit?: Pick<AuditLog, 'record'>,
 ): { close: () => Promise<void> } {
   const webSocketServer = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
 
@@ -482,9 +489,12 @@ export function attachConsoleWebSocket(
       return;
     }
 
-    // WebSocket upgrades do not pass through Express middleware. Re-check both
-    // the HttpOnly session cookie and Origin before accepting the upgrade.
+    // WebSocket upgrades do not pass through Express middleware. Re-check HTTPS,
+    // the HttpOnly session cookie, and Origin before accepting the upgrade.
     const requestLike = request as unknown as import('express').Request;
+    if (process.env.NODE_ENV === 'production' && !isHttpsRequest(requestLike)) {
+      return sendUpgradeError(socket, 403, 'HTTPS required');
+    }
     if (!auth.getPrincipal(requestLike)) return sendUpgradeError(socket, 401, 'Authentication required');
     if (!isSameOriginRequest(requestLike)) return sendUpgradeError(socket, 403, 'Invalid origin');
 
@@ -497,14 +507,50 @@ export function attachConsoleWebSocket(
   webSocketServer.on('connection', (webSocket, request) => {
     const requestLike = request as unknown as import('express').Request;
     const send = (payload: unknown) => {
-      if (webSocket.readyState === WebSocket.OPEN) webSocket.send(JSON.stringify(payload));
+      if (webSocket.readyState !== WebSocket.OPEN) return;
+      if (!auth.getPrincipal(requestLike)) {
+        webSocket.close(4401, 'Session expired');
+        return;
+      }
+      webSocket.send(JSON.stringify(payload));
     };
-    send({ type: 'snapshot', lines: bedrockConsole.getRecentLines(), state: stateStore.getSnapshot() });
+
+    const initialPrincipal = auth.getPrincipal(requestLike);
+    if (!initialPrincipal) {
+      webSocket.close(4401, 'Session expired');
+      return;
+    }
+    send({
+      type: 'snapshot',
+      lines: bedrockConsole.getRecentLines(),
+      state: redactPanelStateForRole(stateStore.getSnapshot(), initialPrincipal.role),
+    });
 
     const onLine = (line: ConsoleLog) => send({ type: 'line', line });
-    const onState = (state: ReturnType<StateStore['getSnapshot']>) => send({ type: 'state', state });
+    const onState = (state: ReturnType<StateStore['getSnapshot']>) => {
+      const current = auth.getPrincipal(requestLike);
+      if (!current) {
+        if (webSocket.readyState === WebSocket.OPEN) webSocket.close(4401, 'Session expired');
+        return;
+      }
+      send({ type: 'state', state: redactPanelStateForRole(state, current.role) });
+    };
+    const unsubscribeSessions = auth.onSessionChange(() => {
+      if (!auth.getPrincipal(requestLike) && webSocket.readyState === WebSocket.OPEN) {
+        webSocket.close(4401, 'Session expired');
+      }
+    });
     bedrockConsole.on('line', onLine);
     stateStore.on('change', onState);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      unsubscribeSessions();
+      bedrockConsole.removeListener('line', onLine);
+      stateStore.removeListener('change', onState);
+    };
 
     webSocket.on('message', (data) => {
       let message: unknown;
@@ -519,7 +565,7 @@ export function attachConsoleWebSocket(
         return;
       }
       const principal = auth.getPrincipal(requestLike);
-      if (!principal || !['owner', 'admin', 'operator'].includes(principal.role)) {
+      if (!principal || !hasMinimumRole(principal.role, 'operator')) {
         send({ type: 'error', error: 'Le rôle opérateur est requis pour envoyer des commandes Bedrock.' });
         return;
       }
@@ -528,19 +574,22 @@ export function attachConsoleWebSocket(
         send({ type: 'error', error: 'Commande invalide : une seule ligne de 1 000 caractères maximum est acceptée.' });
         return;
       }
-      if (!bedrockConsole.sendCommand(command.trim())) {
+      const trimmed = command.trim();
+      if (isPrivilegedConsoleCommand(trimmed) && !hasMinimumRole(principal.role, 'admin')) {
+        send({ type: 'error', error: 'Le rôle administrateur est requis pour gérer les privilèges Bedrock.' });
+        return;
+      }
+      if (!bedrockConsole.sendCommand(trimmed)) {
         send({ type: 'error', error: 'Le serveur Bedrock n’est pas prêt ou la console est fermée.' });
+        return;
+      }
+      if (audit) {
+        void audit.record(principal, 'bedrock-console-command', `Commande console exécutée : ${trimmed.slice(0, 160)}`).catch(() => undefined);
       }
     });
 
-    webSocket.once('close', () => {
-      bedrockConsole.removeListener('line', onLine);
-      stateStore.removeListener('change', onState);
-    });
-    webSocket.once('error', () => {
-      bedrockConsole.removeListener('line', onLine);
-      stateStore.removeListener('change', onState);
-    });
+    webSocket.once('close', cleanup);
+    webSocket.once('error', cleanup);
   });
 
   return {

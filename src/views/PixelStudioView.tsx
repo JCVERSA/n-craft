@@ -161,6 +161,11 @@ export default function PixelStudioView({ onNotify }: PixelStudioViewProps) {
   const [aiProviders, setAiProviders] = useState<PixelStudioAIStatus | null>(null);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [exportBusy, setExportBusy] = useState<'png' | 'spritesheet' | 'gif' | null>(null);
+  const [nameDraft, setNameDraft] = useState(project.name);
+
+  useEffect(() => {
+    setNameDraft(project.name);
+  }, [project.name]);
 
   const updateProject = useCallback((update: (current: PixelStudioProject) => PixelStudioProject, touch = true) => {
     const current = projectRef.current;
@@ -861,7 +866,23 @@ export default function PixelStudioView({ onNotify }: PixelStudioViewProps) {
           >
             <label className="pixel-studio__field pixel-studio__project-name">
               <span>Nom du projet</span>
-              <input type="text" value={project.name} maxLength={64} onChange={(event) => updateProject((current) => ({ ...current, name: event.target.value.trim() ? event.target.value : 'Nouvelle création' }))} />
+              <input
+                type="text"
+                value={nameDraft}
+                maxLength={64}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setNameDraft(raw);
+                  if (raw.trim()) {
+                    updateProject((current) => ({ ...current, name: raw }));
+                  }
+                }}
+                onBlur={() => {
+                  const normalized = nameDraft.trim() || 'Nouvelle création';
+                  setNameDraft(normalized);
+                  updateProject((current) => ({ ...current, name: normalized }));
+                }}
+              />
             </label>
             <div className="pixel-studio__export-grid">
               <button type="button" className="pixel-studio__export-button" onClick={() => void handleExport('png')} disabled={exportBusy !== null}>

@@ -196,4 +196,23 @@ test('verifies a signed Ubuntu InRelease with the pinned key fingerprint without
     verifyUbuntuInRelease(tamperedRelease, signedRelease.keyring, { trustedFingerprints }),
     /Signature InRelease Ubuntu invalide/,
   );
+
+  // Frozen post-May-2025 focal-updates release (>45 days old) remains valid, while pre-2025 rollback is rejected.
+  const frozenDatePayload = payload.replace(/^Date: .+$/m, 'Date: Thu, 15 May 2025 12:00:00 UTC');
+  const frozenSigned = await createSignedUbuntuRelease(frozenDatePayload);
+  assert.equal(
+    await verifyUbuntuInRelease(frozenSigned.inRelease, frozenSigned.keyring, {
+      trustedFingerprints: new Set([frozenSigned.fingerprint]),
+    }),
+    frozenDatePayload,
+  );
+
+  const rollbackPayload = payload.replace(/^Date: .+$/m, 'Date: Wed, 10 May 2023 12:00:00 UTC');
+  const rollbackSigned = await createSignedUbuntuRelease(rollbackPayload);
+  await assert.rejects(
+    verifyUbuntuInRelease(rollbackSigned.inRelease, rollbackSigned.keyring, {
+      trustedFingerprints: new Set([rollbackSigned.fingerprint]),
+    }),
+    /trop anciennes/,
+  );
 });
